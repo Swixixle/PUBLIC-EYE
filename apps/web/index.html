@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Frame — transparency receipt demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0c0f14;
+        --panel: #151a22;
+        --accent: #3ee0b8;
+        --text: #e8ecf1;
+        --muted: #8b97a8;
+        --border: #2a3342;
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 600px at 10% 0%, #12202a, var(--bg));
+        color: var(--text);
+        min-height: 100vh;
+      }
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      h1 {
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        margin: 0 0 0.35rem;
+        font-size: clamp(1.75rem, 4vw, 2.25rem);
+      }
+      p.lead {
+        color: var(--muted);
+        max-width: 62ch;
+        line-height: 1.55;
+        margin: 0 0 1.75rem;
+      }
+      .grid {
+        display: grid;
+        gap: 1rem;
+      }
+      @media (min-width: 800px) {
+        .grid.two {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 1.1rem 1.2rem;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+      }
+      h2 {
+        margin: 0 0 0.65rem;
+        font-size: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+      }
+      textarea {
+        width: 100%;
+        min-height: 220px;
+        background: #0b0e13;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.75rem;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.8rem;
+        resize: vertical;
+      }
+      button {
+        background: var(--accent);
+        color: #04120e;
+        border: none;
+        border-radius: 999px;
+        padding: 0.55rem 1.15rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: 0.5rem;
+        margin-top: 0.5rem;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+      }
+      pre {
+        background: #0b0e13;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.75rem;
+        overflow: auto;
+        font-size: 0.78rem;
+        min-height: 3rem;
+      }
+      ul.rules {
+        margin: 0;
+        padding-left: 1.1rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main>
+      <h1>Frame</h1>
+      <p class="lead">
+        Frame turns a political claim into a <strong>cryptographically signed receipt</strong>:
+        money, votes, and lobbying citations are listed with neutral narrative sentences, each tied
+        to a source id.
+      </p>
+
+      <div class="grid two">
+        <section>
+          <h2>Rules</h2>
+          <ul class="rules">
+            <li>Every narrative sentence must include a <code>sourceId</code> from <code>sources</code>.</li>
+            <li>No judgment adjectives in narrative (see governance list in the repo).</li>
+            <li>Hashing uses <strong>JCS (RFC 8785)</strong> via the <code>canonicalize</code> package — not <code>JSON.stringify</code>.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>API</h2>
+          <p class="lead" style="margin-bottom: 0.75rem">
+            Run the FastAPI app from <code>apps/api</code>, then ping health or verify a receipt.
+          </p>
+          <button type="button" id="btn-health">GET /health</button>
+          <button type="button" class="secondary" id="btn-clear">Clear output</button>
+          <pre id="out-api"></pre>
+        </section>
+      </div>
+
+      <section style="margin-top: 1rem">
+        <h2>Verify receipt JSON</h2>
+        <p class="lead" style="margin-bottom: 0.75rem">
+          Paste a <strong>signed</strong> Frame receipt (includes <code>signature</code> and
+          <code>publicKey</code>). Default URL: <code id="api-base-label"></code>
+        </p>
+        <textarea id="receipt-json" aria-label="Receipt JSON"></textarea>
+        <button type="button" id="btn-verify">POST /v1/verify-receipt</button>
+        <pre id="out-verify"></pre>
+      </section>
+    </main>
+    <script>
+      const DEFAULT_API = "http://127.0.0.1:8000";
+      const params = new URLSearchParams(location.search);
+      const apiBase = params.get("api") || DEFAULT_API;
+      document.getElementById("api-base-label").textContent = apiBase;
+
+      const sample = {
+        schemaVersion: "1.0.0",
+        receiptId: "550e8400-e29b-41d4-a716-446655440000",
+        createdAt: "2024-01-15T12:00:00.000Z",
+        claims: [
+          {
+            id: "claim-1",
+            statement:
+              "A senator received campaign contributions from donors in a reporting period covered by FEC filings.",
+            assertedAt: "2024-01-10T00:00:00.000Z",
+          },
+        ],
+        sources: [
+          {
+            id: "src-fec-c00783746",
+            adapter: "fec",
+            url: "https://www.fec.gov/data/committee/C00783746/",
+            title: "FEC committee profile C00783746",
+            retrievedAt: "2024-01-14T18:22:00.000Z",
+            externalRef: "C00783746",
+            metadata: { committeeId: "C00783746" },
+          },
+          {
+            id: "src-os-n00032838",
+            adapter: "opensecrets",
+            url: "https://www.opensecrets.org/members-of-congress/summary?cid=N00032838",
+            title: "OpenSecrets summary N00032838",
+            retrievedAt: "2024-01-14T18:23:00.000Z",
+            externalRef: "N00032838",
+            metadata: { candidateId: "N00032838" },
+          },
+          {
+            id: "src-lda-example",
+            adapter: "lobbying",
+            url: "https://lda.senate.gov/filings/public/filing/1234567/",
+            title: "Lobbying disclosure filing 1234567",
+            retrievedAt: "2024-01-14T18:24:00.000Z",
+            externalRef: "1234567",
+            metadata: { registrationId: "1234567" },
+          },
+        ],
+        narrative: [
+          {
+            text: "The FEC lists committee C00783746 with filings available on the commission’s site.",
+            sourceId: "src-fec-c00783746",
+          },
+          {
+            text: "OpenSecrets publishes summary totals for candidate id N00032838.",
+            sourceId: "src-os-n00032838",
+          },
+          {
+            text: "The Senate LDA system hosts a disclosure page for registration 1234567.",
+            sourceId: "src-lda-example",
+          },
+        ],
+        contentHash: "",
+        signature: "",
+        publicKey: "",
+      };
+
+      document.getElementById("receipt-json").value = JSON.stringify(sample, null, 2);
+      document.getElementById("out-api").textContent =
+        "Generate a real signed receipt with `npm test` / Frame signing, then paste here.";
+
+      async function show(el, data) {
+        el.textContent =
+          typeof data === "string" ? data : JSON.stringify(data, null, 2);
+      }
+
+      document.getElementById("btn-health").addEventListener("click", async () => {
+        const el = document.getElementById("out-api");
+        try {
+          const res = await fetch(`${apiBase}/health`);
+          const body = await res.json();
+          await show(el, body);
+        } catch (e) {
+          await show(el, String(e));
+        }
+      });
+
+      document.getElementById("btn-clear").addEventListener("click", () => {
+        document.getElementById("out-api").textContent = "";
+      });
+
+      document.getElementById("btn-verify").addEventListener("click", async () => {
+        const el = document.getElementById("out-verify");
+        let json;
+        try {
+          json = JSON.parse(document.getElementById("receipt-json").value);
+        } catch (e) {
+          await show(el, { error: "Invalid JSON", detail: String(e) });
+          return;
+        }
+        try {
+          const res = await fetch(`${apiBase}/v1/verify-receipt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(json),
+          });
+          const body = await res.json();
+          await show(el, { status: res.status, body });
+        } catch (e) {
+          await show(el, String(e));
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,3 +1,0 @@
-# FRAME
-
-Local project workspace.

@@ -11,3 +11,22 @@
 .env
 .env.*
 !.env.example
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# Build / logs
+*.log
+.turbo/
