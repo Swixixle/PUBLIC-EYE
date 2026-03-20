@@ -56,10 +56,11 @@ export async function fetchFecContext(
         metadata: {
           candidateId,
           candidateName,
-          office: c.office_full,
-          state: c.state,
-          party: c.party_full,
-          electionYears: c.election_years,
+          office: c.office_full ?? null,
+          state: c.state ?? null,
+          party: c.party_full ?? null,
+          electionYears:
+            c.election_years != null ? JSON.stringify(c.election_years) : null,
         },
       });
     }
@@ -96,7 +97,10 @@ export async function fetchFecContext(
       title: `FEC fundraising totals by cycle: ${candidateName}`,
       retrievedAt: nowIso(),
       externalRef: candidateId,
-      metadata: { candidateId, allCycleTotals },
+      metadata: {
+        candidateId,
+        allCycleTotalsJson: JSON.stringify(allCycleTotals),
+      },
     });
   } catch (e) {
     errors.push(`fec totals lookup failed: ${String(e)}`);
@@ -182,6 +186,173 @@ export async function buildLiveFecReceipt(
       {
         id: "claim-1",
         statement: `Live FEC fundraising record for ${candidateName} (${candidateId})`,
+        assertedAt: new Date().toISOString(),
+      },
+    ],
+    sources,
+    narrative,
+    contentHash: "",
+  };
+}
+
+/** Senate LDA — live lobbying filings + lobbyist directory (no API key). */
+export async function buildLiveLobbyingReceipt(
+  senatorName: string,
+  fecCandidateId?: string,
+): Promise<FrameReceiptPayload> {
+  const name = senatorName.trim();
+  if (!name) {
+    throw new Error("buildLiveLobbyingReceipt: senatorName is required");
+  }
+
+  const base = "https://lda.senate.gov/api/v1";
+  const filingsUrl = `${base}/filings/?filing_year=2024&filing_type=RR&registrant_name=${encodeURIComponent(name)}&limit=5&offset=0`;
+  const lobbyistsUrl = `${base}/lobbyists/?name=${encodeURIComponent(name)}&limit=10`;
+
+  type LdaLobbyingActivity = {
+    general_issue_code?: string;
+    general_issue_code_display?: string;
+  };
+  type LdaFiling = {
+    filing_year?: number;
+    income?: number | null;
+    registrant?: { name?: string };
+    client?: { name?: string };
+    lobbying_activities?: LdaLobbyingActivity[];
+    url?: string;
+  };
+  type LdaLobbyistRow = {
+    first_name?: string;
+    last_name?: string;
+    registrant?: { name?: string };
+  };
+
+  let filings: LdaFiling[] = [];
+  let lobbyistRows: LdaLobbyistRow[] = [];
+  let filingsOk = false;
+  let lobbyistsOk = false;
+
+  try {
+    const res = await fetch(filingsUrl);
+    if (res.ok) {
+      const data = (await res.json()) as { results?: LdaFiling[] };
+      filings = data.results ?? [];
+      filingsOk = true;
+    }
+  } catch {
+    /* leave filings empty */
+  }
+
+  try {
+    const res = await fetch(lobbyistsUrl);
+    if (res.ok) {
+      const data = (await res.json()) as { results?: LdaLobbyistRow[] };
+      lobbyistRows = data.results ?? [];
+      lobbyistsOk = true;
+    }
+  } catch {
+    /* leave lobbyists empty */
+  }
+
+  const sources: SourceRecord[] = [
+    {
+      id: "lda-filings-rr-2024",
+      adapter: "lobbying",
+      url: filingsUrl,
+      title: `Senate LDA: registrations (RR, 2024) — registrant name search: ${name}`,
+      retrievedAt: nowIso(),
+      externalRef: fecCandidateId ?? name,
+      metadata: {
+        query: name,
+        filingCount: filingsOk ? filings.length : 0,
+        fecCandidateId: fecCandidateId ?? null,
+      },
+    },
+    {
+      id: "lda-lobbyists-name",
+      adapter: "lobbying",
+      url: lobbyistsUrl,
+      title: `Senate LDA: lobbyist directory — name search: ${name}`,
+      retrievedAt: nowIso(),
+      externalRef: fecCandidateId ?? name,
+      metadata: {
+        query: name,
+        matchCount: lobbyistsOk ? lobbyistRows.length : 0,
+        fecCandidateId: fecCandidateId ?? null,
+      },
+    },
+  ];
+
+  const narrative: Array<{ text: string; sourceId: string }> = [];
+  const claimSuffix = fecCandidateId ? ` (${fecCandidateId})` : "";
+
+  if (!filingsOk) {
+    narrative.push({
+      text: `Senate LDA filings search could not be completed for “${name}” at signing time.`,
+      sourceId: "lda-filings-rr-2024",
+    });
+  } else if (filings.length === 0) {
+    narrative.push({
+      text: `According to Senate LDA disclosures, no 2024 registration filings (type RR) matched registrant name “${name}” in the queried result set.`,
+      sourceId: "lda-filings-rr-2024",
+    });
+  } else {
+    for (const f of filings) {
+      const registrant = f.registrant?.name ?? "Unknown registrant";
+      const client = f.client?.name ?? "Unknown client";
+      const year = f.filing_year ?? 2024;
+      const income = f.income;
+      const codes = [...new Set(
+        (f.lobbying_activities ?? [])
+          .map((a) => a.general_issue_code_display ?? a.general_issue_code ?? "")
+          .filter(Boolean),
+      )].slice(0, 12);
+      const codesText = codes.length ? codes.join(", ") : "no issue codes listed";
+
+      if (income != null && typeof income === "number") {
+        narrative.push({
+          text: `According to Senate LDA disclosures, ${registrant} reported $${income.toLocaleString()} in lobbying income from ${client} in ${year}. Issue areas on file include: ${codesText}.`,
+          sourceId: "lda-filings-rr-2024",
+        });
+      } else {
+        narrative.push({
+          text: `According to Senate LDA disclosures, ${registrant} filed a registration involving ${client} in ${year}, with no income figure in this filing record. Issue areas on file include: ${codesText}.`,
+          sourceId: "lda-filings-rr-2024",
+        });
+      }
+    }
+  }
+
+  if (!lobbyistsOk) {
+    narrative.push({
+      text: `Senate LDA lobbyist directory search could not be completed for “${name}” at signing time.`,
+      sourceId: "lda-lobbyists-name",
+    });
+  } else if (lobbyistRows.length === 0) {
+    narrative.push({
+      text: `The Senate LDA lobbyist directory returned no entries matching the name search for “${name}” in the queried result set.`,
+      sourceId: "lda-lobbyists-name",
+    });
+  } else {
+    const sample = lobbyistRows.slice(0, 3).map((r) => {
+      const ln = [r.first_name, r.last_name].filter(Boolean).join(" ");
+      const reg = r.registrant?.name ?? "unknown firm";
+      return `${ln} (${reg})`;
+    });
+    narrative.push({
+      text: `The Senate LDA lobbyist directory lists ${lobbyistRows.length} entr${lobbyistRows.length === 1 ? "y" : "ies"} matching the name search for “${name}” (sample: ${sample.join("; ")}).`,
+      sourceId: "lda-lobbyists-name",
+    });
+  }
+
+  return {
+    schemaVersion: "1.0.0",
+    receiptId: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    claims: [
+      {
+        id: "claim-1",
+        statement: `Public lobbying disclosure record for ${name}${claimSuffix}`,
         assertedAt: new Date().toISOString(),
       },
     ],

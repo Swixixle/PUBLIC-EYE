@@ -104,6 +104,11 @@ class GenerateReceiptRequest(BaseModel):
     candidateId: str = Field(..., min_length=1, max_length=64)
 
 
+class LobbyingRequest(BaseModel):
+    name: str
+    candidateId: str | None = None
+
+
 app = FastAPI(title="Frame API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -166,6 +171,36 @@ def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
             detail=f"invalid JSON from generate-receipt: {exc}",
         ) from exc
     return out
+
+
+@app.post("/v1/generate-lobbying-receipt")
+def generate_lobbying_receipt(req: LobbyingRequest) -> dict[str, Any]:
+    root = _repo_root()
+    script = root / "scripts" / "generate-lobbying-receipt.ts"
+    if not script.is_file():
+        raise HTTPException(status_code=500, detail="generate-lobbying-receipt script missing")
+
+    proc = subprocess.run(
+        ["npx", "tsx", str(script), req.name, req.candidateId or ""],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(root),
+        env={**os.environ},
+        timeout=120,
+    )
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "subprocess failed").strip()
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "generate-lobbying-receipt failed", "stderr": err[:4000]},
+        )
+
+    try:
+        return json.loads(proc.stdout.strip())
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
 @app.post("/v1/jcs-sha256")
