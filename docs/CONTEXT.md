@@ -58,6 +58,11 @@ Adapter roadmap (in priority order):
 7. Court records — PACER (harder but public)
 8. Existing fact-check databases — PolitiFact, Snopes APIs
 
+Media / disinformation layer (extends roadmap):
+7. Hive AI detection — set HIVE_API_KEY in Render to enable (https://thehive.ai)
+8. OCR text extraction — Tesseract or Google Vision, extracts claims from screenshots
+9. Media hash ledger — store file hashes to track viral spread across accounts
+
 Distribution layer (future):
 - Shareable receipt URLs
 - Browser extension — surfaces Frame receipts next to content on any platform
@@ -76,6 +81,9 @@ Distribution layer (future):
 - POST /v1/verify-receipt: COMPLETE and working on Render
 - POST /v1/generate-receipt: COMPLETE locally, PEM key format issue on Render in progress
 - Demo UI with evidence chain, source links, rabbit hole: COMPLETE on Netlify
+- POST /v1/analyze-media: COMPLETE — SHA-256 file hashing, Hive AI detection (requires HIVE_API_KEY)
+- POST /v1/sign-media-analysis: COMPLETE — signs media analysis result as Frame receipt
+- Combined media pipeline: hash → detect → sign → verify
 
 ## Immediate Next Task
 Fix FRAME_PRIVATE_KEY format on Render so /v1/generate-receipt works in production.
