@@ -16,7 +16,17 @@ function pemFromEnv(name: string): string {
   if (!v || v.trim() === "") {
     throw new Error(`Missing ${name} in environment`);
   }
-  return v.replace(/\\n/g, "\n").trim();
+  // Handle multiple encoding formats:
+  // 1. Literal \n in the string (Render stores it this way)
+  // 2. Already has real newlines
+  // 3. JSON-encoded string with \\n
+  let pem = v;
+  if (!pem.includes("\n")) {
+    pem = pem.replace(/\\n/g, "\n");
+  }
+  // Strip surrounding quotes if present
+  pem = pem.replace(/^["']|["']$/g, "");
+  return pem.trim();
 }
 
 const candidateId = process.argv[2]?.trim() ?? "";
