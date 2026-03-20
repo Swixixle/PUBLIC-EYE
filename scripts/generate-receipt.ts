@@ -22,9 +22,7 @@ function getPublicKeyPem(): string {
   const raw = process.env.FRAME_PUBLIC_KEY ?? "";
   if (!raw) throw new Error("Missing FRAME_PUBLIC_KEY in environment");
   let pem = raw;
-  if (!pem.includes("\n")) {
-    pem = pem.replace(/\\n/g, "\n");
-  }
+  pem = pem.replace(/\\n/g, "\n");
   pem = pem.replace(/^["']|["']$/g, "");
   return pem.trim();
 }
