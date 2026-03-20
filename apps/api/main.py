@@ -115,6 +115,11 @@ class CombinedReceiptRequest(BaseModel):
     years: list[int]
 
 
+class NineNinetyRequest(BaseModel):
+    orgName: str
+    ein: str | None = None
+
+
 app = FastAPI(title="Frame API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -243,6 +248,36 @@ def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
         raise HTTPException(
             status_code=500,
             detail={"message": "generate-combined-receipt failed", "stderr": err},
+        )
+
+    try:
+        return json.loads(proc.stdout.strip())
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
+
+
+@app.post("/v1/generate-990-receipt")
+def generate_990_receipt(req: NineNinetyRequest) -> dict[str, Any]:
+    root = _repo_root()
+    script = root / "scripts" / "generate-990-receipt.ts"
+    if not script.is_file():
+        raise HTTPException(status_code=500, detail="generate-990-receipt script missing")
+
+    proc = subprocess.run(
+        ["npx", "tsx", str(script), req.orgName, req.ein or ""],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(root),
+        env={**os.environ},
+        timeout=120,
+    )
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "subprocess failed")[-4000:]
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "generate-990-receipt failed", "stderr": err},
         )
 
     try:

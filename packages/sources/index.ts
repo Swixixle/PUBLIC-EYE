@@ -588,6 +588,165 @@ export async function buildCombinedPoliticianReceipt(
   };
 }
 
+export async function buildLive990Receipt(
+  orgName: string,
+  ein?: string,
+): Promise<FrameReceiptPayload> {
+  const base = "https://projects.propublica.org/nonprofits/api/v2";
+  const sources: SourceRecord[] = [];
+  const narrative: Array<{ text: string; sourceId: string }> = [];
+
+  let resolvedEin = ein ?? "";
+  let resolvedName = orgName;
+
+  const searchSourceId = `irs-search-${orgName.replace(/\s+/g, "-").toLowerCase()}`;
+
+  // Step 1 — search for org if no EIN provided
+  if (!resolvedEin) {
+    try {
+      const searchUrl = `${base}/search.json?q=${encodeURIComponent(orgName)}`;
+      const r = await fetch(searchUrl);
+      const d = (await r.json()) as {
+        organizations?: Array<{
+          ein: number;
+          name: string;
+          city?: string;
+          state?: string;
+        }>;
+      };
+      const first = d.organizations?.[0];
+      if (first) {
+        resolvedEin = String(first.ein);
+        resolvedName = first.name;
+      }
+      sources.push({
+        id: searchSourceId,
+        adapter: "manual",
+        url: searchUrl,
+        title: `ProPublica Nonprofit Explorer: search for "${orgName}"`,
+        retrievedAt: nowIso(),
+        externalRef: resolvedEin || orgName,
+        metadata: {
+          query: orgName,
+          resolvedEin: resolvedEin || null,
+          resolvedName,
+        },
+      });
+    } catch {
+      /* continue */
+    }
+  }
+
+  if (!resolvedEin) {
+    narrative.push({
+      text: `ProPublica Nonprofit Explorer returned no results for "${orgName}" at signing time.`,
+      sourceId: sources[0]?.id ?? searchSourceId,
+    });
+    return {
+      schemaVersion: "1.0.0",
+      receiptId: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      claims: [
+        {
+          id: "claim-1",
+          statement: `IRS 990 record for ${orgName}`,
+          assertedAt: new Date().toISOString(),
+        },
+      ],
+      sources,
+      narrative,
+      contentHash: "",
+    };
+  }
+
+  // Step 2 — fetch org details and filings
+  try {
+    const orgUrl = `${base}/organizations/${resolvedEin}.json`;
+    const r = await fetch(orgUrl);
+    const d = (await r.json()) as {
+      organization?: {
+        name?: string;
+        city?: string;
+        state?: string;
+        asset_amount?: number;
+        income_amount?: number;
+        tax_period?: string;
+      };
+      filings_with_data?: Array<{
+        tax_yr?: number;
+        totrevenue?: number;
+        totfuncexpns?: number;
+        totassetsend?: number;
+        grscontrgifts?: number;
+        pct_compnsatncurrofcr?: number;
+      }>;
+    };
+
+    const org = d.organization;
+    const filings = d.filings_with_data ?? [];
+    resolvedName = org?.name ?? resolvedName;
+
+    sources.push({
+      id: `irs-990-${resolvedEin}`,
+      adapter: "manual",
+      url: orgUrl,
+      title: `IRS 990: ${resolvedName} (EIN ${resolvedEin})`,
+      retrievedAt: nowIso(),
+      externalRef: resolvedEin,
+      metadata: {
+        ein: resolvedEin,
+        name: resolvedName,
+        city: org?.city ?? null,
+        state: org?.state ?? null,
+        assetAmount: org?.asset_amount ?? null,
+        incomeAmount: org?.income_amount ?? null,
+      },
+    });
+
+    const sourceId = `irs-990-${resolvedEin}`;
+
+    if (org?.asset_amount != null) {
+      narrative.push({
+        text: `According to IRS 990 filings, ${resolvedName} (EIN: ${resolvedEin}) reported total assets of $${org.asset_amount.toLocaleString()} and income of $${(org.income_amount ?? 0).toLocaleString()} as of the most recent filing period.`,
+        sourceId,
+      });
+    }
+
+    for (const f of filings.slice(0, 3)) {
+      const yr = f.tax_yr ?? "unknown";
+      const rev = f.totrevenue != null ? f.totrevenue.toLocaleString() : "not reported";
+      const exp = f.totfuncexpns != null ? f.totfuncexpns.toLocaleString() : "not reported";
+      const assets = f.totassetsend != null ? f.totassetsend.toLocaleString() : "not reported";
+      const gifts = f.grscontrgifts != null ? f.grscontrgifts.toLocaleString() : "not reported";
+      narrative.push({
+        text: `In tax year ${yr}, ${resolvedName} reported total revenue of $${rev}, total functional expenses of $${exp}, end-of-year assets of $${assets}, and gross contributions/gifts received of $${gifts}.`,
+        sourceId,
+      });
+    }
+  } catch {
+    narrative.push({
+      text: `IRS 990 data for EIN ${resolvedEin} could not be retrieved at signing time.`,
+      sourceId: `irs-990-${resolvedEin}`,
+    });
+  }
+
+  return {
+    schemaVersion: "1.0.0",
+    receiptId: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    claims: [
+      {
+        id: "claim-1",
+        statement: `IRS 990 financial record for ${resolvedName} (EIN: ${resolvedEin})`,
+        assertedAt: new Date().toISOString(),
+      },
+    ],
+    sources,
+    narrative,
+    contentHash: "",
+  };
+}
+
 /** OpenSecrets — money-in-politics summaries (illustrative stub). */
 export async function fetchOpenSecretsSummary(
   query: SourceQuery,
