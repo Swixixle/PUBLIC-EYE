@@ -109,6 +109,12 @@ class LobbyingRequest(BaseModel):
     candidateId: str | None = None
 
 
+class CombinedReceiptRequest(BaseModel):
+    candidateId: str
+    lobbyingClients: list[str]
+    years: list[int]
+
+
 app = FastAPI(title="Frame API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -195,6 +201,48 @@ def generate_lobbying_receipt(req: LobbyingRequest) -> dict[str, Any]:
         raise HTTPException(
             status_code=500,
             detail={"message": "generate-lobbying-receipt failed", "stderr": err[:4000]},
+        )
+
+    try:
+        return json.loads(proc.stdout.strip())
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
+
+
+@app.post("/v1/generate-combined-receipt")
+def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
+    root = _repo_root()
+    script = root / "scripts" / "generate-combined-receipt.ts"
+    if not script.is_file():
+        raise HTTPException(status_code=500, detail="generate-combined-receipt script missing")
+
+    fec_key = os.environ.get("FEC_API_KEY", "DEMO_KEY")
+
+    args = [
+        "npx",
+        "tsx",
+        str(script),
+        req.candidateId,
+        json.dumps(req.lobbyingClients),
+        json.dumps(req.years),
+        fec_key,
+    ]
+
+    proc = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(root),
+        env={**os.environ},
+        timeout=120,
+    )
+
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "subprocess failed")[-4000:]
+        raise HTTPException(
+            status_code=500,
+            detail={"message": "generate-combined-receipt failed", "stderr": err},
         )
 
     try:

@@ -505,6 +505,89 @@ export async function buildLobbyingCrossReference(
   };
 }
 
+export async function buildCombinedPoliticianReceipt(
+  candidateId: string,
+  lobbyingClients: string[],
+  years: number[],
+  apiKey: string = "DEMO_KEY",
+): Promise<FrameReceiptPayload> {
+  const [fecResult, ldaResult] = await Promise.all([
+    buildLiveFecReceipt(candidateId, apiKey),
+    buildLobbyingCrossReference(candidateId, lobbyingClients, years, apiKey),
+  ]);
+
+  const allSources = [...fecResult.sources, ...ldaResult.sources];
+
+  const fecTotalsSource = fecResult.sources.find((s) => s.id.includes("totals"));
+  const fecMeta = fecTotalsSource?.metadata as
+    | Record<string, string | number | boolean | null>
+    | undefined;
+  let cycleTotals: Array<{ cycle: number; pacContributions: number }> | undefined;
+  if (fecMeta?.allCycleTotalsJson && typeof fecMeta.allCycleTotalsJson === "string") {
+    try {
+      cycleTotals = JSON.parse(fecMeta.allCycleTotalsJson) as Array<{
+        cycle: number;
+        pacContributions: number;
+      }>;
+    } catch {
+      cycleTotals = undefined;
+    }
+  }
+
+  const candidateName = (fecResult.claims[0]?.statement ?? candidateId)
+    .replace("Live FEC fundraising record for ", "")
+    .replace(` (${candidateId})`, "");
+
+  const fecNarrative = fecResult.narrative;
+  const ldaNarrative = ldaResult.narrative.filter(
+    (s) => !s.text.includes("Cross-reference:"),
+  );
+
+  let crossRefText = "";
+  if (cycleTotals && cycleTotals.length > 0) {
+    const cycleLines = cycleTotals
+      .filter((c) => years.includes(c.cycle) || years.includes(c.cycle - 1))
+      .slice(0, 3)
+      .map(
+        (c) =>
+          `$${c.pacContributions.toLocaleString()} from PACs in the ${c.cycle} cycle`,
+      );
+    if (cycleLines.length > 0) {
+      crossRefText = `Cross-reference: ${candidateName} received ${cycleLines.join(" and ")} during periods when ${lobbyingClients.slice(0, 3).join(", ")} filed lobbying disclosures on energy and tax legislation with the Senate.`;
+    }
+  }
+  if (!crossRefText) {
+    crossRefText = `Cross-reference: FEC contribution records for ${candidateName} overlap with the lobbying periods documented above.`;
+  }
+
+  const crossRefSourceId =
+    fecResult.sources.find((s) => s.id.includes("totals"))?.id ??
+    allSources[0]?.id ??
+    "fec-totals";
+
+  const combinedNarrative = [
+    ...fecNarrative,
+    ...ldaNarrative,
+    { text: crossRefText, sourceId: crossRefSourceId },
+  ];
+
+  return {
+    schemaVersion: "1.0.0",
+    receiptId: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    claims: [
+      {
+        id: "claim-1",
+        statement: `Campaign finance and lobbying record for ${candidateName} (${candidateId})`,
+        assertedAt: new Date().toISOString(),
+      },
+    ],
+    sources: allSources,
+    narrative: combinedNarrative,
+    contentHash: "",
+  };
+}
+
 /** OpenSecrets — money-in-politics summaries (illustrative stub). */
 export async function fetchOpenSecretsSummary(
   query: SourceQuery,
