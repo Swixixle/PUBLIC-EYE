@@ -3,409 +3,910 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Frame — Public Record Verification</title>
+<title>Frame — Verified Political Receipt</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0a0a09;
-    --surface: #111110;
-    --surface-2: #181816;
-    --border: #252520;
-    --border-light: #1c1c19;
+    --bg: #0c0c0b;
+    --surface: #131311;
+    --surface-2: #1a1a17;
+    --border: #2a2a25;
+    --border-light: #222220;
     --text: #ede8dc;
-    --text-2: #8a8478;
-    --text-3: #4a4840;
+    --text-2: #9a9488;
+    --text-3: #5a5650;
     --amber: #c8992a;
     --amber-bright: #e8b840;
-    --amber-dim: #7a5e1a;
-    --amber-glow: rgba(200,153,42,0.08);
-    --green: #3a7a4c;
-    --green-bright: #4ea864;
-    --red: #7a3a3a;
-    --red-bright: #b04848;
+    --amber-dim: #8a6a1a;
+    --green: #4a8c5c;
+    --green-bright: #5eb876;
+    --red: #8c4a4a;
+    --red-bright: #c45c5c;
+    --blue: #4a6a8c;
+    --blue-bright: #6a9abf;
   }
-  *{margin:0;padding:0;box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:300;line-height:1.6;min-height:100vh;overflow-x:hidden;}
-  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
-  .page{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:0 28px;}
-  header{padding:44px 0 36px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;animation:fadeDown 0.5s ease both;}
-  .header-left{display:flex;align-items:baseline;gap:18px;}
-  .logo{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:0.35em;text-transform:uppercase;color:var(--amber);}
-  .logo-sep{width:1px;height:13px;background:var(--border);display:inline-block;vertical-align:middle;}
-  .header-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);letter-spacing:0.1em;}
-  .header-right{display:flex;align-items:center;gap:6px;}
-  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green-bright);animation:pulse 2s infinite;}
-  .live-label{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--green-bright);letter-spacing:0.2em;text-transform:uppercase;}
-  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
-  .hero{padding:72px 0 56px;border-bottom:1px solid var(--border);animation:fadeUp 0.6s ease 0.1s both;}
-  .hero-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-3);margin-bottom:24px;}
-  .hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(38px,6vw,64px);font-weight:300;line-height:1.1;color:var(--text);margin-bottom:20px;max-width:640px;}
-  .hero-title em{font-style:italic;color:var(--amber);}
-  .hero-sub{font-size:14px;color:var(--text-2);max-width:520px;line-height:1.8;margin-bottom:48px;}
-  .search-form{display:flex;flex-direction:column;gap:16px;}
-  .search-row{display:flex;gap:0;border:1px solid var(--border);background:var(--surface);transition:border-color 0.2s;}
-  .search-row:focus-within{border-color:var(--amber-dim);}
-  .search-input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic;padding:18px 24px;outline:none;}
-  .search-input::placeholder{color:var(--text-3);font-style:italic;}
-  .search-btn{background:var(--amber-dim);border:none;color:var(--amber-bright);font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.3em;text-transform:uppercase;padding:0 28px;cursor:pointer;transition:background 0.2s,color 0.2s;white-space:nowrap;}
-  .search-btn:hover{background:var(--amber);color:var(--bg);}
-  .search-btn:disabled{opacity:0.4;cursor:not-allowed;}
-  .type-selector{display:flex;gap:0;flex-wrap:wrap;}
-  .type-btn{background:transparent;border:1px solid var(--border);border-right:none;color:var(--text-3);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;padding:10px 18px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
-  .type-btn:last-child{border-right:1px solid var(--border);}
-  .type-btn:hover{color:var(--text);background:var(--surface);}
-  .type-btn.active{background:var(--amber-glow);border-color:var(--amber-dim);color:var(--amber);}
-  .extra-fields{display:none;flex-direction:column;gap:10px;}
-  .extra-fields.visible{display:flex;}
-  .field-row{display:flex;gap:10px;flex-wrap:wrap;}
-  .field-input{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:10px 14px;outline:none;transition:border-color 0.2s;}
-  .field-input::placeholder{color:var(--text-3);}
-  .field-input:focus{border-color:var(--amber-dim);color:var(--text);}
-  .field-label{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;}
-  .type-desc{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);line-height:1.8;min-height:18px;}
-  .status-bar{display:none;align-items:center;gap:12px;padding:14px 0;}
-  .status-bar.visible{display:flex;}
-  .status-spinner{width:10px;height:10px;border:1.5px solid var(--amber-dim);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .status-text{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-2);letter-spacing:0.1em;}
-  .error-box{display:none;padding:16px 20px;background:rgba(122,58,58,0.08);border:1px solid var(--red);border-left:3px solid var(--red-bright);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--red-bright);line-height:1.7;}
-  .error-box.visible{display:block;}
-  .receipt-output{display:none;padding:56px 0;border-bottom:1px solid var(--border);animation:fadeUp 0.5s ease both;}
-  .receipt-output.visible{display:block;}
-  .section-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px;}
-  .receipt-claim{font-family:'Cormorant Garamond',serif;font-size:clamp(26px,4vw,42px);font-weight:300;font-style:italic;line-height:1.25;color:var(--text);margin-bottom:20px;}
-  .receipt-meta{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:32px;}
-  .receipt-meta-item{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-3);}
-  .receipt-meta-item strong{color:var(--text-2);font-weight:400;}
-  .verify-stamp{display:flex;align-items:center;gap:14px;opacity:0;transform:translateY(6px);transition:all 0.4s ease;}
-  .verify-stamp.visible{opacity:1;transform:translateY(0);}
-  .stamp-badge{display:flex;align-items:center;gap:8px;padding:9px 18px;border:1.5px solid;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;}
-  .stamp-badge.valid{border-color:var(--green);color:var(--green-bright);background:rgba(58,122,76,0.06);}
-  .stamp-badge.invalid{border-color:var(--red);color:var(--red-bright);background:rgba(122,58,58,0.06);}
-  .stamp-detail{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);line-height:1.9;}
-  .hash-display{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);word-break:break-all;padding:10px 14px;background:var(--surface);border-left:2px solid var(--amber-dim);margin-top:12px;display:none;}
-  .hash-display.visible{display:block;}
-  .evidence-section{margin-top:48px;}
-  .evidence-list{list-style:none;margin-top:20px;}
-  .evidence-item{display:grid;grid-template-columns:44px 1fr;opacity:0;transform:translateX(-10px);transition:all 0.35s ease;}
-  .evidence-item.visible{opacity:1;transform:translateX(0);}
-  .evidence-num{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber-dim);padding-top:20px;}
-  .evidence-body{padding:20px 0;border-bottom:1px solid var(--border-light);}
-  .evidence-item:last-child .evidence-body{border-bottom:none;}
-  .evidence-text{font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:400;line-height:1.55;color:var(--text);margin-bottom:8px;}
-  .evidence-source{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.08em;color:var(--amber);text-decoration:none;opacity:0.6;text-transform:uppercase;transition:opacity 0.2s;}
-  .evidence-source:hover{opacity:1;}
-  .evidence-source::before{content:'→';}
-  .sources-section{margin-top:48px;}
-  .sources-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:20px;}
-  .source-card{background:var(--surface);border:1px solid var(--border);padding:14px 16px;text-decoration:none;color:inherit;display:block;transition:border-color 0.2s,background 0.2s;position:relative;overflow:hidden;}
-  .source-card::after{content:'↗';position:absolute;top:10px;right:12px;font-size:11px;color:var(--text-3);transition:all 0.2s;}
-  .source-card:hover{border-color:var(--amber-dim);background:var(--surface-2);}
-  .source-card:hover::after{color:var(--amber);transform:translate(2px,-2px);}
-  .source-type{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.3em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;opacity:0.6;}
-  .source-title{font-size:12px;color:var(--text);line-height:1.4;margin-bottom:6px;padding-right:18px;}
-  .source-domain{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);}
-  .sample-section{padding:48px 0;border-bottom:1px solid var(--border);}
-  .sample-card{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:border-color 0.2s,background 0.2s;gap:20px;flex-wrap:wrap;}
-  .sample-card:hover{border-color:var(--amber-dim);background:var(--surface-2);}
-  .sample-claim{font-family:'Cormorant Garamond',serif;font-size:18px;font-style:italic;color:var(--text);flex:1;}
-  .sample-meta{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);text-align:right;white-space:nowrap;}
-  .sample-arrow{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber-dim);transition:all 0.2s;flex-shrink:0;}
-  .sample-card:hover .sample-arrow{color:var(--amber);transform:translateX(4px);}
-  .verify-section{padding:48px 0;border-bottom:1px solid var(--border);}
-  .verify-intro{font-size:13px;color:var(--text-3);margin-top:8px;margin-bottom:16px;}
-  textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:14px;resize:vertical;min-height:120px;line-height:1.6;outline:none;transition:border-color 0.2s;}
-  textarea:focus{border-color:var(--amber-dim);}
-  .btn{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;text-transform:uppercase;padding:9px 22px;cursor:pointer;margin-top:10px;transition:background 0.2s,color 0.2s;}
-  .btn:hover{background:var(--amber-glow);color:var(--amber-bright);}
-  #manual-result{display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);white-space:pre-wrap;}
-  #manual-result.visible{display:block;}
-  footer{padding:24px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
-  .footer-left{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);letter-spacing:0.08em;}
-  .footer-right a{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);text-decoration:none;letter-spacing:0.08em;transition:color 0.2s;}
-  .footer-right a:hover{color:var(--amber);}
-  @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
-  @keyframes fadeDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
-  @media(max-width:600px){.type-selector{flex-direction:column;}.type-btn{border-right:1px solid var(--border)!important;}.sources-grid{grid-template-columns:1fr;}.evidence-item{grid-template-columns:36px 1fr;}}
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    line-height: 1.6;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .page {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .logo {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+
+  .logo-divider {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  .tagline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 0.08em;
+  }
+
+  /* ── CLAIM HERO ── */
+  .claim-section {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 20px;
+  }
+
+  .claim-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(32px, 5vw, 52px);
+    font-style: italic;
+    font-weight: 300;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .claim-text::before {
+    content: '"';
+    color: var(--amber-dim);
+    font-size: 1.2em;
+    line-height: 0;
+    vertical-align: -0.15em;
+    margin-right: 4px;
+  }
+
+  .claim-text::after {
+    content: '"';
+    color: var(--amber-dim);
+    font-size: 1.2em;
+    line-height: 0;
+    vertical-align: -0.15em;
+    margin-left: 4px;
+  }
+
+  .claim-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .claim-who {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-2);
+  }
+
+  .claim-who strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ── VERIFICATION RESULT ── */
+  .verify-section {
+    padding: 40px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .verify-badge {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.5s ease;
+  }
+
+  .verify-badge.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .stamp {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border: 1.5px solid;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+  }
+
+  .stamp.verified {
+    border-color: var(--green);
+    color: var(--green-bright);
+    background: rgba(74, 140, 92, 0.06);
+  }
+
+  .stamp.failed {
+    border-color: var(--red);
+    color: var(--red-bright);
+    background: rgba(140, 74, 74, 0.06);
+  }
+
+  .stamp-icon {
+    font-size: 14px;
+  }
+
+  .stamp-detail {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-3);
+    line-height: 1.8;
+  }
+
+  .hash-line {
+    font-size: 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text-3);
+    word-break: break-all;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-left: 2px solid var(--amber-dim);
+  }
+
+  .verify-loading {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 0.15em;
+  }
+
+  .verify-loading::after {
+    content: '...';
+    animation: dots 1.5s infinite;
+  }
+
+  @keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+  }
+
+  /* ── EVIDENCE CHAIN ── */
+  .evidence-section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .evidence-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .evidence-item {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 0;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition: all 0.4s ease;
+  }
+
+  .evidence-item.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .evidence-number {
+    padding-top: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--amber-dim);
+    letter-spacing: 0.1em;
+  }
+
+  .evidence-body {
+    padding: 20px 0 20px 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .evidence-item:last-child .evidence-body {
+    border-bottom: none;
+  }
+
+  .evidence-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 19px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+
+  .evidence-source-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--amber);
+    text-decoration: none;
+    text-transform: uppercase;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .evidence-source-link:hover { opacity: 1; }
+
+  .evidence-source-link::before {
+    content: '→';
+    font-size: 10px;
+  }
+
+  /* ── SOURCES ── */
+  .sources-section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .source-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .source-card::after {
+    content: '↗';
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-size: 12px;
+    color: var(--text-3);
+    transition: color 0.2s, transform 0.2s;
+  }
+
+  .source-card:hover {
+    border-color: var(--amber-dim);
+    background: var(--surface-2);
+  }
+
+  .source-card:hover::after {
+    color: var(--amber);
+    transform: translate(2px, -2px);
+  }
+
+  .source-type {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 8px;
+    opacity: 0.7;
+  }
+
+  .source-title {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 8px;
+    padding-right: 20px;
+  }
+
+  .source-domain {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-3);
+  }
+
+  /* ── RABBIT HOLE ── */
+  .rabbit-section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rabbit-intro {
+    font-size: 14px;
+    color: var(--text-2);
+    margin-top: 12px;
+    margin-bottom: 32px;
+    max-width: 540px;
+    line-height: 1.7;
+  }
+
+  .rabbit-category {
+    margin-bottom: 32px;
+  }
+
+  .rabbit-category-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .rabbit-links {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .rabbit-link {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 12px;
+    text-decoration: none;
+    color: var(--text-2);
+    font-size: 13px;
+    transition: background 0.15s, color 0.15s;
+    border-left: 2px solid transparent;
+  }
+
+  .rabbit-link:hover {
+    background: var(--surface);
+    color: var(--text);
+    border-left-color: var(--amber-dim);
+  }
+
+  .rabbit-link-arrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-3);
+    flex-shrink: 0;
+    transition: color 0.15s, transform 0.15s;
+    display: inline-block;
+  }
+
+  .rabbit-link:hover .rabbit-link-arrow {
+    color: var(--amber);
+    transform: translateX(3px);
+  }
+
+  .rabbit-link-sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-3);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  /* ── CONTEXT BOX ── */
+  .context-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber-dim);
+    padding: 20px 24px;
+    margin-top: 24px;
+  }
+
+  .context-box-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+
+  .context-box p {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.7;
+  }
+
+  .context-box p + p {
+    margin-top: 10px;
+  }
+
+  /* ── TECHNICAL SECTION ── */
+  .technical-section {
+    padding: 48px 0 64px;
+  }
+
+  .technical-intro {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-top: 8px;
+    margin-bottom: 20px;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 16px;
+    resize: vertical;
+    min-height: 160px;
+    line-height: 1.6;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus { border-color: var(--amber-dim); }
+
+  .btn-verify {
+    margin-top: 12px;
+    background: transparent;
+    border: 1px solid var(--amber-dim);
+    color: var(--amber);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .btn-verify:hover {
+    background: rgba(200, 153, 42, 0.1);
+    color: var(--amber-bright);
+  }
+
+  #manual-result {
+    margin-top: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    white-space: pre-wrap;
+    min-height: 48px;
+    display: none;
+  }
+
+  #manual-result.visible { display: block; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer-left {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-3);
+    letter-spacing: 0.1em;
+  }
+
+  .footer-right a {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-3);
+    text-decoration: none;
+    letter-spacing: 0.1em;
+    transition: color 0.2s;
+  }
+
+  .footer-right a:hover { color: var(--amber); }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .claim-section { animation: fadeUp 0.6s ease both; }
+  header { animation: fadeUp 0.4s ease both; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 600px) {
+    .sources-grid { grid-template-columns: 1fr; }
+    .evidence-item { grid-template-columns: 36px 1fr; }
+  }
 </style>
 </head>
 <body>
 <div class="page">
 
   <header>
-    <div class="header-left">
-      <span class="logo">Frame</span>
-      <span class="logo-sep"></span>
-      <span class="header-tag">cryptographic public record verification</span>
-    </div>
-    <div class="header-right">
-      <div class="live-dot"></div>
-      <span class="live-label">Live</span>
-    </div>
+    <span class="logo">Frame</span>
+    <span class="logo-divider"></span>
+    <span class="tagline">cryptographic political receipts</span>
   </header>
 
-  <section class="hero">
-    <div class="hero-eyebrow">Public Record Infrastructure</div>
-    <h1 class="hero-title">The public record,<br><em>signed and verified.</em></h1>
-    <p class="hero-sub">Enter any public figure, politician, nonprofit, or organization. Frame pulls live data from FEC, Senate LDA, IRS 990s, and Wikidata — then cryptographically signs the receipt so it can never be altered.</p>
-
-    <div class="search-form">
-      <div class="type-selector">
-        <button class="type-btn active" data-type="fec" onclick="setType('fec',this)">FEC Campaign Finance</button>
-        <button class="type-btn" data-type="990" onclick="setType('990',this)">IRS 990 Nonprofit</button>
-        <button class="type-btn" data-type="wikidata" onclick="setType('wikidata',this)">Public Figure</button>
-        <button class="type-btn" data-type="combined" onclick="setType('combined',this)">Combined</button>
-      </div>
-
-      <div class="type-desc" id="type-desc">FEC candidate ID or name search. Returns campaign finance totals by election cycle.</div>
-
-      <div class="search-row">
-        <input type="text" class="search-input" id="search-input" placeholder="Joe Manchin, Bernie Sanders, Ted Cruz..." autocomplete="off">
-        <button class="search-btn" id="search-btn" onclick="runSearch()">Generate Receipt →</button>
-      </div>
-
-      <div class="extra-fields" id="extra-fields-fec">
-        <div>
-          <div class="field-label">FEC Candidate ID (optional — speeds up lookup)</div>
-          <input type="text" class="field-input" id="fec-candidate-id" placeholder="e.g. S0WV00090">
-        </div>
-      </div>
-
-      <div class="extra-fields" id="extra-fields-990">
-        <div>
-          <div class="field-label">EIN (optional)</div>
-          <input type="text" class="field-input" id="ein-input" placeholder="e.g. 562618866">
-        </div>
-      </div>
-
-      <div class="extra-fields" id="extra-fields-wikidata">
-        <div>
-          <div class="field-label">Wikidata ID (optional)</div>
-          <input type="text" class="field-input" id="wikidata-id-input" placeholder="e.g. Q743162">
-        </div>
-      </div>
-
-      <div class="extra-fields" id="extra-fields-combined">
-        <div class="field-row">
-          <div style="flex:1">
-            <div class="field-label">FEC Candidate ID</div>
-            <input type="text" class="field-input" id="combined-candidate-id" placeholder="e.g. S0WV00090">
-          </div>
-          <div style="flex:2">
-            <div class="field-label">Lobbying clients (comma separated)</div>
-            <input type="text" class="field-input" id="combined-clients" placeholder="ExxonMobil, Chevron, American Petroleum Institute">
-          </div>
-        </div>
-        <div>
-          <div class="field-label">Years (comma separated)</div>
-          <input type="text" class="field-input" id="combined-years" placeholder="2021, 2022, 2018, 2024">
-        </div>
-      </div>
-
-      <div class="status-bar" id="status-bar">
-        <div class="status-spinner"></div>
-        <span class="status-text" id="status-text">Querying live data sources...</span>
-      </div>
-
-      <div class="error-box" id="error-box"></div>
+  <!-- CLAIM HERO -->
+  <section class="claim-section">
+    <div class="section-label">The Claim</div>
+    <div class="claim-text" id="claim-text">Loading...</div>
+    <div class="claim-meta">
+      <span class="claim-who">Claimant: <strong id="claimant-name">—</strong></span>
+      <span class="claim-who">Asserted: <strong id="claim-date">—</strong></span>
     </div>
   </section>
 
-  <section class="receipt-output" id="receipt-output">
-    <div class="section-label">Verified Receipt</div>
-    <div class="receipt-claim" id="receipt-claim">—</div>
-    <div class="receipt-meta">
-      <span class="receipt-meta-item">Generated: <strong id="receipt-date">—</strong></span>
-      <span class="receipt-meta-item">Receipt ID: <strong id="receipt-id">—</strong></span>
-    </div>
-
-    <div class="verify-stamp" id="verify-stamp">
-      <div class="stamp-badge" id="stamp-badge"></div>
+  <!-- VERIFICATION -->
+  <section class="verify-section">
+    <div class="section-label">Cryptographic Verification</div>
+    <div id="verify-loading" class="verify-loading">Verifying receipt</div>
+    <div id="verify-badge" class="verify-badge">
+      <div id="stamp" class="stamp"></div>
       <div class="stamp-detail" id="stamp-detail"></div>
     </div>
-    <div class="hash-display" id="hash-display"></div>
+    <div id="hash-line" class="hash-line" style="display:none;"></div>
+  </section>
 
-    <div class="evidence-section">
-      <div class="section-label">Evidence</div>
-      <ul class="evidence-list" id="evidence-list"></ul>
+  <!-- EVIDENCE CHAIN -->
+  <section class="evidence-section">
+    <div class="section-label">Evidence Chain</div>
+    <ul class="evidence-list" id="evidence-list"></ul>
+  </section>
+
+  <!-- SOURCES -->
+  <section class="sources-section">
+    <div class="section-label">Primary Sources</div>
+    <div class="sources-grid" id="sources-grid"></div>
+  </section>
+
+  <!-- RABBIT HOLE -->
+  <section class="rabbit-section">
+    <div class="section-label">Go Deeper</div>
+    <p class="rabbit-intro">Public records, financial history, voting record, and legislative impact. Every link is a primary source or official disclosure — no aggregators, no editorial framing.</p>
+
+    <div class="rabbit-category">
+      <div class="rabbit-category-label">Financial Record</div>
+      <div class="rabbit-links">
+        <a class="rabbit-link" href="https://www.opensecrets.org/members-of-congress/summary?cid=N00002640" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Full career contribution summary — OpenSecrets
+          <span class="rabbit-link-sub">opensecrets.org</span>
+        </a>
+        <a class="rabbit-link" href="https://www.fec.gov/data/candidate/S6WV00185/" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          FEC candidate profile — S6WV00185
+          <span class="rabbit-link-sub">fec.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://www.fec.gov/data/receipts/?committee_id=C00082040&two_year_transaction_period=2022" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          PAC contributions to Manchin — 2022 Q2
+          <span class="rabbit-link-sub">fec.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://www.opensecrets.org/industries/summary.php?ind=E01&recipdetail=M&sortorder=U&mem=Y&cycle=All" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Senate top recipients from Oil & Gas — all cycles
+          <span class="rabbit-link-sub">opensecrets.org</span>
+        </a>
+      </div>
     </div>
 
-    <div class="sources-section">
-      <div class="section-label">Primary Sources</div>
-      <div class="sources-grid" id="sources-grid"></div>
+    <div class="rabbit-category">
+      <div class="rabbit-category-label">Personal Financial Interests</div>
+      <div class="rabbit-links">
+        <a class="rabbit-link" href="https://efdsearch.senate.gov/search/home/" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Senate financial disclosures — search Manchin
+          <span class="rabbit-link-sub">senate.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0001821806" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Enersystems Inc. — SEC EDGAR corporate filings
+          <span class="rabbit-link-sub">sec.gov</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="rabbit-category">
+      <div class="rabbit-category-label">Voting Record</div>
+      <div class="rabbit-links">
+        <a class="rabbit-link" href="https://www.congress.gov/member/joe-manchin/M001183" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Full legislative record — Congress.gov
+          <span class="rabbit-link-sub">congress.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://projects.propublica.org/represent/members/M001183-joe-manchin" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          Vote-by-vote breakdown — ProPublica Congress
+          <span class="rabbit-link-sub">propublica.org</span>
+        </a>
+        <a class="rabbit-link" href="https://votesmart.org/candidate/9820/joe-manchin" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          VoteSmart full voting history
+          <span class="rabbit-link-sub">votesmart.org</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="rabbit-category">
+      <div class="rabbit-category-label">Legislative Impact — Inflation Reduction Act</div>
+      <div class="rabbit-links">
+        <a class="rabbit-link" href="https://www.congress.gov/bill/117th-congress/senate-bill/4717/text" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          IRA S.4717 — full enrolled text including Section 50265
+          <span class="rabbit-link-sub">congress.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://lda.senate.gov/filings/public/search/?client_name=American+Petroleum+Institute&filing_year=2022" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          American Petroleum Institute — 2022 lobbying filings
+          <span class="rabbit-link-sub">senate.gov</span>
+        </a>
+        <a class="rabbit-link" href="https://www.congress.gov/amendment/117th-congress/senate-amendment/5499" target="_blank" rel="noopener">
+          <span class="rabbit-link-arrow">→</span>
+          IRA amendment record — Senate floor changes
+          <span class="rabbit-link-sub">congress.gov</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="context-box">
+      <div class="context-box-label">What the record shows</div>
+      <p>On August 7, 2022, Manchin voted for the Inflation Reduction Act — the largest climate investment in US history. He cast the deciding vote. He also negotiated the bill's final text. The methane fee on oil and gas producers, present in earlier versions, was removed. Section 50265, which requires the Interior Department to offer oil and gas leases as a precondition for permitting renewable energy on federal land, was added.</p>
+      <p>These are not allegations. They are numbered provisions in a public law. The question this receipt answers is not whether Manchin supported or opposed climate action. It is whether his claim — that he never took a dime from the fossil fuel industry — is accurate.</p>
     </div>
   </section>
 
-  <section class="sample-section">
-    <div class="section-label">Sample Receipt</div>
-    <div class="sample-card" onclick="loadSampleReceipt()">
-      <div class="sample-claim">"I've never taken a dime from the fossil fuel industry"</div>
-      <div class="sample-meta">Joe Manchin III<br>FEC + LDA Cross-Reference</div>
-      <div class="sample-arrow">→</div>
-    </div>
-  </section>
-
-  <section class="verify-section">
-    <div class="section-label">Verify Any Receipt</div>
-    <p class="verify-intro">Paste any signed Frame receipt JSON to verify it against the live API.</p>
-    <textarea id="manual-payload" spellcheck="false" placeholder='{"schemaVersion": "1.0.0", ...}'></textarea>
-    <button class="btn" onclick="manualVerify()">Verify Receipt</button>
+  <!-- TECHNICAL -->
+  <section class="technical-section">
+    <div class="section-label">Verify Yourself</div>
+    <p class="technical-intro">Paste any Frame receipt below and verify it against the live API. The signed payload above is preloaded.</p>
+    <textarea id="payload-input" spellcheck="false"></textarea>
+    <br>
+    <button class="btn-verify" onclick="manualVerify()">Post / Verify Receipt</button>
     <pre id="manual-result"></pre>
   </section>
 
   <footer>
-    <div class="footer-left">Frame v1.0 · Ed25519 · JCS (RFC 8785) · SHA-256</div>
-    <div class="footer-right"><a href="https://github.com/Swixixle/FRAME" target="_blank" rel="noopener">github.com/Swixixle/FRAME</a></div>
+    <div class="footer-left">Frame v1.0 · Ed25519 + JCS (RFC 8785)</div>
+    <div class="footer-right">
+      <a href="https://github.com/Swixixle/FRAME" target="_blank" rel="noopener">github.com/Swixixle/FRAME</a>
+    </div>
   </footer>
 
 </div>
+
 <script>
-const API_BASE=(new URLSearchParams(location.search).get('api')||'https://frame-2yxu.onrender.com').replace(/\/$/,'');
-let currentType='fec';
-const TYPE_DESCS={fec:'FEC candidate ID or name search. Returns campaign finance totals by election cycle.','990':'Nonprofit name or EIN. Returns IRS 990 financial data — assets, revenue, expenses.',wikidata:'Any public figure, journalist, executive, or religious leader. Returns biography and affiliations.',combined:'Senator + FEC ID + lobbying clients. Returns cross-referenced campaign finance and lobbying data.'};
-function setType(type,btn){
-  currentType=type;
-  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('type-desc').textContent=TYPE_DESCS[type];
-  ['fec','990','wikidata','combined'].forEach(t=>{
-    const el=document.getElementById(`extra-fields-${t}`);
-    if(el)el.classList.toggle('visible',t===type);
-  });
-  const ph={fec:'Joe Manchin, Bernie Sanders, Ted Cruz...','990':'Gates Foundation, AIPAC, Daily Caller News Foundation...',wikidata:'Tucker Carlson, Sean Hannity, Pope Leo...',combined:'Joe Manchin (use FEC ID field below)'};
-  document.getElementById('search-input').placeholder=ph[type];
+const API_BASE = (new URLSearchParams(location.search).get('api') || 'https://frame-2yxu.onrender.com').replace(/\/$/, '');
+
+const SOURCE_LABELS = {
+  fec: 'FEC',
+  opensecrets: 'OpenSecrets',
+  manual: 'Primary Doc',
+  lobbying: 'Lobbying Disclosure',
+  propublica: 'ProPublica',
+  edgar: 'SEC EDGAR',
+};
+
+function domain(url) {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch { return url; }
 }
-function domain(url){try{return new URL(url).hostname.replace('www.','');}catch{return url;}}
-function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString('en-US',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
-function setStatus(msg){document.getElementById('status-bar').classList.add('visible');document.getElementById('status-text').textContent=msg;}
-function clearStatus(){document.getElementById('status-bar').classList.remove('visible');}
-function showError(msg){const el=document.getElementById('error-box');el.textContent=msg;el.classList.add('visible');}
-function clearError(){document.getElementById('error-box').classList.remove('visible');}
-async function runSearch(){
-  const query=document.getElementById('search-input').value.trim();
-  if(!query)return;
-  clearError();
-  document.getElementById('receipt-output').classList.remove('visible');
-  document.getElementById('search-btn').disabled=true;
-  let body={},endpoint='';
-  if(currentType==='fec'){
-    const candidateId=document.getElementById('fec-candidate-id').value.trim();
-    body={candidateId:candidateId||query};
-    endpoint='/v1/generate-receipt';
-    setStatus('Pulling live FEC contribution data...');
-  }else if(currentType==='990'){
-    const ein=document.getElementById('ein-input').value.trim();
-    body={orgName:query};
-    if(ein)body.ein=ein;
-    endpoint='/v1/generate-990-receipt';
-    setStatus('Querying IRS 990 records via ProPublica...');
-  }else if(currentType==='wikidata'){
-    const wikidataId=document.getElementById('wikidata-id-input').value.trim();
-    body={personName:query};
-    if(wikidataId)body.wikidataId=wikidataId;
-    endpoint='/v1/generate-wikidata-receipt';
-    setStatus('Searching Wikidata entity database...');
-  }else if(currentType==='combined'){
-    const candidateId=document.getElementById('combined-candidate-id').value.trim();
-    const clientsRaw=document.getElementById('combined-clients').value.trim();
-    const yearsRaw=document.getElementById('combined-years').value.trim();
-    const lobbyingClients=clientsRaw?clientsRaw.split(',').map(s=>s.trim()).filter(Boolean):['ExxonMobil','Chevron'];
-    const years=yearsRaw?yearsRaw.split(',').map(s=>parseInt(s.trim())).filter(Boolean):[2021,2022,2018,2024];
-    body={candidateId:candidateId||query,lobbyingClients,years};
-    endpoint='/v1/generate-combined-receipt';
-    setStatus('Pulling FEC + Senate LDA data in parallel...');
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch { return iso; }
+}
+
+async function init() {
+  let payload;
+  try {
+    const r = await fetch('demo-payload.json');
+    payload = await r.json();
+  } catch {
+    document.getElementById('claim-text').textContent = 'Could not load demo-payload.json';
+    return;
   }
-  try{
-    const r=await fetch(`${API_BASE}${endpoint}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok){const err=await r.json().catch(()=>({detail:'Unknown error'}));throw new Error(err.detail?.message||JSON.stringify(err.detail)||`HTTP ${r.status}`);}
-    const signed=await r.json();
-    clearStatus();
-    renderReceipt(signed);
-    autoVerify(signed);
-  }catch(err){clearStatus();showError(`Error: ${err.message}`);}
-  document.getElementById('search-btn').disabled=false;
-}
-function renderReceipt(signed){
-  const payload=signed.payload??signed;
-  const claim=payload.claims?.[0]?.statement??payload.subject?.claimText??'—';
-  const createdAt=payload.createdAt??payload.generatedAt??signed.createdAt;
-  const receiptId=payload.receiptId??payload.frameId??'—';
-  const sources=payload.sources??[];
-  const narrative=payload.narrative??payload.readout?.sentences??[];
-  document.getElementById('receipt-claim').textContent=claim;
-  document.getElementById('receipt-date').textContent=formatDate(createdAt);
-  document.getElementById('receipt-id').textContent=(receiptId?.slice(0,8)??'—')+'...';
-  const evidenceList=document.getElementById('evidence-list');
-  evidenceList.innerHTML='';
-  const sourceMap={};
-  sources.forEach(s=>{sourceMap[s.id]=s;});
-  narrative.forEach((item,i)=>{
-    const text=item.text??item;
-    const src=sourceMap[item.sourceId];
-    const li=document.createElement('li');
-    li.className='evidence-item';
-    li.style.transitionDelay=`${i*60}ms`;
-    li.innerHTML=`<div class="evidence-num">0${i+1}</div><div class="evidence-body"><div class="evidence-text">${text}</div>${src?`<a class="evidence-source" href="${src.url}" target="_blank" rel="noopener">${(src.title??domain(src.url)).slice(0,60)}</a>`:''}</div>`;
+
+  // Populate claim
+  const claim = payload.claims?.[0];
+  document.getElementById('claim-text').textContent = claim?.statement || '—';
+  document.getElementById('claim-date').textContent = formatDate(claim?.assertedAt);
+
+  // Try to find claimant name from narrative or sources
+  const narrative = payload.narrative || [];
+  const sources = payload.sources || [];
+
+  // Derive claimant from statement or set manually
+  document.getElementById('claimant-name').textContent = 'Joe Manchin III';
+
+  // Build source map
+  const sourceMap = {};
+  sources.forEach(s => { sourceMap[s.id] = s; });
+
+  // Populate evidence
+  const evidenceList = document.getElementById('evidence-list');
+  narrative.forEach((item, i) => {
+    const src = sourceMap[item.sourceId];
+    const li = document.createElement('li');
+    li.className = 'evidence-item';
+    li.style.transitionDelay = `${i * 80}ms`;
+    li.innerHTML = `
+      <div class="evidence-number">0${i + 1}</div>
+      <div class="evidence-body">
+        <div class="evidence-text">${item.text}</div>
+        ${src ? `<a class="evidence-source-link" href="${src.url}" target="_blank" rel="noopener">${src.title || SOURCE_LABELS[src.adapter] || src.adapter}</a>` : ''}
+      </div>
+    `;
     evidenceList.appendChild(li);
-    setTimeout(()=>li.classList.add('visible'),80+i*60);
+    setTimeout(() => li.classList.add('visible'), 100 + i * 80);
   });
-  const grid=document.getElementById('sources-grid');
-  grid.innerHTML='';
-  sources.forEach(s=>{
-    const a=document.createElement('a');
-    a.className='source-card';
-    a.href=s.url;a.target='_blank';a.rel='noopener';
-    a.innerHTML=`<div class="source-type">${s.adapter??'source'}</div><div class="source-title">${s.title}</div><div class="source-domain">${domain(s.url)}</div>`;
+
+  // Populate sources grid
+  const grid = document.getElementById('sources-grid');
+  sources.forEach(s => {
+    const a = document.createElement('a');
+    a.className = 'source-card';
+    a.href = s.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.innerHTML = `
+      <div class="source-type">${SOURCE_LABELS[s.adapter] || s.adapter}</div>
+      <div class="source-title">${s.title}</div>
+      <div class="source-domain">${domain(s.url)}</div>
+    `;
     grid.appendChild(a);
   });
-  document.getElementById('manual-payload').value=JSON.stringify(signed,null,2);
-  document.getElementById('receipt-output').classList.add('visible');
-  document.getElementById('receipt-output').scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Preload textarea
+  document.getElementById('payload-input').value = JSON.stringify(payload, null, 2);
+
+  // Auto-verify
+  autoVerify(payload);
 }
-async function autoVerify(signed){
-  const stamp=document.getElementById('verify-stamp');
-  const badge=document.getElementById('stamp-badge');
-  const detail=document.getElementById('stamp-detail');
-  const hashDisplay=document.getElementById('hash-display');
-  try{
-    const r=await fetch(`${API_BASE}/v1/verify-receipt`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(signed)});
-    const data=await r.json();
-    if(data.ok){badge.className='stamp-badge valid';badge.innerHTML='✓ Cryptographic signature valid';detail.innerHTML='Ed25519 · JCS (RFC 8785) · SHA-256<br>Hash matches. Signature valid. All sources intact.';}
-    else{badge.className='stamp-badge invalid';badge.innerHTML='✗ Verification failed';detail.innerHTML=data.reasons?.join('<br>')||'Unknown error';}
-    const payload=signed.payload??signed;
-    const contentHash=signed.contentHash??payload.contentHash;
-    if(contentHash){hashDisplay.textContent=`SHA-256: ${contentHash}`;hashDisplay.classList.add('visible');}
-    stamp.classList.add('visible');
-  }catch(err){badge.className='stamp-badge invalid';badge.innerHTML='✗ Verification error';detail.innerHTML=err.message;stamp.classList.add('visible');}
+
+async function autoVerify(payload) {
+  const loading = document.getElementById('verify-loading');
+  const badge = document.getElementById('verify-badge');
+  const stamp = document.getElementById('stamp');
+  const detail = document.getElementById('stamp-detail');
+  const hashLine = document.getElementById('hash-line');
+
+  try {
+    const r = await fetch(`${API_BASE}/v1/verify-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+
+    loading.style.display = 'none';
+
+    if (data.ok) {
+      stamp.className = 'stamp verified';
+      stamp.innerHTML = '<span class="stamp-icon">✓</span> Cryptographic signature valid';
+      detail.innerHTML = 'Ed25519 · JCS (RFC 8785) · SHA-256<br>Hash matches. Signature valid. All sources intact.';
+    } else {
+      stamp.className = 'stamp failed';
+      stamp.innerHTML = '<span class="stamp-icon">✗</span> Verification failed';
+      detail.innerHTML = data.reasons?.join('<br>') || 'Unknown error';
+    }
+
+    if (payload.contentHash) {
+      hashLine.textContent = `SHA-256: ${payload.contentHash}`;
+      hashLine.style.display = 'block';
+    }
+
+    badge.classList.add('visible');
+  } catch (err) {
+    loading.textContent = `API error: ${err.message}`;
+  }
 }
-async function loadSampleReceipt(){
-  clearError();
-  document.getElementById('receipt-output').classList.remove('visible');
-  setStatus('Loading Manchin fossil fuel receipt...');
-  try{
-    const r=await fetch('demo-payload.json');
-    const payload=await r.json();
-    clearStatus();
-    renderReceipt(payload);
-    autoVerify(payload);
-  }catch(err){clearStatus();showError(`Could not load sample: ${err.message}`);}
-}
-async function manualVerify(){
-  const input=document.getElementById('manual-payload').value;
-  const result=document.getElementById('manual-result');
-  result.className='visible';result.textContent='Verifying...';
+
+async function manualVerify() {
+  const input = document.getElementById('payload-input').value;
+  const result = document.getElementById('manual-result');
+  result.className = 'visible';
+  result.textContent = 'Verifying...';
+
   let payload;
-  try{payload=JSON.parse(input);}catch{result.textContent='Invalid JSON';return;}
-  try{
-    const r=await fetch(`${API_BASE}/v1/verify-receipt`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data=await r.json();
-    result.textContent=JSON.stringify(data,null,2);
-  }catch(err){result.textContent=`Error: ${err.message}`;}
+  try { payload = JSON.parse(input); }
+  catch { result.textContent = 'Invalid JSON'; return; }
+
+  try {
+    const r = await fetch(`${API_BASE}/v1/verify-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    result.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    result.textContent = `Error: ${err.message}`;
+  }
 }
-document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
-setType('fec',document.querySelector('.type-btn.active'));
+
+init();
 </script>
 </body>
 </html>
