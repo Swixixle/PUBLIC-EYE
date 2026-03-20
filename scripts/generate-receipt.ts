@@ -19,8 +19,13 @@ function getPrivateKeyPem(): string {
 }
 
 function getPublicKeyPem(): string {
+  const format = process.env.FRAME_KEY_FORMAT ?? "pem";
   const raw = process.env.FRAME_PUBLIC_KEY ?? "";
   if (!raw) throw new Error("Missing FRAME_PUBLIC_KEY in environment");
+  if (format === "base64") {
+    const decoded = Buffer.from(raw.trim(), "base64").toString("utf8");
+    return decoded.replace(/\\n/g, "\n");
+  }
   let pem = raw;
   pem = pem.replace(/\\n/g, "\n");
   pem = pem.replace(/^["']|["']$/g, "");
