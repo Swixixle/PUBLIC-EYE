@@ -17,6 +17,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -132,6 +134,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_web_dir = _repo_root() / "apps" / "web"
+if _web_dir.is_dir():
+    app.mount("/web", StaticFiles(directory=str(_web_dir), html=True), name="web")
+
+
+@app.get("/demo")
+async def demo_redirect() -> FileResponse:
+    return FileResponse(str(_repo_root() / "apps" / "web" / "index.html"))
 
 
 @app.get("/")
