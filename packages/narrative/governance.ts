@@ -41,6 +41,7 @@ export const DOMAIN_WHITELIST: readonly string[] = [
   "www.propublica.org",
   "projects.propublica.org",
   "lda.senate.gov",
+  "efdsearch.senate.gov",
   "disclosures.house.gov",
   "www.sec.gov",
   "www.congress.gov",

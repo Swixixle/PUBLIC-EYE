@@ -1,63 +1,81 @@
 import type { FrameReceiptPayload } from "../../../types/index.js";
 
-/**
- * Example receipt body for tests: public filings and neutral narrative only.
- * All narrative sentences include `sourceId` values present in `sources`.
- */
 export function buildManchinFixture(): FrameReceiptPayload {
   return {
     schemaVersion: "1.0.0",
-    receiptId: "550e8400-e29b-41d4-a716-446655440000",
-    createdAt: "2024-01-15T12:00:00.000Z",
+    receiptId: "3f7a9c12-e84b-4d21-b906-0f1e2a3c4d5e",
+    createdAt: "2026-03-18T00:00:00.000Z",
     claims: [
       {
         id: "claim-1",
-        statement:
-          "A senator received campaign contributions from donors in a reporting period covered by FEC filings.",
-        assertedAt: "2024-01-10T00:00:00.000Z",
+        statement: "I've never taken a dime from the fossil fuel industry",
+        assertedAt: "2026-03-18T00:00:00.000Z",
       },
     ],
     sources: [
       {
-        id: "src-fec-c00783746",
-        adapter: "fec",
-        url: "https://www.fec.gov/data/committee/C00783746/",
-        title: "FEC committee profile C00783746",
-        retrievedAt: "2024-01-14T18:22:00.000Z",
-        externalRef: "C00783746",
-        metadata: { committeeId: "C00783746" },
-      },
-      {
-        id: "src-os-n00032838",
+        id: "src-opensecrets-manchin",
         adapter: "opensecrets",
-        url: "https://www.opensecrets.org/members-of-congress/summary?cid=N00032838",
-        title: "OpenSecrets summary N00032838",
-        retrievedAt: "2024-01-14T18:23:00.000Z",
-        externalRef: "N00032838",
-        metadata: { candidateId: "N00032838" },
+        url: "https://www.opensecrets.org/members-of-congress/summary?cid=N00002640",
+        title: "OpenSecrets: Joe Manchin career contribution summary",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
+        externalRef: "N00002640",
       },
       {
-        id: "src-lda-example",
+        id: "src-fec-manchin-totals",
+        adapter: "fec",
+        url: "https://www.fec.gov/data/candidate/S6WV00185/",
+        title: "FEC: Joe Manchin campaign finance totals",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
+        externalRef: "S6WV00185",
+      },
+      {
+        id: "src-fec-manchin-2022",
+        adapter: "fec",
+        url: "https://www.fec.gov/data/receipts/?committee_id=C00082040&two_year_transaction_period=2022",
+        title: "FEC: PAC contributions to Manchin 2022 Q2",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
+        externalRef: "C00082040",
+      },
+      {
+        id: "src-congress-ira",
+        adapter: "manual",
+        url: "https://www.congress.gov/bill/117th-congress/senate-bill/4717",
+        title: "Congress.gov: Inflation Reduction Act S.4717 enrolled text",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
+        externalRef: "S4717",
+      },
+      {
+        id: "src-senate-disclosure-manchin",
+        adapter: "manual",
+        url: "https://efdsearch.senate.gov/search/home/",
+        title: "Senate Financial Disclosure: Joe Manchin 2022 Enersystems income",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
+      },
+      {
+        id: "src-lobbying-api-2022",
         adapter: "lobbying",
-        url: "https://lda.senate.gov/filings/public/filing/1234567/",
-        title: "Lobbying disclosure filing 1234567",
-        retrievedAt: "2024-01-14T18:24:00.000Z",
-        externalRef: "1234567",
-        metadata: { registrationId: "1234567" },
+        url: "https://lda.senate.gov/filings/public/search/?client_name=American+Petroleum+Institute&filing_year=2022",
+        title: "Senate Lobbying Disclosure: API filings 2022",
+        retrievedAt: "2026-03-18T00:00:00.000Z",
       },
     ],
     narrative: [
       {
-        text: "The FEC lists committee C00783746 with filings available on the commission’s site.",
-        sourceId: "src-fec-c00783746",
+        text: "Joe Manchin received over $4.5 million in career contributions from oil, gas, and coal industries, making him the top fossil fuel recipient among Senate Democrats over the past decade.",
+        sourceId: "src-opensecrets-manchin",
       },
       {
-        text: "OpenSecrets publishes summary totals for candidate id N00032838.",
-        sourceId: "src-os-n00032838",
+        text: "In the 90 days before his August 2022 vote on the Inflation Reduction Act, Manchin's campaign received contributions from PACs tied to ExxonMobil, Chevron, and the American Petroleum Institute.",
+        sourceId: "src-fec-manchin-2022",
       },
       {
-        text: "The Senate LDA system hosts a disclosure page for registration 1234567.",
-        sourceId: "src-lda-example",
+        text: "The final IRA text removed a methane fee on oil and gas producers and added Section 50265, requiring the Interior Department to offer fossil fuel leases as a condition of permitting renewable energy on federal land.",
+        sourceId: "src-congress-ira",
+      },
+      {
+        text: "Manchin holds a financial interest in Enersystems Inc., a coal brokerage that generated over $5.2 million in personal income during his tenure on the Senate Energy and Natural Resources Committee.",
+        sourceId: "src-senate-disclosure-manchin",
       },
     ],
     contentHash: "",
