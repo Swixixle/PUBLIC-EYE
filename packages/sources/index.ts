@@ -674,6 +674,7 @@ export async function buildLive990Receipt(
       };
       filings_with_data?: Array<{
         tax_yr?: number;
+        tax_prd_yr?: number;
         totrevenue?: number;
         totfuncexpns?: number;
         totassetsend?: number;
@@ -713,13 +714,17 @@ export async function buildLive990Receipt(
     }
 
     for (const f of filings.slice(0, 3)) {
-      const yr = f.tax_yr ?? "unknown";
-      const rev = f.totrevenue != null ? f.totrevenue.toLocaleString() : "not reported";
-      const exp = f.totfuncexpns != null ? f.totfuncexpns.toLocaleString() : "not reported";
-      const assets = f.totassetsend != null ? f.totassetsend.toLocaleString() : "not reported";
-      const gifts = f.grscontrgifts != null ? f.grscontrgifts.toLocaleString() : "not reported";
+      const yr = f.tax_yr ?? f.tax_prd_yr ?? "unknown";
+      const rev =
+        f.totrevenue != null ? `$${f.totrevenue.toLocaleString()}` : "not reported";
+      const exp =
+        f.totfuncexpns != null ? `$${f.totfuncexpns.toLocaleString()}` : "not reported";
+      const assets =
+        f.totassetsend != null ? `$${f.totassetsend.toLocaleString()}` : "not reported";
+      const gifts =
+        f.grscontrgifts != null ? `$${f.grscontrgifts.toLocaleString()}` : "not reported";
       narrative.push({
-        text: `In tax year ${yr}, ${resolvedName} reported total revenue of $${rev}, total functional expenses of $${exp}, end-of-year assets of $${assets}, and gross contributions/gifts received of $${gifts}.`,
+        text: `In tax year ${yr}, ${resolvedName} reported total revenue of ${rev}, total functional expenses of ${exp}, end-of-year assets of ${assets}, and gross contributions/gifts received of ${gifts}.`,
         sourceId,
       });
     }
