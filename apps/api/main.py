@@ -368,20 +368,154 @@ def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
+# In-memory perceptual hash ledger (persists for server lifetime)
+# In production this should be a database table
+_phash_ledger: dict[str, dict[str, Any]] = {}
+
+
+async def _check_phash_ledger(phash: str) -> dict[str, Any] | None:
+    """Check if a perceptual hash (or close variant) has been seen before."""
+    # Exact match first
+    if phash in _phash_ledger:
+        entry = _phash_ledger[phash]
+        return {
+            "matchType": "exact",
+            "firstSeenAt": entry["firstSeenAt"],
+            "firstSeenFile": entry["fileName"],
+            "fileHash": entry["fileHash"],
+            "message": f"This content was first seen at {entry['firstSeenAt']}. Identical perceptual fingerprint.",
+        }
+    # Hamming distance check for near-duplicates (within 10 bits = likely same content)
+    try:
+        import imagehash
+
+        query_hash = imagehash.hex_to_hash(phash)
+        for stored_phash, entry in _phash_ledger.items():
+            stored_hash = imagehash.hex_to_hash(stored_phash)
+            distance = query_hash - stored_hash
+            if distance <= 10:
+                return {
+                    "matchType": "near-duplicate",
+                    "hammingDistance": distance,
+                    "firstSeenAt": entry["firstSeenAt"],
+                    "firstSeenFile": entry["fileName"],
+                    "fileHash": entry["fileHash"],
+                    "message": f"Near-duplicate content detected (Hamming distance: {distance}/64). Original first seen at {entry['firstSeenAt']}.",
+                }
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+async def _add_to_phash_ledger(phash: str, file_hash: str, filename: str, timestamp: str) -> None:
+    """Add a new perceptual hash to the ledger."""
+    _phash_ledger[phash] = {
+        "fileHash": file_hash,
+        "fileName": filename,
+        "firstSeenAt": timestamp,
+    }
+
+
 @app.post("/v1/analyze-media")
 async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
     contents = await file.read()
 
-    # Step 1 — hash the file
+    # Step 1 — cryptographic hash
     file_hash = hashlib.sha256(contents).hexdigest()
     file_size = len(contents)
     content_type = file.content_type or "unknown"
     filename = file.filename or "unknown"
+    timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    # Step 2 — run AI detection via Hive API if key available
-    hive_key = os.environ.get("HIVE_API_KEY", "")
+    # Step 2 — perceptual hash (survives re-compression, cropping, watermarks)
+    perceptual_hash: str | None = None
+    perceptual_hash_type: str | None = None
+    try:
+        import io
+
+        import imagehash
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(contents))
+        ph = imagehash.phash(img)
+        perceptual_hash = str(ph)
+        perceptual_hash_type = "pHash-DCT-64bit"
+    except Exception as e:  # noqa: BLE001
+        perceptual_hash = None
+        perceptual_hash_type = f"unavailable: {str(e)[:80]}"
+
+    # Step 3 — OCR via Claude vision (extract any text claims from the image)
+    extracted_text: str | None = None
+    extracted_claims: list[str] = []
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if anthropic_key and content_type.startswith("image/"):
+        try:
+            import anthropic as ant
+
+            client = ant.Anthropic(api_key=anthropic_key)
+            b64_image = base64.standard_b64encode(contents).decode("utf-8")
+            media_type_map = {
+                "image/jpeg": "image/jpeg",
+                "image/png": "image/png",
+                "image/gif": "image/gif",
+                "image/webp": "image/webp",
+            }
+            ant_media_type = media_type_map.get(content_type, "image/jpeg")
+            msg = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": ant_media_type,
+                                    "data": b64_image,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    'Extract all visible text from this image. Then identify any specific factual '
+                                    'claims being made (things that could be true or false). Return JSON only in '
+                                    'this format: {"extracted_text": "all visible text here", "claims": ["claim 1", '
+                                    '"claim 2"]}. If no text is visible, return {"extracted_text": "", "claims": []}.'
+                                ),
+                            },
+                        ],
+                    }
+                ],
+            )
+            block = msg.content[0]
+            ocr_raw = getattr(block, "text", str(block)).strip()
+            if ocr_raw.startswith("```"):
+                parts = ocr_raw.split("```")
+                if len(parts) >= 2:
+                    ocr_raw = parts[1]
+                    if ocr_raw.startswith("json"):
+                        ocr_raw = ocr_raw[4:]
+            ocr_data = json.loads(ocr_raw)
+            extracted_text = ocr_data.get("extracted_text", "")
+            extracted_claims = ocr_data.get("claims", [])
+        except Exception as e:  # noqa: BLE001
+            extracted_text = f"OCR unavailable: {str(e)[:120]}"
+            extracted_claims = []
+
+    # Step 4 — check perceptual hash ledger for prior appearances
+    ledger_match: dict[str, Any] | None = None
+    if perceptual_hash:
+        existing = await _check_phash_ledger(perceptual_hash)
+        if existing:
+            ledger_match = existing
+        else:
+            await _add_to_phash_ledger(perceptual_hash, file_hash, filename, timestamp)
+
+    # Step 5 — Hive AI detection (if key configured)
     detection_result: dict[str, Any] | None = None
-
+    hive_key = os.environ.get("HIVE_API_KEY", "")
     if hive_key:
         try:
             b64 = base64.b64encode(contents).decode()
@@ -407,7 +541,7 @@ async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
                     "classes": classes[:5],
                 }
         except Exception as e:  # noqa: BLE001
-            detection_result = {"detector": "hive", "error": str(e)}
+            detection_result = {"detector": "hive", "error": str(e)[:120]}
     else:
         detection_result = {
             "detector": "none",
@@ -416,22 +550,32 @@ async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
 
     return {
         "fileHash": file_hash,
+        "perceptualHash": perceptual_hash,
+        "perceptualHashType": perceptual_hash_type,
         "fileName": filename,
         "fileSize": file_size,
         "contentType": content_type,
+        "timestamp": timestamp,
+        "extractedText": extracted_text,
+        "extractedClaims": extracted_claims,
         "detection": detection_result,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "note": "Submit this hash and detection result to /v1/sign-media-analysis to get a signed Frame receipt",
+        "ledgerMatch": ledger_match,
+        "note": "Submit to /v1/sign-media-analysis to get a signed Frame receipt",
     }
 
 
 class MediaAnalysisRequest(BaseModel):
     fileHash: str
+    perceptualHash: str | None = None
+    perceptualHashType: str | None = None
     fileName: str
     fileSize: int
     contentType: str
     detection: dict[str, Any]
     timestamp: str
+    extractedText: str | None = None
+    extractedClaims: list[str] = Field(default_factory=list)
+    ledgerMatch: dict[str, Any] | None = None
     claimText: str | None = None
 
 
