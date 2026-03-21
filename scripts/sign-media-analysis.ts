@@ -2,11 +2,24 @@ import type { FrameReceiptPayload } from "@frame/types";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
 import { signReceipt } from "../packages/signing/index.js";
 
+/** Matches SourceRecord.metadata contract from analyze-media / _verify_and_snapshot_source */
+type VerificationMeta = {
+  verificationStatus: "verified" | "unverified";
+  suggestedBy?: "claude";
+  requestedUrl: string;
+  finalUrl: string | null;
+  httpStatus: number | null;
+  contentHash: string | null;
+  pageTitle: string | null;
+  retrievedAt: string | null;
+  reason: string | null;
+};
+
 type ClaimPrimarySource = {
   label?: string;
   url?: string;
   type?: string;
-  verification?: Record<string, unknown>;
+  verification?: VerificationMeta;
 };
 type ClaimObj = {
   text?: string;
@@ -14,6 +27,37 @@ type ClaimObj = {
   entities?: string[];
   primary_sources?: ClaimPrimarySource[];
 };
+
+function claimSourceId(url: string): string {
+  return `claim-src-${createHash("sha256").update(url).digest("hex").slice(0, 16)}`;
+}
+
+function buildMetadata(ps: ClaimPrimarySource, v: VerificationMeta | undefined): Record<string, string | number | boolean | null> {
+  if (!v) {
+    return {
+      verificationStatus: "unverified",
+      suggestedBy: "claude",
+      requestedUrl: String(ps.url ?? ""),
+      finalUrl: null,
+      httpStatus: null,
+      contentHash: null,
+      pageTitle: null,
+      retrievedAt: null,
+      reason: "fetch_failed",
+    };
+  }
+  return {
+    verificationStatus: v.verificationStatus,
+    suggestedBy: v.suggestedBy ?? "claude",
+    requestedUrl: v.requestedUrl,
+    finalUrl: v.finalUrl ?? null,
+    httpStatus: v.httpStatus ?? null,
+    contentHash: v.contentHash ?? null,
+    pageTitle: v.pageTitle ?? null,
+    retrievedAt: v.retrievedAt ?? null,
+    reason: v.reason ?? null,
+  };
+}
 
 const input = JSON.parse(
   await new Promise<string>((resolve) => {
@@ -122,7 +166,6 @@ if (extractedText && extractedText.length > 0 && !extractedText.startsWith("OCR 
   });
 }
 
-// Sentences 6+ — extracted claims (with classification and primary sources)
 const claimsForNarrative =
   claimObjects.length > 0
     ? claimObjects
@@ -133,26 +176,28 @@ const claimsForNarrative =
         primary_sources: [] as ClaimPrimarySource[],
       }));
 
+// One sentence per claim (extracted text only) — cites media source only
 for (const claim of claimsForNarrative.slice(0, 5)) {
   const claimText = typeof claim === "string" ? claim : (claim.text ?? "");
-  const sources = (claim as ClaimObj).primary_sources ?? [];
-  const sourceList = sources
-    .map((s) => {
-      const ver = (s as ClaimPrimarySource).verification;
-      const tail =
-        ver?.verified && ver.contentHash
-          ? ` [verified SHA-256: ${String(ver.contentHash).slice(0, 12)}…]`
-          : ver?.error || ver?.note
-            ? ` [${String(ver.error || ver.note)}]`
-            : "";
-      return `${s.label}: ${s.url}${tail}`;
-    })
-    .filter(Boolean)
-    .join(" | ");
   narrativeSentences.push({
-    text: `Extracted claim (${(claim as ClaimObj).type ?? "general"}): "${claimText}"${sourceList ? ` — Primary sources: ${sourceList}` : ""}`,
+    text: `Extracted claim (${(claim as ClaimObj).type ?? "general"}): "${claimText}"`,
     sourceId,
   });
+}
+
+// Verified primary sources only — each cite its own source row id
+for (const claim of claimsForNarrative.slice(0, 5)) {
+  for (const ps of (claim.primary_sources ?? []).slice(0, 3)) {
+    if (!ps.url || !ps.label) continue;
+    const v = ps.verification as VerificationMeta | undefined;
+    const sid = claimSourceId(String(ps.url));
+    if (v?.verificationStatus === "verified" && v.contentHash) {
+      narrativeSentences.push({
+        text: `Verified primary source at signing time: ${ps.label} — content SHA-256 ${String(v.contentHash).slice(0, 16)}… (${v.finalUrl || v.requestedUrl})`,
+        sourceId: sid,
+      });
+    }
+  }
 }
 
 const firstClaimText =
@@ -163,26 +208,25 @@ const claimStatement = firstClaimText
   ? `Media analysis: "${firstClaimText}" — file ${(input.fileHash as string).slice(0, 16)}...`
   : `Media file integrity receipt — SHA-256: ${(input.fileHash as string).slice(0, 16)}...`;
 
-// Primary sources from extracted claims (adapter "manual"; suggested type in metadata)
 const claimSources: FrameReceiptPayload["sources"] = [];
 for (const claim of claimObjects.slice(0, 5)) {
   for (const ps of (claim.primary_sources ?? []).slice(0, 3)) {
-    if (ps.url && ps.label) {
-      const id = `claim-src-${createHash("sha256").update(ps.url).digest("hex").slice(0, 16)}`;
-      const psExt = ps as ClaimPrimarySource;
-      claimSources.push({
-        id,
-        adapter: "manual",
-        url: ps.url,
-        title: ps.label,
-        retrievedAt: input.timestamp,
-        externalRef: ps.url,
-        metadata: {
-          suggestedSourceType: ps.type ?? "",
-          verificationJson: JSON.stringify(psExt.verification ?? null),
-        } as unknown as NonNullable<FrameReceiptPayload["sources"][number]["metadata"]>,
-      });
-    }
+    if (!ps.url || !ps.label) continue;
+    const v = ps.verification as VerificationMeta | undefined;
+    const sid = claimSourceId(String(ps.url));
+    const meta = buildMetadata(ps, v);
+    const displayUrl =
+      v?.verificationStatus === "verified" && v.finalUrl ? v.finalUrl : String(ps.url);
+    claimSources.push({
+      id: sid,
+      adapter: "manual",
+      url: displayUrl,
+      title: ps.label,
+      retrievedAt:
+        v?.verificationStatus === "verified" && v.retrievedAt ? v.retrievedAt : input.timestamp,
+      externalRef: v?.requestedUrl ?? String(ps.url),
+      metadata: meta as unknown as NonNullable<FrameReceiptPayload["sources"][number]["metadata"]>,
+    });
   }
 }
 

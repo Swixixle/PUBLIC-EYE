@@ -490,15 +490,15 @@ function buildMediaResult(data, signed) {
     ? `<div style="margin-top:16px;"><div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;">Extracted Claims</div>${claimObjects.map(c => {
     const sourceLinks = (c.primary_sources || []).map(s => {
       const v = s.verification;
-      const verified = v && v.verified;
-      const failed = v && !v.verified;
-      const statusText = v ? (verified ? `✓ ${v.httpStatus}` : `✗ ${v.error || v.httpStatus || 'unverified'}`) : '';
-      const hashText = v && v.contentHash ? ` · SHA-256: ${v.contentHash.slice(0,8)}...` : '';
-      const color = verified ? 'var(--amber)' : failed ? 'var(--red-bright)' : 'var(--text-3)';
+      const verified = v && v.verificationStatus === 'verified';
+      const unverified = v && v.verificationStatus === 'unverified';
+      const statusText = v ? (verified ? `✓ ${v.httpStatus}` : unverified ? `✗ ${v.reason || 'unverified'}` : '') : '';
+      const hashText = verified && v.contentHash ? ` · SHA-256: ${v.contentHash.slice(0,8)}...` : '';
+      const color = verified ? 'var(--amber)' : unverified ? 'var(--red-bright)' : 'var(--text-3)';
       return `<div style="margin-top:6px;">
     <a href="${s.url}" target="_blank" rel="noopener" style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.1em;color:${color};text-decoration:none;text-transform:uppercase;">→ ${s.label}</a>
     <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-left:8px;">${statusText}${hashText}</span>
-    ${v && v.pageTitle ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-top:2px;font-style:italic;">${v.pageTitle.slice(0,80)}</div>` : ''}
+    ${verified && v.pageTitle ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-top:2px;font-style:italic;">${v.pageTitle.slice(0,80)}</div>` : ''}
   </div>`;
 }).join('');
     return `<div style="padding:12px 0;border-bottom:1px solid var(--border-light);">

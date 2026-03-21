@@ -397,55 +397,88 @@ def _init_db() -> None:
 _init_db()
 
 
-async def _verify_and_snapshot_source(url: str, timeout: int = 8) -> dict[str, Any]:
-    """Fetch a source URL, hash its content, return verification record."""
-    import re as _re
+def _verification_reason_from_http(code: int) -> str:
+    if code == 403:
+        return "http_403"
+    if code == 404:
+        return "http_404"
+    return "http_non_2xx"
 
-    result: dict[str, Any] = {
-        "url": url,
-        "verified": False,
+
+async def _verify_and_snapshot_source(url: str, timeout: int = 5) -> dict[str, Any]:
+    """Fetch a source URL, hash its content. Returns SourceRecord.metadata contract fields (no suggestedBy)."""
+    import re as _re
+    import socket
+
+    requested = str(url).strip()
+    out: dict[str, Any] = {
+        "verificationStatus": "unverified",
+        "requestedUrl": requested,
+        "finalUrl": None,
         "httpStatus": None,
         "contentHash": None,
-        "contentLength": None,
         "pageTitle": None,
-        "retrievedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "error": None,
+        "retrievedAt": None,
+        "reason": "fetch_failed",
     }
 
     try:
         req = urllib.request.Request(
-            url,
+            requested,
             headers={
                 "User-Agent": "Frame/1.0 (cryptographic public record verification; https://github.com/Swixixle/FRAME)",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            result["httpStatus"] = resp.status
+            status = resp.status
+            final_url = resp.geturl()
             body = resp.read(524288)  # max 512KB
-            result["contentLength"] = len(body)
-            result["contentHash"] = hashlib.sha256(body).hexdigest()
-            result["verified"] = resp.status == 200
-            # Extract page title
-            try:
-                text = body.decode("utf-8", errors="ignore")
-                title_match = _re.search(r"<title[^>]*>([^<]{1,200})</title>", text, _re.IGNORECASE)
-                if title_match:
-                    result["pageTitle"] = title_match.group(1).strip()
-            except Exception:  # noqa: BLE001
-                pass
+            retrieved_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            if 200 <= status < 300:
+                content_hash = hashlib.sha256(body).hexdigest()
+                page_title: str | None = None
+                try:
+                    text = body.decode("utf-8", errors="ignore")
+                    title_match = _re.search(r"<title[^>]*>([^<]{1,200})</title>", text, _re.IGNORECASE)
+                    if title_match:
+                        page_title = title_match.group(1).strip()
+                except Exception:  # noqa: BLE001
+                    pass
+                out.update(
+                    {
+                        "verificationStatus": "verified",
+                        "finalUrl": final_url,
+                        "httpStatus": status,
+                        "contentHash": content_hash,
+                        "pageTitle": page_title,
+                        "retrievedAt": retrieved_at,
+                        "reason": None,
+                    },
+                )
+            else:
+                out["reason"] = "http_non_2xx"
     except urllib.error.HTTPError as e:
-        result["httpStatus"] = e.code
-        result["error"] = f"HTTP {e.code}"
+        out["reason"] = _verification_reason_from_http(int(e.code))
     except urllib.error.URLError as e:
-        result["error"] = f"URL error: {str(e.reason)[:80]}"
+        reason = e.reason
+        if isinstance(reason, socket.timeout) or isinstance(reason, TimeoutError):
+            out["reason"] = "timeout"
+        elif isinstance(reason, OSError) and "timed out" in str(reason).lower():
+            out["reason"] = "timeout"
+        elif "timed out" in str(e).lower():
+            out["reason"] = "timeout"
+        else:
+            out["reason"] = "fetch_failed"
+    except TimeoutError:
+        out["reason"] = "timeout"
     except Exception as e:  # noqa: BLE001
-        result["error"] = f"Error: {str(e)[:80]}"
+        if "timeout" in str(e).lower():
+            out["reason"] = "timeout"
+        else:
+            out["reason"] = "fetch_failed"
 
-    if not result["verified"]:
-        result["note"] = "Source suggested but could not be verified at signing time."
-
-    return result
+    return out
 
 
 async def _check_phash_ledger(phash: str) -> dict[str, Any] | None:
@@ -659,6 +692,7 @@ async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
             url = ps.get("url", "")
             if url and str(url).startswith("http"):
                 snapshot = await _verify_and_snapshot_source(str(url))
+                snapshot["suggestedBy"] = "claude"
                 verified_sources.append({**ps, "verification": snapshot})
             else:
                 verified_sources.append(ps)
