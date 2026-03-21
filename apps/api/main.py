@@ -9,6 +9,7 @@ import base64
 import hashlib
 import json
 import os
+import sys
 import subprocess
 import urllib.parse
 import urllib.request
@@ -523,6 +524,12 @@ async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
                     if ocr_raw.startswith("json"):
                         ocr_raw = ocr_raw[4:]
             ocr_data = json.loads(ocr_raw)
+            print(
+                f"DEBUG OCR raw_claims type: {type(ocr_data.get('claims', []))}, "
+                f"first item type: {type(ocr_data.get('claims', [''])[0]) if ocr_data.get('claims') else 'empty'}, "
+                f"sample: {str(ocr_data.get('claims', [])[:1])[:200]}",
+                file=sys.stderr,
+            )
             extracted_text = ocr_data.get("extracted_text", "")
             raw_claims = ocr_data.get("claims", [])
             # Support both old format (list of strings) and new format (list of objects)
