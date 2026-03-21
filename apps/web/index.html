@@ -434,6 +434,7 @@ async function manualVerify(){
 }
 function handleDrop(e) {
   e.preventDefault();
+  document.getElementById('media-file-input').value = '';
   document.getElementById('drop-zone').style.borderColor = 'var(--border)';
   const file = e.dataTransfer.files[0];
   if (file) handleMediaFile(file);
@@ -448,6 +449,7 @@ async function handleMediaFile(file) {
   status.textContent = 'Hashing and analyzing...';
 
   const formData = new FormData();
+  document.getElementById('media-file-input').value = '';
   formData.append('file', file);
 
   try {
