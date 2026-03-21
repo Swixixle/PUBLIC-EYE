@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import subprocess
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -373,6 +374,57 @@ def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
 _phash_ledger: dict[str, dict[str, Any]] = {}
 
 
+async def _verify_and_snapshot_source(url: str, timeout: int = 8) -> dict[str, Any]:
+    """Fetch a source URL, hash its content, return verification record."""
+    import re as _re
+
+    result: dict[str, Any] = {
+        "url": url,
+        "verified": False,
+        "httpStatus": None,
+        "contentHash": None,
+        "contentLength": None,
+        "pageTitle": None,
+        "retrievedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "error": None,
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Frame/1.0 (cryptographic public record verification; https://github.com/Swixixle/FRAME)",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result["httpStatus"] = resp.status
+            body = resp.read(524288)  # max 512KB
+            result["contentLength"] = len(body)
+            result["contentHash"] = hashlib.sha256(body).hexdigest()
+            result["verified"] = resp.status == 200
+            # Extract page title
+            try:
+                text = body.decode("utf-8", errors="ignore")
+                title_match = _re.search(r"<title[^>]*>([^<]{1,200})</title>", text, _re.IGNORECASE)
+                if title_match:
+                    result["pageTitle"] = title_match.group(1).strip()
+            except Exception:  # noqa: BLE001
+                pass
+    except urllib.error.HTTPError as e:
+        result["httpStatus"] = e.code
+        result["error"] = f"HTTP {e.code}"
+    except urllib.error.URLError as e:
+        result["error"] = f"URL error: {str(e.reason)[:80]}"
+    except Exception as e:  # noqa: BLE001
+        result["error"] = f"Error: {str(e)[:80]}"
+
+    if not result["verified"]:
+        result["note"] = "Source suggested but could not be verified at signing time."
+
+    return result
+
+
 async def _check_phash_ledger(phash: str) -> dict[str, Any] | None:
     """Check if a perceptual hash (or close variant) has been seen before."""
     # Exact match first
@@ -541,6 +593,26 @@ async def analyze_media(file: UploadFile = File(...)) -> dict[str, Any]:
             extracted_text = f"OCR unavailable: {str(e)[:120]}"
             extracted_claims = []
             extracted_claim_objects = []
+
+    # Step 3b — verify and snapshot primary sources from claim objects
+    verified_claim_objects: list[dict[str, Any]] = []
+    for claim_obj in extracted_claim_objects:
+        if not isinstance(claim_obj, dict):
+            verified_claim_objects.append(claim_obj)
+            continue
+        verified_sources: list[Any] = []
+        for ps in claim_obj.get("primary_sources", [])[:3]:
+            if not isinstance(ps, dict):
+                verified_sources.append(ps)
+                continue
+            url = ps.get("url", "")
+            if url and str(url).startswith("http"):
+                snapshot = await _verify_and_snapshot_source(str(url))
+                verified_sources.append({**ps, "verification": snapshot})
+            else:
+                verified_sources.append(ps)
+        verified_claim_objects.append({**claim_obj, "primary_sources": verified_sources})
+    extracted_claim_objects = verified_claim_objects
 
     # Step 4 — check perceptual hash ledger for prior appearances
     ledger_match: dict[str, Any] | None = None

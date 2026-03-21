@@ -2,7 +2,12 @@ import type { FrameReceiptPayload } from "@frame/types";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
 import { signReceipt } from "../packages/signing/index.js";
 
-type ClaimPrimarySource = { label?: string; url?: string; type?: string };
+type ClaimPrimarySource = {
+  label?: string;
+  url?: string;
+  type?: string;
+  verification?: Record<string, unknown>;
+};
 type ClaimObj = {
   text?: string;
   type?: string;
@@ -132,7 +137,16 @@ for (const claim of claimsForNarrative.slice(0, 5)) {
   const claimText = typeof claim === "string" ? claim : (claim.text ?? "");
   const sources = (claim as ClaimObj).primary_sources ?? [];
   const sourceList = sources
-    .map((s) => `${s.label}: ${s.url}`)
+    .map((s) => {
+      const ver = (s as ClaimPrimarySource).verification;
+      const tail =
+        ver?.verified && ver.contentHash
+          ? ` [verified SHA-256: ${String(ver.contentHash).slice(0, 12)}…]`
+          : ver?.error || ver?.note
+            ? ` [${String(ver.error || ver.note)}]`
+            : "";
+      return `${s.label}: ${s.url}${tail}`;
+    })
     .filter(Boolean)
     .join(" | ");
   narrativeSentences.push({
@@ -155,6 +169,7 @@ for (const claim of claimObjects.slice(0, 5)) {
   for (const ps of (claim.primary_sources ?? []).slice(0, 3)) {
     if (ps.url && ps.label) {
       const id = `claim-src-${createHash("sha256").update(ps.url).digest("hex").slice(0, 16)}`;
+      const psExt = ps as ClaimPrimarySource;
       claimSources.push({
         id,
         adapter: "manual",
@@ -164,6 +179,7 @@ for (const claim of claimObjects.slice(0, 5)) {
         externalRef: ps.url,
         metadata: {
           suggestedSourceType: ps.type ?? "",
+          verificationJson: JSON.stringify(psExt.verification ?? null),
         } as unknown as NonNullable<FrameReceiptPayload["sources"][number]["metadata"]>,
       });
     }
