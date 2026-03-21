@@ -9,7 +9,9 @@ import base64
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -369,9 +371,30 @@ def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
-# In-memory perceptual hash ledger (persists for server lifetime)
-# In production this should be a database table
-_phash_ledger: dict[str, dict[str, Any]] = {}
+# SQLite-backed perceptual hash ledger
+_DB_PATH = Path(os.environ.get("FRAME_DB_PATH", "/tmp/frame_ledger.db"))
+_db_lock = threading.Lock()
+
+
+def _init_db() -> None:
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS phash_ledger (
+                perceptual_hash TEXT PRIMARY KEY,
+                file_hash TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                first_seen_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+
+_init_db()
 
 
 async def _verify_and_snapshot_source(url: str, timeout: int = 8) -> dict[str, Any]:
@@ -426,46 +449,74 @@ async def _verify_and_snapshot_source(url: str, timeout: int = 8) -> dict[str, A
 
 
 async def _check_phash_ledger(phash: str) -> dict[str, Any] | None:
-    """Check if a perceptual hash (or close variant) has been seen before."""
-    # Exact match first
-    if phash in _phash_ledger:
-        entry = _phash_ledger[phash]
-        return {
-            "matchType": "exact",
-            "firstSeenAt": entry["firstSeenAt"],
-            "firstSeenFile": entry["fileName"],
-            "fileHash": entry["fileHash"],
-            "message": f"This content was first seen at {entry['firstSeenAt']}. Identical perceptual fingerprint.",
-        }
-    # Hamming distance check for near-duplicates (within 10 bits = likely same content)
-    try:
-        import imagehash
-
-        query_hash = imagehash.hex_to_hash(phash)
-        for stored_phash, entry in _phash_ledger.items():
-            stored_hash = imagehash.hex_to_hash(stored_phash)
-            distance = query_hash - stored_hash
-            if distance <= 10:
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT * FROM phash_ledger WHERE perceptual_hash = ?",
+                (phash,),
+            ).fetchone()
+            if row:
                 return {
-                    "matchType": "near-duplicate",
-                    "hammingDistance": distance,
-                    "firstSeenAt": entry["firstSeenAt"],
-                    "firstSeenFile": entry["fileName"],
-                    "fileHash": entry["fileHash"],
-                    "message": f"Near-duplicate content detected (Hamming distance: {distance}/64). Original first seen at {entry['firstSeenAt']}.",
+                    "matchType": "exact",
+                    "firstSeenAt": row["first_seen_at"],
+                    "firstSeenFile": row["file_name"],
+                    "fileHash": row["file_hash"],
+                    "message": f"This content was first seen at {row['first_seen_at']}. Identical perceptual fingerprint.",
                 }
-    except Exception:  # noqa: BLE001
-        pass
+            try:
+                import imagehash
+
+                query_hash = imagehash.hex_to_hash(phash)
+                rows = conn.execute("SELECT * FROM phash_ledger").fetchall()
+                for r in rows:
+                    stored_hash = imagehash.hex_to_hash(r["perceptual_hash"])
+                    distance = query_hash - stored_hash
+                    if distance <= 10:
+                        return {
+                            "matchType": "near-duplicate",
+                            "hammingDistance": distance,
+                            "firstSeenAt": r["first_seen_at"],
+                            "firstSeenFile": r["file_name"],
+                            "fileHash": r["file_hash"],
+                            "message": f"Near-duplicate content detected (Hamming distance: {distance}/64). Original first seen at {r['first_seen_at']}.",
+                        }
+            except Exception:  # noqa: BLE001
+                pass
+        finally:
+            conn.close()
     return None
 
 
 async def _add_to_phash_ledger(phash: str, file_hash: str, filename: str, timestamp: str) -> None:
-    """Add a new perceptual hash to the ledger."""
-    _phash_ledger[phash] = {
-        "fileHash": file_hash,
-        "fileName": filename,
-        "firstSeenAt": timestamp,
-    }
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO phash_ledger (perceptual_hash, file_hash, file_name, first_seen_at) VALUES (?, ?, ?, ?)",
+                (phash, file_hash, filename, timestamp),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+@app.get("/v1/ledger")
+def get_ledger() -> dict[str, Any]:
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT perceptual_hash, file_hash, file_name, first_seen_at FROM phash_ledger ORDER BY first_seen_at DESC LIMIT 100",
+            ).fetchall()
+            return {
+                "count": len(rows),
+                "entries": [dict(r) for r in rows],
+            }
+        finally:
+            conn.close()
 
 
 @app.post("/v1/analyze-media")
