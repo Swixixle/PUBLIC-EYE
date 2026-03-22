@@ -134,6 +134,86 @@
   .main-tab.active{color:var(--amber);border-bottom-color:var(--amber);}
   .ts-badge{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--amber-bright);letter-spacing:0.08em;margin-right:8px;}
   @media(max-width:600px){.type-selector{flex-direction:column;}.type-btn{border-right:1px solid var(--border)!important;}.sources-grid{grid-template-columns:1fr;}.evidence-item{grid-template-columns:36px 1fr;}}
+
+  /* —— Media tab (Task 2.1) —— */
+  .media-tab-panel .input-group{margin-bottom:8px;}
+  .media-tab-panel .input-label{display:block;margin-bottom:4px;}
+  .media-url-input{width:100%;font-size:16px;padding:12px 16px;border-radius:6px;margin-top:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;}
+  .media-url-input:focus{outline:none;border-color:var(--amber-dim);}
+  .input-hint{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:6px;}
+  .or-divider{text-align:center;color:var(--text-3);margin:20px 0;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .or-divider span{padding:0 12px;}
+  .media-dropzone{border:2px dashed var(--border);border-radius:8px;padding:40px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--surface);}
+  .media-dropzone:hover,.media-dropzone.dragover{border-color:var(--amber-dim);background:var(--amber-glow);}
+  .dropzone-icon{font-size:24px;margin-bottom:8px;color:var(--text-3);}
+  .dropzone-label{font-size:15px;margin-bottom:4px;color:var(--text);}
+  .dropzone-hint{font-size:12px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;}
+  .file-selected-indicator{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .clear-file-btn{background:transparent;border:none;color:var(--text-3);cursor:pointer;font-size:14px;}
+  .media-analyze-btn{width:100%;padding:14px;font-size:14px;font-weight:500;margin-top:16px;border-radius:6px;cursor:pointer;border:none;background:var(--amber-dim);color:var(--amber-bright);font-family:'IBM Plex Mono',monospace;letter-spacing:0.2em;text-transform:uppercase;transition:background .2s;}
+  .media-analyze-btn:hover:not(:disabled){background:var(--amber);color:var(--bg);}
+  .media-analyze-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .processing-status{text-align:center;padding:40px 0;}
+  .media-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .job-id-display{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:8px;word-break:break-all;}
+  .hash-preview-block{margin:16px 0;padding:16px;border-radius:6px;background:var(--surface);border-left:3px solid var(--amber-dim);}
+  .hash-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;color:var(--text-3);margin-bottom:6px;}
+  .hash-value-line{font-family:'IBM Plex Mono',monospace;font-size:11px;word-break:break-all;color:var(--amber-bright);}
+  .receipt-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;background:var(--surface);}
+  .receipt-header{padding:20px 24px;background:var(--surface-2);border-bottom:1px solid var(--border);}
+  .receipt-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;color:var(--amber);margin-bottom:8px;}
+  .receipt-id-line,.receipt-ts-line{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2);}
+  .receipt-section{padding:20px 24px;border-bottom:1px solid var(--border-light);}
+  .receipt-section .section-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;color:var(--text-3);margin-bottom:10px;}
+  .receipt-subject{font-size:15px;line-height:1.6;color:var(--text);}
+  .receipt-hash.monospace{font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .unknowns-section{background:rgba(200,153,42,0.04);border-left:3px solid var(--amber-dim);}
+  .unknown-item{font-size:13px;line-height:1.6;padding:8px 0;border-bottom:1px solid var(--border-light);color:var(--text-2);}
+  .unknown-item:last-child{border-bottom:none;}
+  .unknown-type{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:500;letter-spacing:0.15em;margin-right:8px;padding:2px 6px;border-radius:3px;background:var(--surface);}
+  .unknown-item.operational .unknown-type{color:var(--amber-bright);}
+  .unknown-item.epistemic .unknown-type{color:var(--text-3);}
+  .source-item{font-size:12px;line-height:1.8;color:var(--text-2);font-family:'IBM Plex Mono',monospace;}
+  .trust-footer{padding:16px 24px;}
+  .trust-footer summary{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.15em;cursor:pointer;color:var(--text-3);}
+  .trust-footer-content{margin-top:16px;}
+  .trust-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;color:var(--text-3);margin-bottom:6px;}
+  .verify-btn{margin-top:16px;padding:10px 20px;font-size:11px;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--amber);font-family:'IBM Plex Mono',monospace;}
+  .verify-pass{color:var(--green-bright);font-weight:500;}
+  .verify-fail{color:var(--red-bright);font-weight:500;}
+  .raw-json{font-family:'IBM Plex Mono',monospace;font-size:10px;overflow-x:auto;padding:12px;background:var(--bg);border-radius:4px;margin-top:8px;max-height:300px;overflow-y:auto;color:var(--text-2);}
+  .reset-btn{width:100%;padding:12px;font-size:12px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text-2);font-family:'IBM Plex Mono',monospace;margin-top:8px;}
+  .error-banner{padding:12px 16px;background:rgba(122,58,58,0.12);border:1px solid var(--red);border-radius:6px;font-size:13px;color:var(--red-bright);margin-bottom:16px;font-family:'IBM Plex Mono',monospace;}
+  .ocr-text{font-size:13px;line-height:1.6;white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;color:var(--text-2);}
+  .custody-line{font-size:12px;line-height:1.8;color:var(--text-2);font-family:'IBM Plex Mono',monospace;}
+  @media(max-width:480px){.receipt-section{padding:16px;}.receipt-header{padding:16px;}.media-url-input{font-size:16px;}}
+
+  /* Ad Spend / Meta Ad Library */
+  .ad-library-inputs{display:none;flex:1;align-items:center;gap:12px;flex-wrap:wrap;min-width:0;}
+  .ad-library-inputs .search-input{flex:1;min-width:180px;}
+  .country-select{min-width:160px;width:auto;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:10px 14px;border-radius:0;}
+  #ad-library-summary{margin-bottom:20px;}
+  .ad-library-result{padding:8px 0 16px;}
+  .ad-library-result .result-headline{font-size:18px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:10px;color:var(--text);font-family:'Cormorant Garamond',serif;}
+  .active-badge{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.1em;padding:3px 8px;background:rgba(176,72,72,0.12);border:1px solid var(--red);color:var(--red-bright);border-radius:3px;text-transform:uppercase;}
+  .active-dot{color:var(--red-bright);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .funding-section{margin:16px 0;}
+  .ad-library-result .funding-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;color:var(--text-3);margin-bottom:8px;}
+  .funding-entity{font-size:14px;padding:6px 0;border-bottom:1px solid var(--border-light);font-weight:500;color:var(--text);}
+  .no-entity{font-size:13px;color:var(--text-3);font-style:italic;}
+  .ad-library-caveat{font-size:12px;color:var(--text-3);font-style:italic;margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light);}
+  .result-caveat{font-size:12px;color:var(--text-3);font-style:italic;margin-top:8px;}
+  .ad-spend-table-wrapper{margin:16px 0;overflow-x:auto;}
+  .ad-spend-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .ad-spend-table th{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.1em;color:var(--text-3);text-align:left;padding:8px;border-bottom:1px solid var(--border);}
+  .ad-spend-table td{padding:8px;border-bottom:1px solid var(--border-light);vertical-align:top;color:var(--text-2);}
+  .table-overflow-note{font-size:11px;color:var(--text-3);text-align:right;margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+  .ad-library-result.no-results .result-headline{color:var(--text-3);}
+  .ad-library-result .result-sub{font-size:14px;color:var(--text-2);line-height:1.6;}
+  @media(max-width:480px){
+    .ad-spend-table th:nth-child(3),.ad-spend-table td:nth-child(3){display:none;}
+  }
 </style>
 </head>
 <body>
@@ -153,6 +233,7 @@
 
   <nav class="main-tabs">
     <button type="button" class="main-tab active" id="tab-records" onclick="showMainPanel('records')">Public records</button>
+    <button type="button" class="main-tab" id="tab-media" onclick="showMainPanel('media')">Media</button>
     <button type="button" class="main-tab" id="tab-podcast" onclick="showMainPanel('podcast')">Podcast / Video</button>
   </nav>
 
@@ -168,12 +249,22 @@
         <button class="type-btn" data-type="990" onclick="setType('990',this)">IRS 990 Nonprofit</button>
         <button class="type-btn" data-type="wikidata" onclick="setType('wikidata',this)">Public Figure</button>
         <button class="type-btn" data-type="combined" onclick="setType('combined',this)">Combined</button>
+        <button class="type-btn" data-type="ad_library" onclick="setType('ad_library',this)">Ad Spend</button>
       </div>
 
       <div class="type-desc" id="type-desc">FEC candidate ID or name search. Returns campaign finance totals by election cycle.</div>
 
-      <div class="search-row">
+      <div class="search-row" id="records-search-row">
         <input type="text" class="search-input" id="search-input" placeholder="Joe Manchin, Bernie Sanders, Ted Cruz..." autocomplete="off">
+        <div id="ad-library-inputs" class="ad-library-inputs" style="display:none">
+          <input type="text" class="search-input" id="ad-library-name" placeholder="Name, page name, or search term" autocomplete="off" />
+          <select id="ad-library-country" class="field-input country-select" aria-label="Country">
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="AU">Australia</option>
+          </select>
+        </div>
         <button class="search-btn" id="search-btn" onclick="runSearch()">Generate Receipt →</button>
       </div>
 
@@ -224,23 +315,107 @@
     </div>
   </section>
 
-  <section class="media-section" style="padding:48px 0;border-bottom:1px solid var(--border);">
-    <div class="section-label">Media Verification</div>
-    <p style="font-size:13px;color:var(--text-2);margin-top:8px;margin-bottom:24px;max-width:540px;line-height:1.7;">Upload any image or screenshot. Frame generates a cryptographic hash, a perceptual fingerprint that survives re-compression, extracts any text claims via OCR, and checks if this content has appeared before. The signed receipt proves when this file was first seen.</p>
+  </div>
 
-    <div id="drop-zone" style="border:1px dashed var(--border);padding:40px 24px;text-align:center;cursor:pointer;transition:border-color 0.2s;background:var(--surface);" onclick="document.getElementById('media-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--amber-dim)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleDrop(event)">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-3);">Drop image here or click to upload</div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:8px;">PNG, JPG, GIF, WEBP — screenshots of social media, news, video frames</div>
+  <div id="panel-media" class="media-tab-panel" style="display:none;padding:0 28px 48px;max-width:900px;margin:0 auto;">
+    <div class="hero-eyebrow" style="padding-top:32px;">Media verification</div>
+    <h2 class="hero-title" style="font-size:clamp(26px,4vw,40px);margin-bottom:12px;">URL or file → <em>readable receipt</em></h2>
+    <p class="hero-sub" style="max-width:560px;margin-bottom:28px;">Paste an Instagram, TikTok, or direct image link — or drop a file. Frame fetches, fingerprints, runs Hive AI detection and OCR, then signs a receipt you can verify.</p>
+
+    <div id="media-input-panel">
+      <div class="input-group">
+        <label class="field-label input-label">Paste a URL to verify</label>
+        <input type="url" id="media-url-input" placeholder="https://instagram.com/reel/... or any image/video URL" class="media-url-input" autocomplete="off" />
+        <div class="input-hint">Instagram, TikTok, YouTube, or any direct image/video link</div>
+      </div>
+      <div class="or-divider"><span>or</span></div>
+      <div id="media-dropzone" class="media-dropzone" ondragover="mediaHandleDragOver(event)" ondragleave="mediaHandleDragLeave(event)" ondrop="mediaHandleDrop(event)" onclick="document.getElementById('media-tab-file-input').click()">
+        <div class="dropzone-icon">↑</div>
+        <div class="dropzone-label">Drop a file here or click to upload</div>
+        <div class="dropzone-hint">Image or video · Max 50MB</div>
+        <input type="file" id="media-tab-file-input" accept="image/*,video/*" style="display:none" onchange="mediaHandleFileSelect(event)" />
+      </div>
+      <div id="media-file-selected" style="display:none" class="file-selected-indicator">
+        <span id="media-file-name"></span>
+        <button type="button" onclick="clearFileSelection()" class="clear-file-btn">✕</button>
+      </div>
+      <button type="button" id="media-analyze-btn" onclick="analyzeMediaTab()" class="media-analyze-btn" disabled>Analyze</button>
     </div>
-    <input type="file" id="media-file-input" accept="image/*" style="display:none" onchange="handleMediaFile(this.files[0])">
 
-    <div id="media-status" style="display:none;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-2);margin-top:12px;"></div>
-    <div id="media-result" style="display:none;margin-top:16px;"></div>
-  </section>
+    <div id="media-processing-panel" style="display:none">
+      <div class="processing-status">
+        <div class="media-spinner"></div>
+        <div id="processing-label">Analyzing...</div>
+        <div id="processing-job-id" class="job-id-display"></div>
+      </div>
+      <div id="media-hash-preview" style="display:none" class="hash-preview-block">
+        <div class="hash-label">FILE FINGERPRINT</div>
+        <div id="media-hash-value" class="hash-value-line"></div>
+        <div class="hash-note">Hash computed. Analysis in progress.</div>
+      </div>
+    </div>
+
+    <div id="media-receipt-panel" style="display:none">
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="receipt-title">FRAME RECEIPT — MEDIA VERIFICATION</div>
+          <div id="receipt-id-display" class="receipt-id-line"></div>
+          <div id="receipt-timestamp" class="receipt-ts-line"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">WHAT WAS CHECKED</div>
+          <div id="receipt-subject" class="receipt-subject"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">FILE FINGERPRINT</div>
+          <div id="receipt-hash" class="receipt-hash monospace"></div>
+          <div class="hash-note">If this file is modified in any way, this hash will not match.</div>
+        </div>
+        <div id="receipt-detection-section" class="receipt-section" style="display:none">
+          <div class="section-label">AI DETECTION</div>
+          <div id="receipt-detection-result"></div>
+          <div class="implication-note" id="receipt-detection-note"></div>
+        </div>
+        <div id="receipt-ocr-section" class="receipt-section" style="display:none">
+          <div class="section-label">TEXT FOUND IN FILE</div>
+          <div id="receipt-ocr-text" class="ocr-text"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">CHAIN OF CUSTODY</div>
+          <div id="receipt-custody" class="custody-block"></div>
+        </div>
+        <div class="receipt-section unknowns-section">
+          <div class="section-label">WHAT WE DON'T KNOW</div>
+          <div id="receipt-operational-unknowns"></div>
+          <div id="receipt-epistemic-unknowns"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">SOURCES CONSULTED</div>
+          <div id="receipt-sources"></div>
+        </div>
+        <details class="trust-footer">
+          <summary>Verify this receipt</summary>
+          <div class="trust-footer-content">
+            <div class="trust-label">SIGNATURE</div>
+            <div id="receipt-signature" class="monospace truncate"></div>
+            <div class="trust-label" style="margin-top:12px">PUBLIC KEY</div>
+            <div id="receipt-pubkey" class="monospace truncate"></div>
+            <button type="button" id="media-verify-btn" onclick="verifyMediaReceiptSignature()" class="verify-btn">Verify Signature</button>
+            <div id="media-verify-result"></div>
+            <details style="margin-top:16px">
+              <summary class="raw-json-toggle">View raw receipt JSON</summary>
+              <pre id="receipt-raw-json" class="raw-json"></pre>
+            </details>
+          </div>
+        </details>
+      </div>
+      <button type="button" onclick="resetMediaPanel()" class="reset-btn">Check another</button>
+    </div>
   </div>
 
   <section class="receipt-output" id="receipt-output">
     <div class="section-label">Verified Receipt</div>
+    <div id="ad-library-summary" style="display:none"></div>
     <div class="receipt-claim" id="receipt-claim">—</div>
     <div class="receipt-meta">
       <span class="receipt-meta-item">Generated: <strong id="receipt-date">—</strong></span>
@@ -313,9 +488,8 @@
 <script>
 const API_BASE=(new URLSearchParams(location.search).get('api')||'https://frame-2yxu.onrender.com').replace(/\/$/,'');
 
-// Job polling infrastructure — used by Task 2.1 media UI
-// Existing adapter calls are not changed here
-async function submitJobAndPoll(jobRequest, onProgress, onComplete, onError) {
+/** Submit async job and poll until complete, failed, or 3-minute timeout. */
+async function submitJobAndPoll(jobRequest, onProgress) {
   const base = API_BASE;
   const submitRes = await fetch(`${base}/v1/jobs`, {
     method: 'POST',
@@ -324,55 +498,450 @@ async function submitJobAndPoll(jobRequest, onProgress, onComplete, onError) {
   });
   if (!submitRes.ok) {
     const t = await submitRes.text();
-    if (onError) onError(t || submitRes.statusText);
-    return null;
+    throw new Error(t || `HTTP ${submitRes.status}`);
   }
-  const { job_id, poll_url } = await submitRes.json();
+  const body = await submitRes.json();
+  const job_id = body.job_id;
+  const poll_url = body.poll_url;
   const pollUrl = poll_url && poll_url.startsWith('http') ? poll_url : `${base}${poll_url || '/v1/jobs/' + job_id}`;
 
   if (onProgress) onProgress({ status: 'pending', job_id });
 
-  const poll = setInterval(async () => {
-    try {
-      const pollRes = await fetch(pollUrl);
-      if (!pollRes.ok) {
-        clearInterval(poll);
-        if (onError) onError(await pollRes.text());
-        return;
-      }
-      const job = await pollRes.json();
-
-      if (onProgress) onProgress(job);
-
-      if (job.status === 'complete') {
-        clearInterval(poll);
-        if (onComplete) onComplete(job.receipt, job.processing_time_ms);
-      } else if (job.status === 'failed') {
-        clearInterval(poll);
-        if (onError) onError(job.error);
-      }
-    } catch (err) {
-      clearInterval(poll);
-      if (onError) onError(err && err.message ? err.message : String(err));
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    const pollRes = await fetch(pollUrl);
+    if (!pollRes.ok) {
+      const t = await pollRes.text();
+      throw new Error(t || `Poll HTTP ${pollRes.status}`);
     }
-  }, 2000);
+    const job = await pollRes.json();
+    if (onProgress) onProgress(job);
 
-  setTimeout(() => {
-    clearInterval(poll);
-    if (onError) onError('Job timed out after 3 minutes.');
-  }, 180000);
-
-  return job_id;
+    if (job.status === 'complete') {
+      return { receipt: job.receipt, processing_time_ms: job.processing_time_ms };
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error || 'Job failed');
+    }
+    await new Promise(function (r) { setTimeout(r, 2000); });
+  }
+  throw new Error('Job timed out after 3 minutes.');
 }
 
 function stripReceiptUrl(obj){if(!obj||typeof obj!=='object')return obj;const{receiptUrl,extractedClaimObjects,transcript,sourceUrl,podcastTitle,note,...rest}=obj;return rest;}
 function showMainPanel(which){
   const rec=document.getElementById('panel-records');
   const pod=document.getElementById('panel-podcast');
-  if(which==='records'){rec.style.display='block';pod.style.display='none';}
-  else{rec.style.display='none';pod.style.display='block';}
+  const med=document.getElementById('panel-media');
+  rec.style.display=which==='records'?'block':'none';
+  pod.style.display=which==='podcast'?'block':'none';
+  if(med) med.style.display=which==='media'?'block':'none';
   document.getElementById('tab-records').classList.toggle('active',which==='records');
+  document.getElementById('tab-media').classList.toggle('active',which==='media');
   document.getElementById('tab-podcast').classList.toggle('active',which==='podcast');
+}
+
+// ─────────────────────────────────────────
+// MEDIA TAB — URL / file → receipt card
+// ─────────────────────────────────────────
+let mediaSelectedFile = null;
+let mediaCurrentReceipt = null;
+
+function mediaShowPanel(id, visible) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = visible ? 'block' : 'none';
+}
+
+function mediaHandleDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.add('dragover');
+}
+function mediaHandleDragLeave(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.remove('dragover');
+}
+function mediaHandleDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) mediaSetSelectedFile(file);
+}
+function mediaHandleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) mediaSetSelectedFile(file);
+}
+
+function mediaSetSelectedFile(file) {
+  mediaSelectedFile = file;
+  const nameEl = document.getElementById('media-file-name');
+  const sel = document.getElementById('media-file-selected');
+  if (nameEl) nameEl.textContent = file.name;
+  if (sel) sel.style.display = 'flex';
+  const urlIn = document.getElementById('media-url-input');
+  if (urlIn) urlIn.value = '';
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = false;
+}
+
+function clearFileSelection() {
+  mediaSelectedFile = null;
+  const sel = document.getElementById('media-file-selected');
+  if (sel) sel.style.display = 'none';
+  const fin = document.getElementById('media-tab-file-input');
+  if (fin) fin.value = '';
+  checkAnalyzeButton();
+}
+
+function checkAnalyzeButton() {
+  const url = (document.getElementById('media-url-input') && document.getElementById('media-url-input').value.trim()) || '';
+  const hasFile = mediaSelectedFile !== null;
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = !url && !hasFile;
+}
+
+if (document.getElementById('media-url-input')) {
+  document.getElementById('media-url-input').addEventListener('input', checkAnalyzeButton);
+}
+
+function getMediaProcessingMessage(status) {
+  const messages = {
+    pending: 'Queued...',
+    processing: 'Analyzing...',
+    complete: 'Done.',
+    failed: 'Failed.',
+  };
+  return messages[status] || 'Processing...';
+}
+
+function setProcessingLabel(text) {
+  const el = document.getElementById('processing-label');
+  if (el) el.textContent = text;
+}
+
+function showMediaError(message) {
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-input-panel', true);
+  const existing = document.getElementById('media-error');
+  if (existing) existing.remove();
+  const err = document.createElement('div');
+  err.id = 'media-error';
+  err.className = 'error-banner';
+  err.textContent = 'Analysis failed: ' + message;
+  const panel = document.getElementById('media-input-panel');
+  if (panel) panel.prepend(err);
+}
+
+async function analyzeMediaTab() {
+  const urlIn = document.getElementById('media-url-input');
+  const url = urlIn ? urlIn.value.trim() : '';
+  const file = mediaSelectedFile;
+  if (!url && !file) return;
+
+  mediaShowPanel('media-input-panel', false);
+  mediaShowPanel('media-processing-panel', true);
+  mediaShowPanel('media-receipt-panel', false);
+  setProcessingLabel('Submitting...');
+  const hp = document.getElementById('media-hash-preview');
+  if (hp) hp.style.display = 'none';
+
+  try {
+    if (url) {
+      const { receipt, processing_time_ms } = await submitJobAndPoll(
+        { source_url: url },
+        function (job) {
+          setProcessingLabel(getMediaProcessingMessage(job.status));
+          const jid = document.getElementById('processing-job-id');
+          if (jid) jid.textContent = job.job_id || '';
+        },
+      );
+      renderMediaReceipt(receipt, processing_time_ms);
+    } else {
+      setProcessingLabel('Uploading file...');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const analyzeRes = await fetch(`${API_BASE}/v1/analyze-media`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!analyzeRes.ok) throw new Error('Analysis failed: ' + analyzeRes.status);
+      const analysis = await analyzeRes.json();
+
+      if (analysis.fileHash) {
+        const hv = document.getElementById('media-hash-value');
+        if (hv) hv.textContent = 'sha256:' + analysis.fileHash;
+        const hprev = document.getElementById('media-hash-preview');
+        if (hprev) hprev.style.display = 'block';
+      }
+
+      setProcessingLabel('Signing receipt...');
+
+      const signRes = await fetch(`${API_BASE}/v1/sign-media-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(analysis),
+      });
+
+      if (!signRes.ok) throw new Error('Signing failed: ' + signRes.status);
+      const receipt = await signRes.json();
+      renderMediaReceipt(receipt, null);
+    }
+  } catch (err) {
+    showMediaError(err && err.message ? err.message : String(err));
+  }
+}
+
+function renderMediaReceipt(receipt, processingMs) {
+  mediaCurrentReceipt = receipt;
+
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-receipt-panel', true);
+
+  const detSec = document.getElementById('receipt-detection-section');
+  const ocrSec = document.getElementById('receipt-ocr-section');
+  if (detSec) detSec.style.display = 'none';
+  if (ocrSec) ocrSec.style.display = 'none';
+
+  const receiptId = receipt.receiptId || receipt.receipt_id || 'FRM-' + Date.now();
+  const ridEl = document.getElementById('receipt-id-display');
+  if (ridEl) ridEl.textContent = receiptId;
+
+  const ts = receipt.createdAt || receipt.metadata?.generated_at || new Date().toISOString();
+  const tsEl = document.getElementById('receipt-timestamp');
+  if (tsEl) tsEl.textContent = 'Observed ' + new Date(ts).toLocaleString();
+
+  const subject =
+    receipt.subject?.display_name ||
+    receipt.subject?.identifier ||
+    (receipt.sources && receipt.sources[0] && receipt.sources[0].url) ||
+    (receipt.claims && receipt.claims[0] && receipt.claims[0].statement) ||
+    'Media file';
+  const subEl = document.getElementById('receipt-subject');
+  if (subEl) subEl.textContent = subject;
+
+  const hash = findHash(receipt);
+  const hashEl = document.getElementById('receipt-hash');
+  if (hashEl && hash) hashEl.textContent = 'sha256:' + hash;
+
+  const detection = findDetection(receipt);
+  if (detection) {
+    const score = detection.ai_generated_probability != null ? detection.ai_generated_probability : detection.ai_generated_score;
+    if (detection.detector === 'hive' && score != null && typeof score === 'number') {
+      const pct = Math.round(score * 100);
+      const rr = document.getElementById('receipt-detection-result');
+      const rn = document.getElementById('receipt-detection-note');
+      if (rr) rr.innerHTML = 'AI-generated probability: <strong>' + pct + '%</strong>';
+      if (rn) rn.textContent = detection.implication_note || 'This score reflects model output probabilities. It does not constitute a determination that content is or is not AI-generated.';
+      if (detSec) detSec.style.display = 'block';
+    } else if (detection.detector === 'hive' && detection.error) {
+      const rr = document.getElementById('receipt-detection-result');
+      const rn = document.getElementById('receipt-detection-note');
+      if (rr) rr.textContent = 'Hive returned an error.';
+      if (rn) rn.textContent = detection.note || detection.error;
+      if (detSec) detSec.style.display = 'block';
+    }
+  }
+
+  const ocr = findOcr(receipt);
+  if (ocr && ocr.status === 'success' && ocr.text) {
+    const ot = document.getElementById('receipt-ocr-text');
+    if (ot) {
+      const t = String(ocr.text);
+      ot.textContent = t.substring(0, 500) + (t.length > 500 ? '...' : '');
+    }
+    if (ocrSec) ocrSec.style.display = 'block';
+  }
+
+  const coc = findChainOfCustody(receipt);
+  const custEl = document.getElementById('receipt-custody');
+  if (custEl && coc) custEl.innerHTML = formatCustody(coc);
+
+  const unknowns = receipt.unknowns || { operational: [], epistemic: [] };
+  const opUnknowns = unknowns.operational || [];
+  const epUnknowns = unknowns.epistemic || [];
+
+  const opEl = document.getElementById('receipt-operational-unknowns');
+  if (opEl) {
+    opEl.innerHTML =
+      opUnknowns
+        .map(function (u) {
+          const text = u.text || u.description || u;
+          return (
+            '<div class="unknown-item operational"><span class="unknown-type">Technical limit</span> ' +
+            escHtml(String(text)) +
+            '</div>'
+          );
+        })
+        .join('') || '';
+  }
+
+  const epEl = document.getElementById('receipt-epistemic-unknowns');
+  if (epEl) {
+    epEl.innerHTML =
+      epUnknowns
+        .map(function (u) {
+          const text = u.text || u.description || u;
+          return (
+            '<div class="unknown-item epistemic"><span class="unknown-type">Fundamental limit</span> ' +
+            escHtml(String(text)) +
+            '</div>'
+          );
+        })
+        .join('') || '';
+  }
+
+  const evidence = receipt.sources || [];
+  const srcEl = document.getElementById('receipt-sources');
+  if (srcEl) {
+    srcEl.innerHTML =
+      evidence
+        .map(function (e) {
+          const adapter = e.adapter || 'Frame analysis';
+          const when = e.retrievedAt || e.retrieved_at || e.timestamp;
+          return (
+            '<div class="source-item">' +
+            escHtml(adapter) +
+            ' — queried ' +
+            escHtml(formatMediaDate(when)) +
+            '</div>'
+          );
+        })
+        .join('') || '<div class="source-item">Frame media analysis</div>';
+  }
+
+  const sigEl = document.getElementById('receipt-signature');
+  const pkEl = document.getElementById('receipt-pubkey');
+  const rawEl = document.getElementById('receipt-raw-json');
+  if (receipt.signing_error) {
+    if (sigEl) sigEl.textContent = 'Signing failed — see raw JSON';
+    if (pkEl) pkEl.textContent = '';
+  } else {
+    if (sigEl) sigEl.textContent = receipt.signature ? receipt.signature.substring(0, 64) + '...' : 'Not signed';
+    if (pkEl) pkEl.textContent = receipt.publicKey ? receipt.publicKey.substring(0, 64) + '...' : '';
+  }
+  if (rawEl) rawEl.textContent = JSON.stringify(receipt, null, 2);
+}
+
+function findHash(receipt) {
+  if (receipt.subject && receipt.subject.identifier && String(receipt.subject.identifier).startsWith('sha256:')) {
+    return String(receipt.subject.identifier).replace('sha256:', '');
+  }
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.sha256) return meta.sha256;
+    if (meta.fileHash) return meta.fileHash;
+    const u = sources[i].url;
+    if (u && String(u).startsWith('sha256:')) return String(u).replace('sha256:', '');
+  }
+  if (receipt.fileHash) return receipt.fileHash;
+  return null;
+}
+
+function findDetection(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.detection) return meta.detection;
+  }
+  if (receipt.detection) return receipt.detection;
+  return null;
+}
+
+function findOcr(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.ocr) return meta.ocr;
+  }
+  return null;
+}
+
+function findChainOfCustody(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.chain_of_custody) return meta.chain_of_custody;
+  }
+  return null;
+}
+
+function formatCustody(coc) {
+  const lines = [
+    'Fetched via: ' + (coc.fetch_adapter_version || 'frame-fetch'),
+    'Retrieved: ' + formatMediaDate(coc.retrieval_timestamp),
+    'TLS verified: ' + (coc.tls_verified ? 'Yes' : 'No'),
+  ];
+  if (coc.server_ip) lines.push('Server IP: ' + coc.server_ip);
+  if (coc.http_status != null) lines.push('HTTP status: ' + coc.http_status);
+  return lines.map(function (l) {
+    return '<div class="custody-line">' + escHtml(l) + '</div>';
+  }).join('');
+}
+
+function formatMediaDate(iso) {
+  if (!iso) return 'unknown';
+  try {
+    return new Date(iso).toLocaleString();
+  } catch (e) {
+    return String(iso);
+  }
+}
+
+async function verifyMediaReceiptSignature() {
+  if (!mediaCurrentReceipt) return;
+  const btn = document.getElementById('media-verify-btn');
+  if (btn) {
+    btn.textContent = 'Verifying...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/v1/verify-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stripReceiptUrl(mediaCurrentReceipt)),
+    });
+    const result = await res.json();
+    const el = document.getElementById('media-verify-result');
+    if (result.ok) {
+      if (el) el.innerHTML = '<span class="verify-pass">✓ Signature valid — receipt has not been modified</span>';
+    } else {
+      if (el) el.innerHTML = '<span class="verify-fail">✗ Signature invalid</span>';
+    }
+  } catch (err) {
+    const el = document.getElementById('media-verify-result');
+    if (el) el.textContent = 'Verification error: ' + (err && err.message ? err.message : String(err));
+  } finally {
+    if (btn) {
+      btn.textContent = 'Verify Signature';
+      btn.disabled = false;
+    }
+  }
+}
+
+function resetMediaPanel() {
+  mediaSelectedFile = null;
+  mediaCurrentReceipt = null;
+  const urlIn = document.getElementById('media-url-input');
+  if (urlIn) urlIn.value = '';
+  const fin = document.getElementById('media-tab-file-input');
+  if (fin) fin.value = '';
+  const sel = document.getElementById('media-file-selected');
+  if (sel) sel.style.display = 'none';
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = true;
+  const hp = document.getElementById('media-hash-preview');
+  if (hp) hp.style.display = 'none';
+  const err = document.getElementById('media-error');
+  if (err) err.remove();
+  mediaShowPanel('media-receipt-panel', false);
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-input-panel', true);
 }
 function formatTs(sec){
   const s=Math.max(0,Math.floor(Number(sec)||0));
@@ -480,6 +1049,33 @@ function collectEntityLinks(signed){
 function escHtml(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+function renderAdSpendTableHtml(ads){
+  if(!ads||!ads.length)return '';
+  const rows=ads.slice(0,10).map(function(ad){
+    return '<tr><td>'+escHtml(String(ad.page_name||'—'))+'</td><td>'+escHtml(String(ad.funding_entity||'not disclosed'))+'</td><td>'+escHtml(String(ad.spend_display||'not disclosed'))+'</td><td>'+(ad.is_active?'<span class="active-dot">active</span>':'inactive')+'</td></tr>';
+  }).join('');
+  return '<div class="ad-spend-table-wrapper"><table class="ad-spend-table"><thead><tr><th>Page</th><th>Funding entity</th><th>Spend (est.)</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>'+(ads.length>10?'<div class="table-overflow-note">Showing 10 of '+ads.length+' ads</div>':'')+'</div>';
+}
+function buildAdLibrarySummaryHtml(receipt){
+  const payload=receipt.payload??receipt;
+  const meta=(payload.sources&&payload.sources[0]&&payload.sources[0].metadata)||{};
+  const result=meta.ad_library||{};
+  const status=result.status;
+  if(status==='no_results'){
+    return '<div class="ad-library-result no-results"><div class="result-headline">No political or issue ads found</div><div class="result-sub">Meta Ad Library returned no results for "'+escHtml(String(result.search_term||''))+'" in '+escHtml(String(result.country||''))+'.</div><div class="result-caveat">This does not mean no paid content exists — Meta only discloses political and issue ads.</div></div>';
+  }
+  if(status==='results_found'){
+    const entities=result.unique_funding_entities||[];
+    const entityHtml=entities.length>0?entities.map(function(e){return '<div class="funding-entity">'+escHtml(e)+'</div>';}).join(''):'<div class="no-entity">No funding entity disclosed</div>';
+    const activeAds=result.active_ads_count||0;
+    const totalAds=result.total_ads_returned||0;
+    return '<div class="ad-library-result has-results"><div class="result-headline">'+totalAds+' political/issue ad'+(totalAds!==1?'s':'')+' found'+(activeAds>0?' <span class="active-badge">'+activeAds+' active</span>':'')+'</div><div class="funding-section"><div class="funding-label">FUNDING ENTITIES ON RECORD</div>'+entityHtml+'</div>'+renderAdSpendTableHtml(result.ads||[])+'<div class="ad-library-caveat">Spend figures are estimated ranges from Meta\'s disclosure. Presence of paid advertising does not establish intent.</div></div>';
+  }
+  if(status==='unavailable'){
+    return '<div class="ad-library-result unavailable"><div class="result-headline">Meta Ad Library not configured</div><div class="result-sub">'+escHtml(result.note||'META_AD_LIBRARY_TOKEN required.')+'</div></div>';
+  }
+  return '<div class="ad-library-result error"><div class="result-headline">Query did not complete</div><div class="result-sub">'+escHtml(result.note||result.error||'Unknown error')+'</div></div>';
+}
 function shareUrlFor(signed){
   if(!signed||typeof signed!=='object')return null;
   if(signed.receiptUrl)return signed.receiptUrl;
@@ -533,18 +1129,27 @@ function extractClaimsFromNarrative(signed){
   return out;
 }
 let currentType='fec';
-const TYPE_DESCS={fec:'FEC candidate ID or name search. Returns campaign finance totals by election cycle.','990':'Nonprofit name or EIN. Returns IRS 990 financial data — assets, revenue, expenses.',wikidata:'Any public figure, journalist, executive, or religious leader. Returns biography and affiliations.',combined:'Senator + FEC ID + lobbying clients. Returns cross-referenced campaign finance and lobbying data.'};
+const TYPE_DESCS={fec:'FEC candidate ID or name search. Returns campaign finance totals by election cycle.','990':'Nonprofit name or EIN. Returns IRS 990 financial data — assets, revenue, expenses.',wikidata:'Any public figure, journalist, executive, or religious leader. Returns biography and affiliations.',combined:'Senator + FEC ID + lobbying clients. Returns cross-referenced campaign finance and lobbying data.',ad_library:'Meta Ad Library — political and issue ads only. Spend is disclosed as ranges.'};
 function setType(type,btn){
   currentType=type;
   document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('type-desc').textContent=TYPE_DESCS[type];
+  document.getElementById('type-desc').textContent=TYPE_DESCS[type]||TYPE_DESCS.fec;
   ['fec','990','wikidata','combined'].forEach(t=>{
     const el=document.getElementById(`extra-fields-${t}`);
     if(el)el.classList.toggle('visible',t===type);
   });
-  const ph={fec:'Joe Manchin, Bernie Sanders, Ted Cruz...','990':'Gates Foundation, AIPAC, Daily Caller News Foundation...',wikidata:'Tucker Carlson, Sean Hannity, Pope Leo...',combined:'Joe Manchin (use FEC ID field below)'};
-  document.getElementById('search-input').placeholder=ph[type];
+  const si=document.getElementById('search-input');
+  const adi=document.getElementById('ad-library-inputs');
+  if(type==='ad_library'){
+    if(si)si.style.display='none';
+    if(adi)adi.style.display='flex';
+  }else{
+    if(si)si.style.display='block';
+    if(adi)adi.style.display='none';
+  }
+  const ph={fec:'Joe Manchin, Bernie Sanders, Ted Cruz...','990':'Gates Foundation, AIPAC, Daily Caller News Foundation...',wikidata:'Tucker Carlson, Sean Hannity, Pope Leo...',combined:'Joe Manchin (use FEC ID field below)',ad_library:'Ted Cruz, page name, or keyword'};
+  if(si)si.placeholder=ph[type]||ph.fec;
 }
 function domain(url){try{return new URL(url).hostname.replace('www.','');}catch{return url;}}
 function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString('en-US',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
@@ -553,6 +1158,38 @@ function clearStatus(){document.getElementById('status-bar').classList.remove('v
 function showError(msg){const el=document.getElementById('error-box');el.textContent=msg;el.classList.add('visible');}
 function clearError(){document.getElementById('error-box').classList.remove('visible');}
 async function runSearch(){
+  if(currentType==='ad_library'){
+    const name=document.getElementById('ad-library-name').value.trim();
+    const country=document.getElementById('ad-library-country').value;
+    if(!name)return;
+    clearError();
+    document.getElementById('receipt-output').classList.remove('visible');
+    document.getElementById('search-btn').disabled=true;
+    setStatus('Querying Meta Ad Library...');
+    try{
+      const r=await fetch(`${API_BASE}/v1/generate-ad-library-receipt`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name,country}),
+      });
+      if(!r.ok){
+        let msg='Unknown error';
+        try{
+          const err=await r.json();
+          if(typeof err.detail==='string')msg=err.detail;
+          else if(err.detail)msg=typeof err.detail==='object'?JSON.stringify(err.detail):String(err.detail);
+          else msg=`HTTP ${r.status}`;
+        }catch(_){msg=`HTTP ${r.status}`;}
+        throw new Error(msg);
+      }
+      const signed=await r.json();
+      clearStatus();
+      renderReceipt(signed,{adLibrarySummaryHtml:buildAdLibrarySummaryHtml(signed)});
+      autoVerify(signed);
+    }catch(err){clearStatus();showError(`Error: ${err.message}`);}
+    document.getElementById('search-btn').disabled=false;
+    return;
+  }
   const query=document.getElementById('search-input').value.trim();
   if(!query)return;
   clearError();
@@ -605,12 +1242,23 @@ async function runSearch(){
     if(!r.ok){const err=await r.json().catch(()=>({detail:'Unknown error'}));throw new Error(err.detail?.message||JSON.stringify(err.detail)||`HTTP ${r.status}`);}
     const signed=await r.json();
     clearStatus();
-    renderReceipt(signed);
+    renderReceipt(signed,{});
     autoVerify(signed);
   }catch(err){clearStatus();showError(`Error: ${err.message}`);}
   document.getElementById('search-btn').disabled=false;
 }
-function renderReceipt(signed){
+function renderReceipt(signed,opts){
+  opts=opts||{};
+  const sumEl=document.getElementById('ad-library-summary');
+  if(sumEl){
+    if(opts.adLibrarySummaryHtml){
+      sumEl.innerHTML=opts.adLibrarySummaryHtml;
+      sumEl.style.display='block';
+    }else{
+      sumEl.innerHTML='';
+      sumEl.style.display='none';
+    }
+  }
   const payload=signed.payload??signed;
   const claim=payload.claims?.[0]?.statement??payload.subject?.claimText??'—';
   const createdAt=payload.createdAt??payload.generatedAt??signed.createdAt;
@@ -693,127 +1341,9 @@ async function manualVerify(){
     result.textContent=JSON.stringify(data,null,2);
   }catch(err){result.textContent=`Error: ${err.message}`;}
 }
-function handleDrop(e) {
-  e.preventDefault();
-  document.getElementById('media-file-input').value = '';
-  document.getElementById('drop-zone').style.borderColor = 'var(--border)';
-  const file = e.dataTransfer.files[0];
-  if (file) handleMediaFile(file);
-}
-
-async function handleMediaFile(file) {
-  if (!file) return;
-  const status = document.getElementById('media-status');
-  const result = document.getElementById('media-result');
-  status.style.display = 'block';
-  result.style.display = 'none';
-  status.textContent = 'Analyzing, routing, signing…';
-
-  const formData = new FormData();
-  document.getElementById('media-file-input').value = '';
-  formData.append('file', file);
-
-  try {
-    const r = await fetch(`${API_BASE}/v1/analyze-and-verify`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!r.ok) {
-      const errBody = await r.text().catch(() => '');
-      throw new Error(`HTTP ${r.status} ${errBody.slice(0, 200)}`);
-    }
-    const signed = await r.json();
-
-    status.style.display = 'none';
-    result.style.display = 'block';
-    result.innerHTML = buildMediaResult(signed);
-    renderReceipt(signed);
-    document.getElementById('manual-payload').value = JSON.stringify(signed, null, 2);
-    autoVerify(stripReceiptUrl(signed));
-  } catch (err) {
-    status.textContent = `Error: ${err.message}`;
-  }
-}
-
-function buildMediaResult(signed) {
-  const data = mediaAnalysisFromSigned(signed);
-  const ledger = data.ledgerMatch;
-  const ledgerHtml = ledger
-    ? `<div style="margin-top:12px;padding:12px 16px;background:rgba(176,72,72,0.08);border:1px solid var(--red);border-left:3px solid var(--red-bright);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--red-bright);line-height:1.8;">⚠ ${ledger.message}</div>`
-    : `<div style="margin-top:12px;padding:12px 16px;background:rgba(58,122,76,0.06);border:1px solid var(--green);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--green-bright);line-height:1.8;">✓ First appearance recorded. This receipt establishes the origin timestamp.</div>`;
-
-  const claimObjects = data.extractedClaimObjects || [];
-  const claimsHtml = claimObjects.length > 0
-    ? `<div style="margin-top:16px;"><div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;">Extracted Claims</div>${claimObjects.map(c => {
-    const sourceLinks = (c.primary_sources || []).map(s => {
-      const v = s.verification;
-      const verified = v && v.verificationStatus === 'verified';
-      const unverified = v && v.verificationStatus === 'unverified';
-      const statusText = v ? (verified ? `✓ ${v.httpStatus}` : unverified ? `✗ ${v.reason || 'unverified'}` : '') : '';
-      const hashText = verified && v.contentHash ? ` · SHA-256: ${v.contentHash.slice(0,8)}...` : '';
-      const color = verified ? 'var(--amber)' : unverified ? 'var(--red-bright)' : 'var(--text-3)';
-      return `<div style="margin-top:6px;">
-    <a href="${s.url}" target="_blank" rel="noopener" style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.1em;color:${color};text-decoration:none;text-transform:uppercase;">→ ${s.label}</a>
-    <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-left:8px;">${statusText}${hashText}</span>
-    ${verified && v.pageTitle ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-top:2px;font-style:italic;">${v.pageTitle.slice(0,80)}</div>` : ''}
-  </div>`;
-}).join('');
-    return `<div style="padding:12px 0;border-bottom:1px solid var(--border-light);">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-style:italic;color:var(--text);margin-bottom:6px;">"${c.text}"</div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--text-3);margin-bottom:4px;letter-spacing:0.15em;text-transform:uppercase;">${c.type || 'general'}${c.entities?.length ? ' · ' + c.entities.join(', ') : ''}</div>
-      <div style="display:flex;flex-wrap:wrap;">${sourceLinks}</div>
-    </div>`;
-  }).join('')}</div>`
-    : (data.extractedClaims?.length > 0
-      ? `<div style="margin-top:16px;">${data.extractedClaims.map(c => `<div style="font-family:'Cormorant Garamond',serif;font-size:17px;font-style:italic;color:var(--text);padding:8px 0;border-bottom:1px solid var(--border-light);">"${c}"</div>`).join('')}</div>`
-      : '');
-
-  const textHtml = data.extractedText && !data.extractedText.startsWith('OCR unavailable') && data.extractedText.length > 0
-    ? `<div style="margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);padding:10px 12px;background:var(--surface);border-left:2px solid var(--amber-dim);">EXTRACTED TEXT: ${data.extractedText.slice(0,300)}${data.extractedText.length>300?'...':''}</div>`
-    : '';
-
-  const entityLinks = collectEntityLinks(signed);
-  const entityBlock = entityLinks && entityLinks.length
-    ? `<div style="margin-top:14px;padding:14px 16px;border:1px solid var(--border);background:var(--surface-2);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.25em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Entity behavioral ledger</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px 16px;">${entityLinks.map(e=>`<a href="${API_BASE}/entity/${encodeURIComponent(e.slug)}" target="_blank" rel="noopener" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber-bright);text-decoration:none;letter-spacing:0.06em;">View entity record → ${escHtml(e.name)}</a>`).join('')}</div>
-      </div>`
-    : '';
-  const mediaShare = shareUrlFor(signed);
-  const rid = signed.receiptId || '';
-  const sharePanel = mediaShare
-    ? `<div style="margin-top:16px;padding:16px;background:var(--surface-2);border:1px solid var(--amber-dim);border-radius:2px;">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.25em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Shareable receipt</div>
-        <a href=${JSON.stringify(mediaShare)} target="_blank" rel="noopener" style="display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--amber-bright);word-break:break-all;line-height:1.5;text-decoration:underline;">${escHtml(mediaShare)}</a>
-        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <button type="button" class="btn" onclick="navigator.clipboard.writeText(${JSON.stringify(mediaShare)}).then(function(){alert('Link copied to clipboard');}).catch(function(){prompt('Copy this URL:',${JSON.stringify(mediaShare)});})">Copy link</button>
-          <button type="button" class="btn" onclick="window.open(${JSON.stringify(mediaShare)},'_blank','noopener')">Open receipt page</button>
-        </div>
-        ${rid ? `<div style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);">Receipt ID: <span style="color:var(--text-2);">${escHtml(rid)}</span></div>` : ''}
-      </div>`
-    : `<div style="margin-top:14px;padding:12px;background:var(--surface);border:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-3);">No share URL — missing receiptId in response. Try redeploying the API or check /v1/analyze-and-verify.</div>`;
-  return `
-    <div style="background:var(--surface);border:1px solid var(--border);padding:24px;">
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px;">Media Analysis Receipt</div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-2);line-height:2;">
-        <div>SHA-256: <span style="color:var(--amber);word-break:break-all;">${data.fileHash}</span></div>
-        <div>Perceptual Hash: <span style="color:var(--text);">${data.perceptualHash ?? 'unavailable'}</span></div>
-        <div>File: ${data.fileName} · ${(Math.max(data.fileSize,1)/1024).toFixed(1)}KB · ${data.contentType}</div>
-        <div>Timestamp: ${data.timestamp}</div>
-        ${data.detection?.ai_generated_score != null ? `<div>AI Detection: <span style="color:var(--amber-bright);">${(data.detection.ai_generated_score*100).toFixed(1)}% AI-generated probability</span></div>` : ''}
-      </div>
-      ${ledgerHtml}
-      ${textHtml}
-      ${claimsHtml}
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light);">
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--green-bright);">✓ Receipt cryptographically signed · Ed25519 · SHA-256: ${signed.contentHash?.slice(0,16)}...</div>
-      </div>
-      ${sharePanel}
-      ${entityBlock}
-    </div>
-  `;
-}
 document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+const adLibName=document.getElementById('ad-library-name');
+if(adLibName)adLibName.addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
 setType('fec',document.querySelector('.type-btn.active'));
 </script>
 </body>

@@ -1,0 +1,174 @@
+{
+  "source_id": "wikidata",
+  "captured_at": "2026-03-22T04:56:21.319963+00:00",
+  "endpoint_description": "Wikidata wbsearchentities \u2014 entity name search",
+  "schema_monitor_version": "schema_monitor_v1",
+  "full_schema_hash": "7611648c6c6d794343808f5c67aed704b66296cc662105b718bab1b50b410975",
+  "critical_fields_hash": "062bbefff6f0a2f6469a410effe9ef3410b594bda1d4fd90bdd6b364c1831016",
+  "field_count": 24,
+  "critical_field_count": 2,
+  "schema_tuples": [
+    {
+      "path": "search[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "search[].concepturi",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].description",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.description",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.description.language",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.description.value",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.label",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.label.language",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].display.label.value",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].id",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].label",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].match",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].match.language",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].match.text",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].match.type",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].pageid",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].repository",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].title",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].url",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search_continue",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "searchinfo",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "searchinfo.search",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "success",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    }
+  ],
+  "critical_tuples": [
+    {
+      "path": "search[].id",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "search[].pageid",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    }
+  ],
+  "is_genesis": true,
+  "version_history": [],
+  "version_history_count": 0,
+  "last_verified_at": "2026-03-22T05:05:46.699639+00:00"
+}

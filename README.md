@@ -1,102 +1,203 @@
 # Frame
 
-**Cryptographic public record verification. Every claim sourced, signed, and verifiable.**
+A cryptographic public record verification system.
+
+Frame generates signed, tamper-evident receipts that show what public records say about a claim, a piece of media, or a public figure — and is explicit about what it could not find.
+
+**Live demo:** https://frame-2yxu.onrender.com/demo  
+**System brief:** https://frame-2yxu.onrender.com/pitch  
+**Health:** https://frame-2yxu.onrender.com/health
 
 ---
 
-## What it is
+## What it does
 
-Frame is a fact-checking infrastructure tool. You give it a name, a claim, or a piece of media. It searches public records — campaign finance filings, lobbying disclosures, nonprofit financials, biographical registries — pulls back real data, and signs the result cryptographically so the record can't be quietly altered later.
+Frame queries public data sources — FEC campaign finance, Senate lobbying disclosures, IRS 990 filings, Wikidata, Meta Ad Library — and returns a signed receipt documenting what was found, what was inferred, and what could not be determined.
 
-It isn't a verdict machine. It doesn't tell you what to think. It gives you a signed, timestamped receipt that says: here is what the public record shows, here is where it came from, and here is proof that this record hasn't been changed since it was issued.
+Every receipt is:
+- **Signed** with Ed25519
+- **Canonicalized** with JCS (RFC 8785) before signing
+- **Independently verifiable** — the public key is in the receipt
+- **Explicit about unknowns** — absence of findings is documented, not silently omitted
 
----
-
-## What it does right now
-
-**Search public figures by name.** Type "Ted Cruz" — Frame finds him in the FEC database, pulls career campaign finance totals, signs the result, and returns a verifiable receipt. No manual candidate ID needed.
-
-**Cross-reference money and lobbying.** Combined mode pulls FEC contributions and Senate LDA lobbying disclosures together, generates a narrative, and signs the whole thing.
-
-**Nonprofit financials.** IRS 990 data via ProPublica. Type an organization name and EIN, get assets, revenue, and filings — signed.
-
-**Public figure biography.** Wikidata adapter returns occupations, employers, and party affiliations for any public figure in the registry.
-
-**Media fingerprinting.** Upload any image or file. Frame generates a SHA-256 hash and a signed timestamp receipt. If the file changes later, the signature breaks. AI-generated image detection is wired in (requires Hive API key).
-
-**Receipt verification.** Any signed Frame receipt can be independently verified against the public key. No trust required.
+Frame does not issue verdicts. It issues receipts.
 
 ---
 
-## Live demo
+## Try it now
 
-[https://frame-2yxu.onrender.com/demo](https://frame-2yxu.onrender.com/demo)
+### Campaign finance (FEC)
 
-Try: type **Ted Cruz** in FEC mode. Or **Gates Foundation** with EIN 562618866 in 990 mode.
+```bash
+# Find a candidate
+curl "https://frame-2yxu.onrender.com/v1/fec-search?name=Ted%20Cruz"
+
+# Generate signed receipt
+curl -s -X POST https://frame-2yxu.onrender.com/v1/generate-receipt \
+  -H "Content-Type: application/json" \
+  -d '{"candidateId": "S2TX00312"}'
+```
+
+### Lobbying disclosures (Senate LDA)
+
+```bash
+curl -s -X POST https://frame-2yxu.onrender.com/v1/generate-lobbying-receipt \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Exxon"}'
+```
+
+### Nonprofit financials (IRS 990)
+
+```bash
+curl -s -X POST https://frame-2yxu.onrender.com/v1/generate-990-receipt \
+  -H "Content-Type: application/json" \
+  -d '{"orgName": "Gates Foundation", "ein": "562618866"}'
+```
+
+### Public figure biography (Wikidata)
+
+```bash
+curl -s -X POST https://frame-2yxu.onrender.com/v1/generate-wikidata-receipt \
+  -H "Content-Type: application/json" \
+  -d '{"personName": "Tucker Carlson"}'
+```
+
+### Media verification (hash + chain of custody)
+
+```bash
+# Submit URL — returns job_id immediately
+curl -s -X POST https://frame-2yxu.onrender.com/v1/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"source_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png"}'
+
+# Poll for result
+curl -s https://frame-2yxu.onrender.com/v1/jobs/{job_id}
+```
+
+### Verify any receipt
+
+```bash
+curl -s -X POST https://frame-2yxu.onrender.com/v1/verify-receipt \
+  -H "Content-Type: application/json" \
+  -d @receipt.json
+```
+
+Expected: `{"ok": true, "reasons": []}`
 
 ---
 
-## Data sources
+## What a receipt looks like
 
-| Adapter | Source | What it returns |
-|---|---|---|
-| FEC | api.open.fec.gov | Campaign finance totals, candidate IDs |
-| LDA | Senate lobbying disclosures | Lobbying clients, firms, dollar amounts |
-| 990 | ProPublica Nonprofit Explorer | Nonprofit assets, revenue, filings |
-| Wikidata | Wikidata public registry | Biography, affiliations, employers |
-| Media | Uploaded file | SHA-256 hash, AI detection score, signed receipt |
+```json
+{
+  "schemaVersion": "1.0.0",
+  "receiptId": "FRM-...",
+  "subject": {
+    "type": "politician",
+    "identifier": "S2TX00312",
+    "display_name": "TED CRUZ"
+  },
+  "claims": [
+    {
+      "statement": "Total career receipts: $174,208,411",
+      "type": "observed",
+      "implication_risk": "medium"
+    }
+  ],
+  "evidence": [...],
+  "unknowns": {
+    "operational": [],
+    "epistemic": [
+      {
+        "text": "Campaign finance totals reflect disclosed contributions; they do not establish improper conduct or policy influence.",
+        "resolution_possible": false
+      }
+    ]
+  },
+  "narrative": "...",
+  "signature": "...",
+  "publicKey": "..."
+}
+```
+
+The `unknowns` field is mandatory on every receipt. If it is empty, the adapter is not being honest.
 
 ---
 
-## How signing works
+## API reference
 
-Every receipt is signed with **Ed25519** using **JCS (RFC 8785) canonicalization** — not JSON.stringify. This means the signature is deterministic regardless of key ordering, whitespace, or serialization differences. The public key is included in every receipt. Verification requires no account, no API key, and no trust in Frame.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Liveness check |
+| GET | `/demo` | Interactive search UI |
+| GET | `/pitch` | Full system brief |
+| GET | `/v1/fec-search?name=` | FEC candidate lookup |
+| POST | `/v1/generate-receipt` | FEC campaign finance receipt |
+| POST | `/v1/generate-lobbying-receipt` | Senate LDA lobbying receipt |
+| POST | `/v1/generate-combined-receipt` | FEC + LDA cross-reference |
+| POST | `/v1/generate-990-receipt` | IRS 990 nonprofit receipt |
+| POST | `/v1/generate-wikidata-receipt` | Public figure biography receipt |
+| POST | `/v1/generate-ad-library-receipt` | Meta Ad Library paid advertising |
+| POST | `/v1/analyze-media` | SHA-256 hash + AI detection |
+| POST | `/v1/sign-media-analysis` | Sign media analysis as receipt |
+| POST | `/v1/verify-receipt` | Verify any signed receipt |
+| POST | `/v1/jobs` | Submit async job, get job_id |
+| GET | `/v1/jobs/{job_id}` | Poll job status and receipt |
+| POST | `/v1/intake` | Unified intake (URL or file) |
+| GET | `/v1/schema-baselines` | Schema baseline status |
+
+---
+
+## Architecture
+
+```
+intake (URL / file / text)
+  → fetch (yt-dlp or direct HTTP)
+  → SHA-256 hash
+  → OCR (Tesseract)
+  → entity extraction
+  → adapter routing (FEC / LDA / 990 / Wikidata / Ad Library)
+  → receipt assembly
+  → JCS canonicalization (RFC 8785)
+  → Ed25519 signing
+  → signed receipt
+```
+
+**Signing:** Ed25519. Keys stored as base64 in environment. Public key embedded in every receipt.  
+**Canonicalization:** JCS (RFC 8785). Not `JSON.stringify`.  
+**Unknowns:** Split into `operational` (technical limits, resolvable) and `epistemic` (fundamental limits, permanent).  
+**Claims:** Every claim carries `implication_risk: low | medium | high`. High-risk claims require a machine-generated `implication_note` stating what the fact does not establish.
+
+Full architecture documentation: [`docs/CONTEXT.md`](docs/CONTEXT.md)  
+Technical proof with curl outputs: [`docs/PROOF.md`](docs/PROOF.md)
 
 ---
 
 ## Stack
 
-- Python FastAPI (backend, Render)
-- Node.js subprocess (signing layer)
-- Ed25519 + JCS canonicalization
-- Render environment for key storage (base64-encoded)
-
-## Environment variables (API / Render)
-
-| Variable | Purpose |
-|----------|---------|
-| `FRAME_PRIVATE_KEY` | Ed25519 PEM for signing receipts |
-| `FRAME_KEY_FORMAT` | `pem` or `base64` (Render often uses base64) |
-| `FEC_API_KEY` | OpenFEC (`DEMO_KEY` works with low limits) |
-| `ANTHROPIC_API_KEY` | Claude vision for media OCR / claim extraction |
-| `CONGRESS_API_KEY` | [api.congress.gov](https://api.congress.gov) — **required** for Congress bill search in Gap 3 routing (free signup) |
-| `HIVE_API_KEY` | Optional AI-generated image detection |
-
-**Gap 3:** `POST /v1/analyze-media` runs claim routing → public-record adapters → attaches `adapterResults` per claim. **`POST /v1/analyze-and-verify`** does the full pipeline and returns a signed receipt + `receiptUrl` in one request (used by the macOS capture script and browser extension).
+- **API:** Python FastAPI, deployed on Render
+- **Signing:** Node.js (Ed25519 + JCS), called via subprocess
+- **Frontend:** Vanilla HTML/JS at `/demo`
+- **Types:** TypeScript (`packages/types/`)
+- **Sources package:** TypeScript (`packages/sources/`)
 
 ---
 
-## Status
+## Environment variables
 
-Active development. Core pipeline is live and tested. Media UI in progress. See `docs/CONTEXT.md` for full technical state and roadmap.
-
----
-
-## What's next
-
-- Image upload UI on the demo page
-- Hive API key for live AI detection scores
-- News API adapter (Guardian, NYT) for cross-referencing public figures with documented reporting
-- Fuzzy name matching in FEC search
-- Perceptual hashing (videohash) for viral content fingerprinting
-- Custom domain
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `FRAME_PRIVATE_KEY` | Yes | Ed25519 private key (base64) |
+| `FRAME_KEY_FORMAT` | Yes | Set to `base64` |
+| `FEC_API_KEY` | Yes | OpenFEC API key |
+| `META_AD_LIBRARY_TOKEN` | No | Meta Ad Library access |
+| `HIVE_API_KEY` | No | Hive AI detection |
 
 ---
 
-## The mission
+## What Frame is not
 
-Epistemic infrastructure. Not an attack tool — a public record tool. Works for lies and truths equally. Every claim gets the same treatment: sourced, signed, tamper-evident, verifiable by anyone.
-
----
-
-*Built by Alex ([@Swixixle](https://github.com/Swixixle))*
+- Not a fact-checker (implies verdict)
+- Not an AI trust score (implies oracle)
+- Not a misinformation detector (implies we decided)
+- Not a competitor to C2PA (we cover what they can't reach)

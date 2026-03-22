@@ -1,0 +1,264 @@
+{
+  "source_id": "fec",
+  "captured_at": "2026-03-22T04:56:22.013541+00:00",
+  "endpoint_description": "FEC /v1/candidates/ \u2014 candidate lookup by ID",
+  "schema_monitor_version": "schema_monitor_v1",
+  "full_schema_hash": "2527fea1f0e17347cad0a0bc7f1cfd8381e60a43e9f19307f74283dfc036f6a6",
+  "critical_fields_hash": "4b4dfc0d22f9454fe5d01dd81b64df08e41f5dbc36f28bc1fb981b06c450db66",
+  "field_count": 32,
+  "critical_field_count": 9,
+  "schema_tuples": [
+    {
+      "path": "api_version",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination.count",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination.is_count_exact",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination.page",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination.pages",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "pagination.per_page",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].active_through",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].candidate_id",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].candidate_inactive",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].candidate_status",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].cycles[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].district",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].district_number",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].election_districts[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].election_years[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].federal_funds_flag",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].first_file_date",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].has_raised_funds",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].inactive_election_years",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].incumbent_challenge",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].incumbent_challenge_full",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].last_f2_date",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].last_file_date",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].load_date",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].office",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].office_full",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].party",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].party_full",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    }
+  ],
+  "critical_tuples": [
+    {
+      "path": "results[].candidate_id",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].election_years[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].inactive_election_years",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].office",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].office_full",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].party",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].party_full",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    }
+  ],
+  "is_genesis": true,
+  "version_history": [],
+  "version_history_count": 0,
+  "last_verified_at": "2026-03-22T05:05:46.925831+00:00"
+}

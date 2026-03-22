@@ -1,0 +1,564 @@
+{
+  "source_id": "lda",
+  "captured_at": "2026-03-22T04:56:24.039317+00:00",
+  "endpoint_description": "Senate LDA /api/v1/filings/ \u2014 registrant name search",
+  "schema_monitor_version": "schema_monitor_v1",
+  "full_schema_hash": "b94a36769b3da1819da0c4faec5499c8d511da8b424f0605893bd51fb5a7a5c4",
+  "critical_fields_hash": "736e75816e34368586bfdf9e2d47e38bdb51fb2806e779b26f7a53e5c06c7250",
+  "field_count": 90,
+  "critical_field_count": 1,
+  "schema_tuples": [
+    {
+      "path": "count",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "next",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "previous",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].affiliated_organizations[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].client",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.client_government_entity",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.client_id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.client_self_select",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.country_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.effective_date",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.general_description",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.ppb_country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.ppb_country_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.ppb_state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.ppb_state_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.state_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].client.url",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].conviction_disclosures[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].dt_posted",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].expenses",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].expenses_method",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].expenses_method_display",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_document_content_type",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_document_url",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_period",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_period_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_type",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_type_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_uuid",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].filing_year",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].foreign_entities[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].income",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].lobbying_activities[].description",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].foreign_entity_issues",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].general_issue_code",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].general_issue_code_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].government_entities[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].lobbying_activities[].government_entities[].id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].government_entities[].name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].covered_position",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.first_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.last_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.middle_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.nickname",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.prefix",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.prefix_display",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.suffix",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].lobbyist.suffix_display",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].lobbying_activities[].lobbyists[].new",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].posted_by_name",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant",
+      "node_type": "object",
+      "scalar_type": null,
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.address_1",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.address_2",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.address_3",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.address_4",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.city",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.contact_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.contact_telephone",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.country_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.description",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.dt_updated",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.house_registrant_id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.id",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.ppb_country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.ppb_country_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.state_display",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.url",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant.zip",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_address_1",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_address_2",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_city",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_different_address",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_ppb_country",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_state",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].registrant_zip",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].termination_date",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "results[].url",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    }
+  ],
+  "critical_tuples": [
+    {
+      "path": "results[].filing_year",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    }
+  ],
+  "is_genesis": true,
+  "version_history": [],
+  "version_history_count": 0,
+  "last_verified_at": "2026-03-22T05:05:48.964201+00:00"
+}

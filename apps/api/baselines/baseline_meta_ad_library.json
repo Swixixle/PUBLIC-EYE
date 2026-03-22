@@ -1,0 +1,41 @@
+{
+  "source_id": "meta_ad_library",
+  "captured_at": "2026-03-22T04:56:20.700565+00:00",
+  "endpoint_description": "Meta Graph ads_archive \u2014 political/issue ads (adapter output)",
+  "schema_monitor_version": "schema_monitor_v1",
+  "full_schema_hash": "31f6518fe56295d1399021c59a0e42220ebbb2524c92829c599b0c6e589916b5",
+  "critical_fields_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "field_count": 4,
+  "critical_field_count": 0,
+  "schema_tuples": [
+    {
+      "path": "note",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "resolution_possible",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "status",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "timestamp",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    }
+  ],
+  "critical_tuples": [],
+  "is_genesis": true,
+  "version_history": [],
+  "version_history_count": 0,
+  "last_verified_at": "2026-03-22T05:05:46.542110+00:00"
+}

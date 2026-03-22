@@ -135,6 +135,8 @@ const input = JSON.parse(
     full_text?: string;
     duration?: number;
   } | null;
+  /** Tesseract OCR result from analyze-media (Task 2.1) */
+  ocr?: Record<string, unknown> | null;
 };
 
 function getPrivateKeyPem(): string {
@@ -417,6 +419,7 @@ const mainMetadata = (
         fileSize: input.fileSize,
         contentType: input.contentType,
         detection: input.detection,
+        ocr: input.ocr ?? null,
         ledgerMatch: ledgerMatch,
         extractedClaimsCount: extractedClaims.length,
       }

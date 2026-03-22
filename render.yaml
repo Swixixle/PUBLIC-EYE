@@ -4,12 +4,16 @@ services:
     runtime: python
     rootDir: .
     # ffmpeg: podcast pipeline (30m trim, acoustic fingerprint). yt-dlp + whisper are in apps/api/requirements.txt
-    buildCommand: DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y ffmpeg && npm ci && pip install -r apps/api/requirements.txt
+    # ffmpeg: podcast; tesseract-ocr: pytesseract OCR in analyze-media & source_url jobs
+    # System: ffmpeg (podcast/trim), tesseract-ocr (pytesseract OCR). Node: monorepo build for signing/types.
+    buildCommand: DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y ffmpeg tesseract-ocr && npm ci && npm run build && pip install -r apps/api/requirements.txt
     startCommand: cd apps/api && uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: FRAME_REPO_ROOT
         value: /opt/render/project/src
         sync: false
+      - key: FRAME_KEY_FORMAT
+        value: base64
       - key: FRAME_PRIVATE_KEY
         sync: false
       - key: FRAME_PUBLIC_KEY

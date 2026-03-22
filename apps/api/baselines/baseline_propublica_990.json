@@ -1,0 +1,264 @@
+{
+  "source_id": "propublica_990",
+  "captured_at": "2026-03-22T04:56:21.214032+00:00",
+  "endpoint_description": "ProPublica 990 /api/v2/search.json \u2014 org name search",
+  "schema_monitor_version": "schema_monitor_v1",
+  "full_schema_hash": "8eada7edc4ec3ef270ef6766421ca0c569363002304b163d874f13be2bc8cd19",
+  "critical_fields_hash": "136afb9c382493619170eda4dced220207a84e73cd1aec7bb8b4f6a5ade2dcb0",
+  "field_count": 26,
+  "critical_field_count": 15,
+  "schema_tuples": [
+    {
+      "path": "api_version",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "cur_page",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "data_source",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "num_pages",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "organizations[].city",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].ein",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].has_subseccd",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_extracts",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_filings",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_pdfs",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].ntee_code",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].raw_ntee_code",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].score",
+      "node_type": "scalar",
+      "scalar_type": "number",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].strein",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].sub_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].subseccd",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "page_offset",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "per_page",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "search_query",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "selected_code",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "selected_ntee",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "selected_state",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "total_results",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    }
+  ],
+  "critical_tuples": [
+    {
+      "path": "organizations[]",
+      "node_type": "array",
+      "scalar_type": null,
+      "cardinality": "repeated"
+    },
+    {
+      "path": "organizations[].city",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].ein",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].has_subseccd",
+      "node_type": "scalar",
+      "scalar_type": "boolean",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_extracts",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_filings",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].have_pdfs",
+      "node_type": "scalar",
+      "scalar_type": "null",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].ntee_code",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].raw_ntee_code",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].score",
+      "node_type": "scalar",
+      "scalar_type": "number",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].state",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].strein",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].sub_name",
+      "node_type": "scalar",
+      "scalar_type": "string",
+      "cardinality": "single"
+    },
+    {
+      "path": "organizations[].subseccd",
+      "node_type": "scalar",
+      "scalar_type": "integer",
+      "cardinality": "single"
+    }
+  ],
+  "is_genesis": true,
+  "version_history": [],
+  "version_history_count": 0,
+  "last_verified_at": "2026-03-22T05:05:46.609341+00:00"
+}

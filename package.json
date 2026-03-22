@@ -11,7 +11,11 @@
     "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate-keys": "tsx scripts/generate-keys.ts"
+    "generate-keys": "tsx scripts/generate-keys.ts",
+    "proof:date": "node -e \"const fs=require('fs'); const d=new Date().toISOString().split('T')[0]; const p=fs.readFileSync('docs/PROOF.md','utf8'); fs.writeFileSync('docs/PROOF.md', p.replace('[date]', d))\"",
+    "regen-demo": "npx tsx scripts/regen-demo-payload.ts",
+    "e2e": "bash scripts/e2e-test.sh",
+    "e2e:local": "bash scripts/e2e-test.sh http://localhost:8000"
   },
   "engines": {
     "node": ">=20"

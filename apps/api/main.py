@@ -45,9 +45,14 @@ from adapters_podcast import (
     transcribe_audio,
     trim_audio_max,
 )
+from adapters.meta_ad_library import AD_LIBRARY_ADAPTER_VERSION, query_ad_library
+from implication_notes import IMPLICATION_NOTES
 from job_store import Job, create_job, get_job, mark_complete, mark_failed, mark_processing
 from router import route_claim
+from schema_monitor import BASELINES_DIR, SCHEMA_MONITOR_VERSION, capture_baseline, load_baseline
 
+# Repo root: two levels up from apps/api/main.py. Prefer FRAME_REPO_ROOT on Render so
+# Node subprocesses (npx tsx scripts/…) resolve scripts/ and node_modules/ regardless of uvicorn cwd.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 JCS_SCRIPT = REPO_ROOT / "scripts" / "jcs-stringify.mjs"
 
@@ -71,6 +76,7 @@ def jcs_canonicalize(obj: Any) -> str:
         capture_output=True,
         check=False,
         cwd=str(root),
+        env={**os.environ},
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr or "JCS subprocess failed")
@@ -182,6 +188,12 @@ class WikidataRequest(BaseModel):
     wikidataId: str | None = None
 
 
+class AdLibraryRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    country: str = "US"
+    limit: int = Field(default=25, ge=1, le=100)
+
+
 class JobRequest(BaseModel):
     """Async job submission — one of `source_url` or `receipt_type` should be set."""
 
@@ -195,6 +207,8 @@ class JobRequest(BaseModel):
     lobbying_clients: list[str] | None = None
     years: list[int] | None = None
     wikidata_id: str | None = None
+    country: str | None = None
+    limit: int | None = None
 
 
 app = FastAPI(title="Frame API", version="0.1.0")
@@ -208,6 +222,234 @@ app.add_middleware(
 _web_dir = _repo_root() / "apps" / "web"
 if _web_dir.is_dir():
     app.mount("/web", StaticFiles(directory=str(_web_dir), html=True), name="web")
+
+
+@app.on_event("startup")
+async def capture_schema_baselines() -> None:
+    """
+    On startup, attempt to capture schema baselines for all active adapters.
+    Uses real API calls with minimal queries (one result each).
+    Failures are logged but never block startup.
+
+    First run: captures genesis baselines.
+    Subsequent runs: verifies schema hasn't changed, updates last_verified_at.
+    """
+    root = _repo_root()
+    print(f"[startup] REPO_ROOT: {root}")
+    print(f"[startup] scripts/ exists: {(root / 'scripts').is_dir()}")
+    print(f"[startup] node_modules/ exists: {(root / 'node_modules').is_dir()}")
+
+    print("[schema_monitor] Starting baseline capture...")
+
+    tasks = [
+        _capture_fec_baseline(),
+        _capture_lda_baseline(),
+        _capture_990_baseline(),
+        _capture_wikidata_baseline(),
+        _capture_meta_ad_library_baseline(),
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    source_ids = ["fec", "lda", "propublica_990", "wikidata", "meta_ad_library"]
+    for source_id, result in zip(source_ids, results):
+        if isinstance(result, Exception):
+            print(f"[schema_monitor] {source_id}: capture failed — {str(result)[:100]}")
+        else:
+            status = "CHANGED" if (isinstance(result, dict) and result.get("schema_changed")) else "ok"
+            h = (result.get("full_schema_hash", "") if isinstance(result, dict) else "")[:16]
+            print(f"[schema_monitor] {source_id}: {status} — hash {h}...")
+
+    print("[schema_monitor] Baseline capture complete.")
+
+    await _verify_signing_pipeline()
+
+
+async def _verify_signing_pipeline() -> None:
+    """
+    Smoke test the Node signing subprocess on startup.
+    If this fails, receipt generation that uses sign-payload.ts will fail.
+    """
+    ts = datetime.now(timezone.utc).isoformat()
+    test_payload: dict[str, Any] = {
+        "schemaVersion": "1.0.0",
+        "receiptId": "FRM-STARTUP-HEALTH",
+        "createdAt": ts,
+        "claims": [
+            {
+                "id": "claim-health",
+                "statement": "Frame API startup signing health check.",
+                "type": "observed",
+                "implication_risk": "low",
+            },
+        ],
+        "sources": [
+            {
+                "id": "src-health",
+                "adapter": "manual",
+                "url": "https://frame.invalid/health",
+                "title": "Startup health",
+                "retrievedAt": ts,
+            },
+        ],
+        "narrative": [{"text": "Startup signing pipeline check.", "sourceId": "src-health"}],
+        "unknowns": {"operational": [], "epistemic": []},
+        "contentHash": "",
+    }
+
+    try:
+        out = await asyncio.to_thread(_sign_frame_payload, test_payload)
+        if out.get("signing_error"):
+            print("[startup] Signing pipeline: FAILED")
+            err = str(out.get("signing_error", ""))[:400]
+            print(f"[startup] signing_error: {err}")
+            return
+        if out.get("signature"):
+            print("[startup] Signing pipeline: OK")
+        else:
+            print("[startup] Signing pipeline: FAILED (no signature in output)")
+    except Exception as exc:  # noqa: BLE001
+        print("[startup] Signing pipeline: FAILED")
+        print(f"[startup] exception: {str(exc)[:300]}")
+
+
+async def _capture_fec_baseline() -> dict[str, Any]:
+    """Capture FEC API schema baseline using a known stable candidate."""
+    try:
+        import httpx
+
+        fec_key = os.environ.get("FEC_API_KEY", "DEMO_KEY")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://api.open.fec.gov/v1/candidates/",
+                params={
+                    "api_key": fec_key,
+                    "candidate_id": "S2TX00312",
+                    "per_page": 1,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        return capture_baseline(
+            source_id="fec",
+            sample_response=data,
+            endpoint_description="FEC /v1/candidates/ — candidate lookup by ID",
+        )
+    except Exception as e:
+        return capture_baseline(
+            source_id="fec",
+            sample_response={"error": "capture_failed", "note": str(e)[:200]},
+            endpoint_description="FEC baseline capture failed at startup",
+        )
+
+
+async def _capture_lda_baseline() -> dict[str, Any]:
+    """Capture Senate LDA API schema baseline."""
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://lda.senate.gov/api/v1/filings/",
+                params={
+                    "registrant_name": "Exxon",
+                    "limit": 1,
+                },
+                headers={"Accept": "application/json"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        return capture_baseline(
+            source_id="lda",
+            sample_response=data,
+            endpoint_description="Senate LDA /api/v1/filings/ — registrant name search",
+        )
+    except Exception as e:
+        return capture_baseline(
+            source_id="lda",
+            sample_response={"error": "capture_failed", "note": str(e)[:200]},
+            endpoint_description="LDA baseline capture failed at startup",
+        )
+
+
+async def _capture_990_baseline() -> dict[str, Any]:
+    """Capture ProPublica 990 API schema baseline."""
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://projects.propublica.org/nonprofits/api/v2/search.json",
+                params={"q": "Gates Foundation", "page": 0},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        return capture_baseline(
+            source_id="propublica_990",
+            sample_response=data,
+            endpoint_description="ProPublica 990 /api/v2/search.json — org name search",
+        )
+    except Exception as e:
+        return capture_baseline(
+            source_id="propublica_990",
+            sample_response={"error": "capture_failed", "note": str(e)[:200]},
+            endpoint_description="ProPublica 990 baseline capture failed at startup",
+        )
+
+
+async def _capture_wikidata_baseline() -> dict[str, Any]:
+    """Capture Wikidata API schema baseline."""
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                "https://www.wikidata.org/w/api.php",
+                params={
+                    "action": "wbsearchentities",
+                    "search": "Ted Cruz",
+                    "language": "en",
+                    "format": "json",
+                    "limit": 1,
+                },
+                headers={"User-Agent": "Frame/1.0 (https://getframe.dev)"},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        return capture_baseline(
+            source_id="wikidata",
+            sample_response=data,
+            endpoint_description="Wikidata wbsearchentities — entity name search",
+        )
+    except Exception as e:
+        return capture_baseline(
+            source_id="wikidata",
+            sample_response={"error": "capture_failed", "note": str(e)[:200]},
+            endpoint_description="Wikidata baseline capture failed at startup",
+        )
+
+
+async def _capture_meta_ad_library_baseline() -> dict[str, Any]:
+    """Capture Meta Ad Library response schema (adapter output shape)."""
+    try:
+        from adapters.meta_ad_library import query_ad_library
+
+        data = await query_ad_library("Ted Cruz", country="US", limit=1)
+        return capture_baseline(
+            source_id="meta_ad_library",
+            sample_response=data,
+            endpoint_description="Meta Graph ads_archive — political/issue ads (adapter output)",
+        )
+    except Exception as e:
+        return capture_baseline(
+            source_id="meta_ad_library",
+            sample_response={"error": "capture_failed", "note": str(e)[:200]},
+            endpoint_description="Meta Ad Library baseline capture failed at startup",
+        )
 
 
 @app.get("/demo")
@@ -237,6 +479,45 @@ async def root() -> dict[str, str]:
 @app.get("/health/")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "frame-api"}
+
+
+@app.get("/v1/schema-baselines")
+async def get_schema_baselines() -> dict[str, Any]:
+    """
+    Returns current schema baseline status for all monitored sources.
+    Shows hash, capture date, field count, and whether a change was detected.
+    Used for: PROOF.md generation, admin verification, grant documentation.
+    """
+    sources = ["fec", "lda", "propublica_990", "wikidata", "meta_ad_library"]
+    result: dict[str, Any] = {}
+
+    for source_id in sources:
+        baseline = load_baseline(source_id)
+        if baseline:
+            result[source_id] = {
+                "status": "captured",
+                "full_schema_hash": (baseline.get("full_schema_hash", "") or "")[:32] + "...",
+                "critical_fields_hash": (baseline.get("critical_fields_hash", "") or "")[:16] + "...",
+                "captured_at": baseline.get("captured_at"),
+                "last_verified_at": baseline.get("last_verified_at"),
+                "field_count": baseline.get("field_count"),
+                "critical_field_count": baseline.get("critical_field_count"),
+                "is_genesis": baseline.get("is_genesis", False),
+                "schema_changed": baseline.get("schema_changed", False),
+                "version_history_count": baseline.get("version_history_count", 0),
+            }
+        else:
+            result[source_id] = {
+                "status": "not_captured",
+                "note": "No baseline exists. Will capture on next server startup.",
+            }
+
+    return {
+        "baselines": result,
+        "baselines_dir": BASELINES_DIR,
+        "schema_monitor_version": SCHEMA_MONITOR_VERSION,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @app.get("/v1/adapters")
@@ -315,6 +596,7 @@ def _generate_fec_receipt_sync(candidate_id: str) -> dict[str, Any]:
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ},
         timeout=120,
     )
     if proc.returncode != 0:
@@ -490,6 +772,293 @@ def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
     return _generate_wikidata_receipt_sync(req.personName, req.wikidataId)
 
 
+def generate_receipt_id() -> str:
+    """Short unique suffix for receipt IDs."""
+    return uuid.uuid4().hex[:8].upper()
+
+
+def build_claim_py(
+    claim_id: str,
+    statement: str,
+    claim_type: str,
+    risk: str,
+    asserted_at: str | None = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Build a claim dict for Frame payloads. implication_note required for high risk."""
+    if risk == "high" and not note:
+        raise ValueError(f"implication_note required for high-risk claim: {statement[:80]}")
+    claim: dict[str, Any] = {
+        "id": claim_id,
+        "statement": statement,
+        "type": claim_type,
+        "implication_risk": risk,
+    }
+    if asserted_at:
+        claim["assertedAt"] = asserted_at
+    if note:
+        claim["implication_note"] = note
+    return claim
+
+
+def _build_ad_library_narrative_sentences(
+    name: str,
+    country: str,
+    result: dict[str, Any],
+    source_id: str,
+) -> list[dict[str, Any]]:
+    if result["status"] == "no_results":
+        return [
+            {
+                "text": (
+                    f"Frame queried the Meta Ad Library for political and issue advertisements "
+                    f"associated with '{name}' in {result.get('country', country)}. "
+                    f"No results were returned. This means no political or issue ads matching "
+                    f"this name were found in Meta's disclosure database at the time of query. "
+                    f"This does not mean the account is not running paid content — Meta only "
+                    f"discloses political and issue ads, not commercial or boosted content."
+                ),
+                "sourceId": source_id,
+            },
+        ]
+    if result["status"] == "results_found":
+        entities = result.get("unique_funding_entities", [])
+        entity_str = (
+            f"Funding entities on record: {', '.join(entities)}."
+            if entities
+            else "No funding entity was disclosed."
+        )
+        active = result.get("active_ads_count", 0)
+        total = result.get("total_ads_returned", 0)
+        return [
+            {
+                "text": (
+                    f"Frame queried the Meta Ad Library for political and issue advertisements "
+                    f"associated with '{name}' in {result.get('country', country)}. "
+                    f"The query returned {total} ad(s), of which {active} are currently active. "
+                    f"{entity_str} "
+                    f"Spend figures are estimated ranges as disclosed by Meta — exact amounts "
+                    f"are not available through public disclosure. "
+                    f"This receipt documents what Meta's Ad Library shows. It does not establish "
+                    f"the purpose, effectiveness, or authorship of the content."
+                ),
+                "sourceId": source_id,
+            },
+        ]
+    return [
+        {
+            "text": (
+                f"Frame attempted to query the Meta Ad Library for '{name}' but the query "
+                f"did not complete. See unknowns for details."
+            ),
+            "sourceId": source_id,
+        },
+    ]
+
+
+def _build_ad_library_payload(
+    name: str,
+    country: str,
+    limit: int,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    timestamp = datetime.now(timezone.utc).isoformat()
+    source_id = "src-meta-ad-library"
+    claims: list[dict[str, Any]] = []
+    operational_unknowns: list[dict[str, Any]] = []
+    epistemic_unknowns: list[dict[str, Any]] = [
+        {
+            "text": (
+                "Meta only discloses political and issue ads. Regular commercial or boosted content "
+                "is not in the Ad Library. An account with no results here may still be running paid content."
+            ),
+            "resolution_possible": False,
+        },
+        {
+            "text": "Spend figures are estimated ranges provided by Meta, not exact amounts.",
+            "resolution_possible": False,
+        },
+        {
+            "text": IMPLICATION_NOTES["paid_advertising"],
+            "resolution_possible": False,
+        },
+    ]
+
+    if result["status"] == "no_results":
+        claims.append(
+            build_claim_py(
+                "claim-1",
+                f"No political or issue ads were found in the Meta Ad Library for '{name}' in {country}.",
+                "observed",
+                "low",
+                asserted_at=timestamp,
+            ),
+        )
+        operational_unknowns.append(
+            {
+                "text": (
+                    "Absence of results reflects only political and issue ads. "
+                    "Commercial ad spend is not disclosed."
+                ),
+                "resolution_possible": False,
+            },
+        )
+
+    elif result["status"] == "results_found":
+        idx = 1
+        claims.append(
+            build_claim_py(
+                f"claim-{idx}",
+                (
+                    f"The Meta Ad Library returned {result['total_ads_returned']} political or issue ad(s) "
+                    f"matching '{name}' in {result['country']}."
+                ),
+                "observed",
+                "high",
+                asserted_at=timestamp,
+                note=IMPLICATION_NOTES["paid_advertising"],
+            ),
+        )
+        idx += 1
+        if result.get("active_ads_count", 0) > 0:
+            claims.append(
+                build_claim_py(
+                    f"claim-{idx}",
+                    f"{result['active_ads_count']} ad(s) are currently active.",
+                    "observed",
+                    "medium",
+                    asserted_at=timestamp,
+                ),
+            )
+            idx += 1
+        for entity in result.get("unique_funding_entities", []):
+            claims.append(
+                build_claim_py(
+                    f"claim-{idx}",
+                    f"Funding entity on record: {entity}",
+                    "observed",
+                    "high",
+                    asserted_at=timestamp,
+                    note=IMPLICATION_NOTES["paid_advertising"],
+                ),
+            )
+            idx += 1
+
+    elif result["status"] in ("unavailable", "api_error", "fetch_error"):
+        operational_unknowns.append(
+            {
+                "text": result.get("note", result.get("error", "Meta Ad Library query did not complete.")),
+                "resolution_possible": bool(result.get("resolution_possible", True)),
+            },
+        )
+        claims.append(
+            build_claim_py(
+                "claim-1",
+                "Meta Ad Library query did not complete successfully for this search.",
+                "observed",
+                "low",
+                asserted_at=timestamp,
+            ),
+        )
+
+    q = urllib.parse.quote(name)
+    cc = urllib.parse.quote(country)
+    library_url = (
+        f"https://www.facebook.com/ads/library/?active_status=all&ad_type=political_and_issue_ads"
+        f"&country={cc}&q={q}"
+    )
+    sources: list[dict[str, Any]] = [
+        {
+            "id": source_id,
+            "adapter": "manual",
+            "url": library_url,
+            "title": "Meta Ad Library (political and issue ads)",
+            "retrievedAt": timestamp,
+            "externalRef": f"{name[:24]}:{country}",
+            "metadata": {
+                "ad_library": result,
+                "adapter": AD_LIBRARY_ADAPTER_VERSION,
+                "search_term": name,
+                "country": country,
+                "limit": limit,
+            },
+        },
+    ]
+
+    narrative = _build_ad_library_narrative_sentences(name, country, result, source_id)
+
+    rid = f"FRM-ADL-{generate_receipt_id()}"
+    return {
+        "schemaVersion": "1.0.0",
+        "receiptId": rid,
+        "createdAt": timestamp,
+        "claims": claims,
+        "sources": sources,
+        "narrative": narrative,
+        "unknowns": {
+            "operational": operational_unknowns,
+            "epistemic": epistemic_unknowns,
+        },
+        "contentHash": "",
+    }
+
+
+def _sign_frame_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Sign a Frame-shaped payload via scripts/sign-payload.ts (stdin → stdout JSON)."""
+    root = _repo_root()
+    payload_str = json.dumps(payload, ensure_ascii=False)
+    sign_result = subprocess.run(
+        ["npx", "tsx", str(root / "scripts" / "sign-payload.ts")],
+        input=payload_str,
+        capture_output=True,
+        text=True,
+        cwd=str(root),
+        env={**os.environ},
+        timeout=120,
+    )
+    if sign_result.returncode == 0:
+        try:
+            return json.loads(sign_result.stdout.strip())
+        except json.JSONDecodeError:
+            err = (sign_result.stderr or sign_result.stdout or "")[:500]
+            return {**payload, "signing_error": err}
+    err = (sign_result.stderr or sign_result.stdout or "")[:500]
+    return {**payload, "signing_error": err}
+
+
+async def _generate_ad_library_receipt_internal(
+    name: str,
+    country: str,
+    limit: int,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    payload = _build_ad_library_payload(name, country, limit, result)
+    signed = await asyncio.to_thread(_sign_frame_payload, payload)
+    if signed.get("signing_error"):
+        return signed
+    return _with_receipt_url(signed)
+
+
+@app.post("/v1/generate-ad-library-receipt")
+async def generate_ad_library_receipt(request: AdLibraryRequest) -> dict[str, Any]:
+    """
+    Query Meta Ad Library for political and issue ads associated with a name.
+    Returns a signed Frame receipt documenting what was found — including
+    explicit documentation of what was NOT found and why.
+    """
+    result = await query_ad_library(
+        search_term=request.name.strip(),
+        country=request.country,
+        limit=request.limit,
+    )
+    return await _generate_ad_library_receipt_internal(
+        request.name.strip(),
+        request.country,
+        request.limit,
+        result,
+    )
+
+
 # ─────────────────────────────────────────
 # ASYNC JOB SYSTEM
 # POST /v1/jobs    — submit work, get job_id immediately
@@ -514,6 +1083,8 @@ def _describe_job(request: JobRequest) -> str:
         return f"Combined receipt: {request.name or request.candidate_id or 'unknown'}"
     if request.receipt_type == "media":
         return "Media analysis (file)"
+    if request.receipt_type == "ad_library":
+        return f"Meta Ad Library: {request.name or 'unknown'}"
     return "Unknown job type"
 
 
@@ -576,6 +1147,21 @@ async def _generate_combined_receipt_for_job(
     return await asyncio.to_thread(_generate_combined_receipt_sync, cid, clients, ys)
 
 
+async def _generate_ad_library_receipt_for_job(request: JobRequest) -> dict[str, Any]:
+    n = (request.name or "").strip()
+    if not n:
+        raise ValueError("ad_library job requires name")
+    country = (request.country or "US").strip() or "US"
+    lim = int(request.limit) if request.limit is not None else 25
+    lim = max(1, min(100, lim))
+    result = await query_ad_library(
+        search_term=n,
+        country=country,
+        limit=lim,
+    )
+    return await _generate_ad_library_receipt_internal(n, country, lim, result)
+
+
 async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float) -> None:
     """Fetch URL via FetchAdapter, build Frame receipt, sign with scripts/sign-payload.ts."""
     from adapters.fetch_adapter import AdapterUnavailableError, FetchError
@@ -624,6 +1210,72 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
 
         rid = str(uuid.uuid4())
         source_id = "src-fetch-media"
+
+        hive_task = asyncio.create_task(
+            _run_hive_detection(fetch_result.file_bytes, fetch_result.content_type),
+        )
+        ocr_task = asyncio.create_task(
+            _run_ocr(fetch_result.file_bytes, fetch_result.content_type),
+        )
+        try:
+            hive_result, ocr_result = await asyncio.wait_for(
+                asyncio.gather(hive_task, ocr_task),
+                timeout=25.0,
+            )
+        except asyncio.TimeoutError:
+            hive_result = {
+                "detector": "none",
+                "note": "Hive detection timed out after 25 seconds.",
+                "resolution_possible": True,
+            }
+            ocr_result = {
+                "status": "timeout",
+                "note": "OCR timed out after 25 seconds.",
+                "resolution_possible": True,
+            }
+
+        hive_meta = dict(hive_result)
+        if hive_meta.get("ai_generated_probability") is not None:
+            hive_meta["ai_generated_score"] = hive_meta["ai_generated_probability"]
+
+        operational_unknowns: list[dict[str, Any]] = []
+        epistemic_unknowns: list[dict[str, Any]] = [
+            {
+                "text": (
+                    "A cryptographic hash proves file identity at observation time; it does not "
+                    "establish the truth or falsity of any claims within the file."
+                ),
+                "resolution_possible": False,
+            },
+        ]
+
+        if hive_result.get("detector") == "none" or hive_result.get("error"):
+            operational_unknowns.append(
+                {
+                    "text": hive_result.get("note", "AI detection not available."),
+                    "resolution_possible": True,
+                },
+            )
+
+        if ocr_result.get("status") in ("unavailable", "error", "timeout"):
+            operational_unknowns.append(
+                {
+                    "text": ocr_result.get("note", "OCR not available."),
+                    "resolution_possible": True,
+                },
+            )
+
+        if hive_result.get("ai_generated_probability") is not None:
+            epistemic_unknowns.append(
+                {
+                    "text": (
+                        "AI detection scores reflect model output probabilities; they do not constitute "
+                        "a determination that content is or is not AI-generated."
+                    ),
+                    "resolution_possible": False,
+                },
+            )
+
         meta: dict[str, Any] = {
             "sha256": fetch_result.sha256_hash,
             "content_type": fetch_result.content_type,
@@ -640,8 +1292,10 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
                 k: v for k, v in fetch_result.metadata.items() if k != "temp_fetch_dir"
             },
             "job_id": job.job_id,
+            "detection": hive_meta,
+            "ocr": ocr_result,
         }
-        claims = [
+        claims: list[dict[str, Any]] = [
             {
                 "id": "claim-1",
                 "statement": (
@@ -651,8 +1305,20 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
                 "assertedAt": coc.retrieval_timestamp,
                 "type": "observed",
                 "implication_risk": "low",
-            }
+            },
         ]
+        if hive_result.get("ai_generated_probability") is not None:
+            claims.append(
+                {
+                    "id": "claim-2",
+                    "statement": "Hive visual model reported an AI-generated probability score for this media.",
+                    "assertedAt": coc.retrieval_timestamp,
+                    "type": "observed",
+                    "implication_risk": "high",
+                    "implication_note": IMPLICATION_NOTES["ai_detection"],
+                },
+            )
+
         sources = [
             {
                 "id": source_id,
@@ -662,7 +1328,7 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
                 "retrievedAt": coc.retrieval_timestamp,
                 "externalRef": fetch_result.sha256_hash[:16],
                 "metadata": meta,
-            }
+            },
         ]
         narrative = [
             {
@@ -680,22 +1346,30 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
                 "sourceId": source_id,
             },
         ]
-        unknowns = {
-            "operational": [
-                {
-                    "text": "OCR and Whisper transcription not yet run on this file.",
-                    "resolution_possible": True,
-                },
-            ],
-            "epistemic": [
+        if hive_result.get("detector") == "hive" and hive_result.get("ai_generated_probability") is not None:
+            p = float(hive_result["ai_generated_probability"])
+            narrative.append(
                 {
                     "text": (
-                        "A cryptographic hash proves file identity at observation time; it does not "
-                        "establish the truth or falsity of any claims within the file."
+                        f"Hive AI detection (visual): model-assigned AI-generated probability approximately "
+                        f"{p:.4f}. {IMPLICATION_NOTES['ai_detection']}"
                     ),
-                    "resolution_possible": False,
+                    "sourceId": source_id,
                 },
-            ],
+            )
+        if ocr_result.get("status") == "success" and ocr_result.get("text"):
+            narrative.append(
+                {
+                    "text": (
+                        f"Tesseract OCR extracted {ocr_result.get('char_count', 0)} characters from the image."
+                    ),
+                    "sourceId": source_id,
+                },
+            )
+
+        unknowns = {
+            "operational": operational_unknowns,
+            "epistemic": epistemic_unknowns,
         }
         payload: dict[str, Any] = {
             "schemaVersion": "1.0.0",
@@ -708,12 +1382,14 @@ async def _handle_source_url_job(job: Job, request: JobRequest, start_ms: float)
             "contentHash": "",
         }
         payload_str = json.dumps(payload, ensure_ascii=False)
+        _root = _repo_root()
         sign_result = subprocess.run(
-            ["npx", "tsx", str(REPO_ROOT / "scripts" / "sign-payload.ts")],
+            ["npx", "tsx", str(_root / "scripts" / "sign-payload.ts")],
             input=payload_str,
             capture_output=True,
             text=True,
-            cwd=str(REPO_ROOT),
+            cwd=str(_root),
+            env={**os.environ},
             timeout=120,
         )
         if sign_result.returncode == 0:
@@ -773,6 +1449,9 @@ async def _run_job(job: Job, request: JobRequest) -> None:
                 request.lobbying_clients,
                 request.years,
             )
+
+        elif request.receipt_type == "ad_library":
+            receipt = await _generate_ad_library_receipt_for_job(request)
 
         elif request.receipt_type == "media":
             receipt = {
@@ -1251,6 +1930,121 @@ def entity_share_page(name: str) -> HTMLResponse:
     )
 
 
+HIVE_API_KEY = os.getenv("HIVE_API_KEY")
+HIVE_ENDPOINT = "https://api.thehive.ai/api/v2/task/sync"
+
+
+async def _run_hive_detection(file_bytes: bytes, content_type: str) -> dict[str, Any]:
+    """
+    Call Hive AI detection API.
+    Returns structured detection result or a documented failure.
+    Always returns a dict — never raises.
+    """
+    if not HIVE_API_KEY:
+        return {
+            "detector": "none",
+            "note": "HIVE_API_KEY not configured. File hash and timestamp are valid without AI detection.",
+            "resolution_possible": True,
+        }
+
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(
+                HIVE_ENDPOINT,
+                headers={"token": HIVE_API_KEY},
+                files={"media": ("upload", file_bytes, content_type)},
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        ai_generated_prob = None
+        raw_classes: list[Any] = []
+
+        status_list = data.get("status", [])
+        for status_item in status_list:
+            output = status_item.get("response", {}).get("output", [])
+            if not isinstance(output, list):
+                output = [output] if output else []
+            for item in output:
+                if not isinstance(item, dict):
+                    continue
+                classes = item.get("classes", [])
+                if isinstance(classes, list):
+                    raw_classes.extend(classes)
+                    for cls in classes:
+                        if isinstance(cls, dict) and cls.get("class") == "ai_generated":
+                            ai_generated_prob = cls.get("score")
+
+        return {
+            "detector": "hive",
+            "ai_generated_probability": ai_generated_prob,
+            "ai_generated_score": ai_generated_prob,
+            "raw_classes": raw_classes[:10],
+            "model_version": "hive_visual_v2",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "implication_risk": "high",
+            "implication_note": IMPLICATION_NOTES["ai_detection"],
+        }
+
+    except Exception as e:  # noqa: BLE001
+        return {
+            "detector": "hive",
+            "error": str(e)[:200],
+            "note": "Hive detection failed. Hash and timestamp are valid without AI score.",
+            "resolution_possible": True,
+        }
+
+
+async def _run_ocr(file_bytes: bytes, content_type: str) -> dict[str, Any]:
+    """
+    Run Tesseract OCR on image files.
+    Returns extracted text or a documented failure.
+    Always returns a dict — never raises.
+    """
+    if not content_type.startswith("image/"):
+        return {
+            "status": "skipped",
+            "note": "OCR only runs on image files.",
+        }
+
+    try:
+        import io
+
+        import pytesseract
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(file_bytes))
+        text = pytesseract.image_to_string(image).strip()
+
+        if not text:
+            return {
+                "status": "no_text_found",
+                "note": "OCR ran successfully but found no extractable text.",
+            }
+
+        return {
+            "status": "success",
+            "text": text,
+            "char_count": len(text),
+            "note": "Text extracted via Tesseract OCR. May be incomplete for stylized or small text.",
+        }
+
+    except ImportError:
+        return {
+            "status": "unavailable",
+            "note": "pytesseract or Pillow not installed. Add to requirements.txt.",
+            "resolution_possible": True,
+        }
+    except Exception as e:  # noqa: BLE001
+        return {
+            "status": "error",
+            "error": str(e)[:200],
+            "resolution_possible": True,
+        }
+
+
 async def _build_analyze_media_response(
     contents: bytes,
     filename: str,
@@ -1427,40 +2221,31 @@ async def _build_analyze_media_response(
         else:
             await _add_to_phash_ledger(perceptual_hash, file_hash, filename, timestamp)
 
-    # Step 5 — Hive AI detection (if key configured)
-    detection_result: dict[str, Any] | None = None
-    hive_key = os.environ.get("HIVE_API_KEY", "")
-    if hive_key:
-        try:
-            b64 = base64.b64encode(contents).decode()
-            payload = json.dumps({"image": {"data": b64}}).encode()
-            req = urllib.request.Request(
-                "https://api.thehive.ai/api/v2/task/sync",
-                data=payload,
-                headers={
-                    "Authorization": f"Token {hive_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                hive_data = json.loads(resp.read())
-                classes = hive_data.get("status", [{}])[0].get("response", {}).get("output", [{}])[0].get("classes", [])
-                ai_score = next(
-                    (c.get("score", 0) for c in classes if c.get("class") == "ai_generated"),
-                    None,
-                )
-                detection_result = {
-                    "detector": "hive",
-                    "ai_generated_score": ai_score,
-                    "classes": classes[:5],
-                }
-        except Exception as e:  # noqa: BLE001
-            detection_result = {"detector": "hive", "error": str(e)[:120]}
-    else:
-        detection_result = {
+    # Step 5 — Hive AI + Tesseract OCR (parallel, 25s cap)
+    hive_task = asyncio.create_task(_run_hive_detection(contents, content_type))
+    ocr_task = asyncio.create_task(_run_ocr(contents, content_type))
+    try:
+        hive_result, ocr_result = await asyncio.wait_for(
+            asyncio.gather(hive_task, ocr_task),
+            timeout=25.0,
+        )
+    except asyncio.TimeoutError:
+        hive_result = {
             "detector": "none",
-            "note": "No HIVE_API_KEY configured — set it in Render environment to enable AI detection",
+            "note": "Hive detection timed out after 25 seconds.",
+            "resolution_possible": True,
         }
+        ocr_result = {
+            "status": "timeout",
+            "note": "OCR timed out after 25 seconds.",
+            "resolution_possible": True,
+        }
+
+    detection_result: dict[str, Any] = dict(hive_result)
+    if detection_result.get("ai_generated_probability") is not None:
+        detection_result["ai_generated_score"] = detection_result["ai_generated_probability"]
+    if "classes" not in detection_result and detection_result.get("raw_classes") is not None:
+        detection_result["classes"] = detection_result["raw_classes"][:5]
 
     return {
         "fileHash": file_hash,
@@ -1474,6 +2259,7 @@ async def _build_analyze_media_response(
         "extractedClaims": extracted_claims,
         "extractedClaimObjects": extracted_claim_objects,
         "detection": detection_result,
+        "ocr": ocr_result,
         "ledgerMatch": ledger_match,
         "note": "Submit to /v1/sign-media-analysis or POST /v1/analyze-and-verify for a signed Frame receipt",
     }
@@ -1623,6 +2409,7 @@ class MediaAnalysisRequest(BaseModel):
     fileSize: int
     contentType: str
     detection: dict[str, Any]
+    ocr: dict[str, Any] | None = None
     timestamp: str
     extractedText: str | None = None
     extractedClaims: list[str] = Field(default_factory=list)

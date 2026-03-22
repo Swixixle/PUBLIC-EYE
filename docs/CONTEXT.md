@@ -58,6 +58,74 @@ The job system wraps the same underlying adapter logic.
 **Current limitation:** Job store is in-memory. Resets on server restart.
 Acceptable at current stage — no persistent state required for grant demo.
 
+## Media UI
+
+Located at `/demo` — **Media** tab.
+
+Input: URL paste or file upload (image/video, max 50MB)
+
+Processing: job system (`submitJobAndPoll`), 2-second polling for URL jobs; file path uses `POST /v1/analyze-media` then `POST /v1/sign-media-analysis`.
+
+Output: receipt card with required sections.
+
+Required sections in receipt card (in order):
+
+1. WHAT WAS CHECKED
+2. FILE FINGERPRINT (SHA-256, tamper-evident note)
+3. AI DETECTION (shown if Hive ran with a score or error)
+4. TEXT FOUND IN FILE (shown if OCR found text)
+5. CHAIN OF CUSTODY
+6. WHAT WE DON'T KNOW (mandatory — never hidden)
+7. SOURCES CONSULTED
+8. VERIFY (trust footer, collapsed by default)
+
+The **WHAT WE DON'T KNOW** section is architecturally mandatory.
+If it is empty, the adapter is lying.
+
+Operational unknowns = technical failures (amber label)
+
+Epistemic unknowns = fundamental limits (grey label)
+
+## Environment Variables
+
+### META_AD_LIBRARY_TOKEN
+
+Required for: `POST /v1/generate-ad-library-receipt`
+
+Setup:
+
+1. Create a Meta developer account at https://developers.facebook.com/
+2. Create an app — type: Business
+3. Add the Marketing API product
+4. Request `ads_read` permission
+5. Generate a User Access Token with `ads_read` scope
+6. Add as `META_AD_LIBRARY_TOKEN` in Render environment
+
+Without this token: endpoint returns a partial receipt documenting
+the absence of the token as an operational unknown. It does not fail.
+
+Note: User Access Tokens expire. A System User token (via Business Manager)
+is more stable for production. Add as a known gap until addressed.
+
+## Schema baselines (Rule Change Receipt foundation)
+
+**Module:** `apps/api/schema_monitor.py`  
+**Storage:** `apps/api/baselines/baseline_{source_id}.json` (committed as evidence)
+
+On **API startup**, Frame captures a **structural schema fingerprint** (field paths, types, cardinality — not values) for:
+
+- `fec` — OpenFEC candidates
+- `lda` — Senate LDA filings
+- `propublica_990` — ProPublica nonprofit search
+- `wikidata` — `wbsearchentities`
+- `meta_ad_library` — adapter output from Meta Ad Library query
+
+**GET `/v1/schema-baselines`** returns status, truncated hashes, capture time, and field counts for each source.
+
+First capture is **genesis**; unchanged schema on later starts updates **`last_verified_at`**. If structure drifts, baseline is versioned and **`schema_changed`** is set — full **Rule Change Receipt** generation is **not** implemented yet (`compare_to_baseline` in `schema_monitor.py` is the drift hook).
+
+See **`docs/PROOF.md`** for curl proofs including schema baselines.
+
 ## FetchAdapter
 
 Interface: `apps/api/adapters/fetch_adapter.py`  
@@ -149,6 +217,7 @@ Distribution layer (future):
 - **Gap 3 (OCR → router → adapters):** `apps/api/router.py` + `adapters_media.py` — after Claude extracts claims, `route_claim()` selects fec / irs990 (ProPublica) / lda / congress / wikidata; results on each claim as `adapterResults`; `sign-media-analysis.ts` adds adapter rows to `sources[]` with `metadata.adapterData`. **`POST /v1/analyze-and-verify`** = analyze + route + sign in one call. **`CONGRESS_API_KEY`** required for Congress.gov bill search (free at api.congress.gov).
 - **Gap 4 (entity behavioral ledger):** SQLite table `entity_receipts` — each verified media receipt appends rows per (claim × entity) from `extractedClaimObjects`. **`GET /v1/entity/{name}`**, **`GET /v1/entity/{name}/summary`**, **`GET /v1/entities`**. **`GET /entity/{name}`** serves `apps/web/entity.html` (Cinzel baroque frame). Demo UI links “View entity record →” after analyze-and-verify when entities are present.
 - **Podcast / video adapter:** `apps/api/adapters_podcast.py` — `yt-dlp` download, local **`openai-whisper` `base`** transcription, Claude claim extraction with timestamps + speakers, same source verification + `route_claim` + signing as media. **`POST /v1/analyze-podcast`** (JSON `url` or multipart `file`), **`POST /v1/analyze-and-verify-podcast`**. **`scripts/sign-media-analysis.ts`** supports `sourceType: "podcast"`, transcript source row (`whisper://local/{hash}`), narrative lines `At HH:MM:SS, speaker said: …`. **v1 cap: 30 minutes** of audio (`FRAME_PODCAST_MAX_SECONDS`). Requires **ffmpeg** on `PATH` for trim + acoustic fingerprint. Whisper **~140MB** model download on first run (slow cold start on free tier). **Spotify app links** not supported — use public RSS episode URLs or YouTube.
+- **Meta Ad Library (“was it paid for”):** `apps/api/adapters/meta_ad_library.py` — Graph API `ads_archive` for political and issue ads; spend ranges normalized; epistemic unknowns for disclosure limits. **`POST /v1/generate-ad-library-receipt`**, **`receipt_type: "ad_library"`** on **`POST /v1/jobs`**. Demo: **Ad Spend** mode on `/demo`. Requires **`META_AD_LIBRARY_TOKEN`** (`ads_read`); without token, signed receipt still returned with operational unknown.
 
 ## Immediate Next Task
 Fix FRAME_PRIVATE_KEY format on Render so /v1/generate-receipt works in production.
@@ -180,6 +249,18 @@ Built in one overnight session March 19-20 2026.
 Started: broken 500 error, placeholder payload.
 Ended: live FEC pipeline, cryptographic verification, full UI with evidence chain.
 
+### Task 3.2 — README + polish + E2E
+- **`README.md`:** rewritten for 60-second clarity; curl proofs; API table; stack; env vars.
+- **`scripts/e2e-test.sh`:** production smoke tests (health, demo, pitch, receipts, verify, jobs, schema baselines, FEC job poll).
+- **`docs/DOMAIN.md`:** custom-domain checklist.
+- **`render.yaml` / `requirements.txt`:** audited for media pipeline deps.
+
+### Task 3.1 — Schema baseline capture + PROOF.md
+- **`apps/api/schema_monitor.py`:** path normalization, recursive `_extract_schema`, `fingerprint_schema` (full + critical hashes), `capture_baseline` / `save_baseline` / `compare_to_baseline`, JSON storage under **`apps/api/baselines/`**.
+- **Startup:** `capture_schema_baselines` runs FEC, LDA, ProPublica 990, Wikidata, Meta Ad Library adapter samples; failures still record error-shaped baselines.
+- **`GET /v1/schema-baselines`:** admin/grant view of capture status and truncated hashes.
+- **`docs/PROOF.md`:** falsifiable curl proofs + architecture table; **`npm run proof:date`** stamps the generated date line.
+
 ### Task 1.4 — FetchAdapter + pitch deck
 - **`apps/api/adapters/`:** `FetchAdapter` ABC, `YtDlpAdapter`, `DirectHttpAdapter`, `get_adapter_for_url`. `httpx` for direct HTTP.
 - **`_run_job` `source_url`:** real fetch → Frame-shaped payload → `scripts/sign-payload.ts` (Ed25519). `AdapterUnavailableError` → partial receipt with operational unknowns.
@@ -203,3 +284,62 @@ Ended: live FEC pipeline, cryptographic verification, full UI with evidence chai
 - **`scripts/sign-media-analysis.ts`:** Media/podcast receipts include `unknowns` (OCR/HIVE/trim limits operational; boundary epistemic).
 - **`apps/api/main.py`:** `SignedReceipt` includes optional **`unknowns`** (`UnknownItem` / `UnknownsBlock`) for `/v1/verify-receipt` compatibility.
 - **`apps/web/demo-payload.json`:** Regenerated via **`npx tsx scripts/regen-demo-payload.ts`** (uses first PEM private key in `apps/api/.env`).
+
+---
+
+## What Frame Is Not
+
+Read this when scope starts drifting.
+
+Frame is a receipt system for claims and evidence. It proves what was observed,
+from what sources, at what time, signed by whom. It works for true things and
+false things equally. It is epistemic infrastructure, not an arbiter.
+
+- Not a fact-checker (implies verdict)
+- Not an AI trust score (implies oracle)  
+- Not a misinformation detector (implies we decided)
+- Not a competitor to C2PA (we cover what they can't reach)
+
+---
+
+## Maturity Ladder
+
+**Frame Core (built):** Public records. FEC, LDA, 990s, Wikidata.
+Subject classes: politicians, nonprofits, public figures.
+
+**Frame Media (in progress):** Media provenance for untagged content.
+SHA-256 hash, OCR, Whisper, Hive AI detection, yt-dlp fetch.
+Subject classes: social media clips, screenshots, uploaded files.
+
+**Frame Network (not yet started):** Distribution tracking.
+Perceptual hashing, hash ledger, repost mapping.
+Do not build until Media tier is stable.
+
+---
+
+## Known Gaps (current)
+
+- `HIVE_API_KEY` not yet configured — AI detection returns `detector: none`
+- `META_AD_LIBRARY_TOKEN` — User token expires; System User token recommended
+- Salience algorithm (Layer Zero) uses rule-based fallback until corpus N=100
+- Music dossier (Liner Notes) specced but not built
+- Rule Change Receipt generation not yet implemented (baselines captured, monitoring not wired)
+- Job store is in-memory — resets on server restart
+- Browser extension is a skeleton only
+- Custom domain not yet configured
+
+---
+
+## Subject Class Map
+
+| Subject Class | Tier | Adapters | Status |
+|--------------|------|----------|--------|
+| politician | Core | FEC, LDA, Wikidata | Built |
+| nonprofit | Core | 990, Wikidata | Built |
+| public_figure | Core | Wikidata | Built |
+| social_media_clip | Media | yt-dlp, SHA-256, OCR, Ad Library | Built |
+| screenshot | Media | SHA-256, OCR, Ad Library | Built |
+| artist | Music | AcoustID, Librosa, Rights | Specced |
+| recording | Music | LibrosaAnalysis, SimilarSongs | Specced |
+| corporation | Future | SEC EDGAR, PACER | Not started |
+| court_case | Future | PACER | Not started |
