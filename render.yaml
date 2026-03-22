@@ -4,6 +4,8 @@ services:
     runtime: python
     rootDir: .
     buildCommand: |
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
       apt-get install -y tesseract-ocr ffmpeg
       npm ci
       npm run build
