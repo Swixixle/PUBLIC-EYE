@@ -40,6 +40,24 @@ They are signed into the receipt payload.
 The UI surfaces `implication_note` as a tooltip on high-risk claims.
 This is schema enforcement, not style guidance.
 
+## Async Job System
+
+All receipt generation can be submitted as background jobs.
+
+**Submit:** `POST /v1/jobs` or `POST /v1/intake`  
+Returns: `{ job_id, status, poll_url }` immediately.
+
+**Poll:** `GET /v1/jobs/{job_id}`  
+Returns: `{ status, receipt, processing_time_ms }` when complete.
+
+Status values: `pending` → `processing` → `complete` | `failed`
+
+The synchronous `/v1/generate-*` endpoints remain available and unchanged.
+The job system wraps the same underlying adapter logic.
+
+**Current limitation:** Job store is in-memory. Resets on server restart.
+Acceptable at current stage — no persistent state required for grant demo.
+
 The verification is live. Anyone can check it. Anyone can re-verify independently.
 
 ## Architecture — Current
@@ -144,6 +162,12 @@ investigative journalism fellowships, The Markup, Freedom of the Press Foundatio
 Built in one overnight session March 19-20 2026.
 Started: broken 500 error, placeholder payload.
 Ended: live FEC pipeline, cryptographic verification, full UI with evidence chain.
+
+### Task 1.3 — Async job system
+- **`apps/api/job_store.py`:** in-memory jobs (`pending` → `processing` → `complete` | `failed`); resets on restart.
+- **`POST /v1/jobs`**, **`GET /v1/jobs/{job_id}`**, **`POST /v1/intake`:** submit work, poll for signed receipt or result payload. Same adapter logic as synchronous **`/v1/generate-*`** via extracted **`_generate_*_sync`** helpers + async wrappers for background tasks.
+- **`apps/web/index.html`:** **`submitJobAndPoll()`** helper (uses `API_BASE`; no change to existing flows yet).
+- **Note:** Deploy API to Render for **`/v1/jobs`** on production; signing still requires **`FRAME_PRIVATE_KEY`** (or Render env) for FEC/990/etc. jobs.
 
 ### Task 1.2 — `implication_risk` + `implication_note` on claims
 - **`packages/types`:** `ImplicationRisk`, `ClaimEvidenceType`, `ClaimRecord` fields; `buildClaim()`; `IMPLICATION_NOTES` / `getImplicationNote()` (`implication-notes.ts`).

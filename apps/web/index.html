@@ -312,6 +312,59 @@
 </div>
 <script>
 const API_BASE=(new URLSearchParams(location.search).get('api')||'https://frame-2yxu.onrender.com').replace(/\/$/,'');
+
+// Job polling infrastructure — used by Task 2.1 media UI
+// Existing adapter calls are not changed here
+async function submitJobAndPoll(jobRequest, onProgress, onComplete, onError) {
+  const base = API_BASE;
+  const submitRes = await fetch(`${base}/v1/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(jobRequest),
+  });
+  if (!submitRes.ok) {
+    const t = await submitRes.text();
+    if (onError) onError(t || submitRes.statusText);
+    return null;
+  }
+  const { job_id, poll_url } = await submitRes.json();
+  const pollUrl = poll_url && poll_url.startsWith('http') ? poll_url : `${base}${poll_url || '/v1/jobs/' + job_id}`;
+
+  if (onProgress) onProgress({ status: 'pending', job_id });
+
+  const poll = setInterval(async () => {
+    try {
+      const pollRes = await fetch(pollUrl);
+      if (!pollRes.ok) {
+        clearInterval(poll);
+        if (onError) onError(await pollRes.text());
+        return;
+      }
+      const job = await pollRes.json();
+
+      if (onProgress) onProgress(job);
+
+      if (job.status === 'complete') {
+        clearInterval(poll);
+        if (onComplete) onComplete(job.receipt, job.processing_time_ms);
+      } else if (job.status === 'failed') {
+        clearInterval(poll);
+        if (onError) onError(job.error);
+      }
+    } catch (err) {
+      clearInterval(poll);
+      if (onError) onError(err && err.message ? err.message : String(err));
+    }
+  }, 2000);
+
+  setTimeout(() => {
+    clearInterval(poll);
+    if (onError) onError('Job timed out after 3 minutes.');
+  }, 180000);
+
+  return job_id;
+}
+
 function stripReceiptUrl(obj){if(!obj||typeof obj!=='object')return obj;const{receiptUrl,extractedClaimObjects,transcript,sourceUrl,podcastTitle,note,...rest}=obj;return rest;}
 function showMainPanel(which){
   const rec=document.getElementById('panel-records');

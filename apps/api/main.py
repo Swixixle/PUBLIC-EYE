@@ -14,6 +14,7 @@ import re
 import sqlite3
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -25,7 +26,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,7 @@ from adapters_podcast import (
     transcribe_audio,
     trim_audio_max,
 )
+from job_store import Job, create_job, get_job, mark_complete, mark_failed, mark_processing
 from router import route_claim
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -177,6 +179,21 @@ class WikidataRequest(BaseModel):
     wikidataId: str | None = None
 
 
+class JobRequest(BaseModel):
+    """Async job submission — one of `source_url` or `receipt_type` should be set."""
+
+    model_config = ConfigDict(extra="allow")
+
+    source_url: str | None = None
+    receipt_type: str | None = None
+    name: str | None = None
+    candidate_id: str | None = None
+    ein: str | None = None
+    lobbying_clients: list[str] | None = None
+    years: list[int] | None = None
+    wikidata_id: str | None = None
+
+
 app = FastAPI(title="Frame API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -247,8 +264,30 @@ async def fec_search(name: str) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/v1/generate-receipt")
-def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
+def _resolve_fec_candidate_id(name: str) -> str:
+    """Resolve a display name to an FEC candidate_id via OpenFEC search."""
+    fec_key = os.environ.get("FEC_API_KEY", "DEMO_KEY")
+    q = urllib.parse.quote(name.strip())
+    url = f"https://api.open.fec.gov/v1/candidates/?q={q}&per_page=5&api_key={fec_key}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Frame/1.0"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode())
+    results = data.get("results") or []
+    for r in results:
+        cid = r.get("candidate_id")
+        if cid:
+            return str(cid)
+    raise ValueError(f"No FEC candidate found for name: {name!r}")
+
+
+def _http_exception_detail(exc: HTTPException) -> str:
+    d = exc.detail
+    if isinstance(d, (dict, list)):
+        return json.dumps(d)
+    return str(d)
+
+
+def _generate_fec_receipt_sync(candidate_id: str) -> dict[str, Any]:
     """
     Build a live FEC receipt for `candidateId` via Node (`buildLiveFecReceipt` + `signReceipt`),
     same pipeline as `scripts/generate-receipt.ts`.
@@ -259,7 +298,7 @@ def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="generate-receipt script missing")
 
     proc = subprocess.run(
-        ["npx", "tsx", str(script), body.candidateId],
+        ["npx", "tsx", str(script), candidate_id],
         cwd=str(root),
         capture_output=True,
         text=True,
@@ -282,15 +321,19 @@ def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
     return _with_receipt_url(out)
 
 
-@app.post("/v1/generate-lobbying-receipt")
-def generate_lobbying_receipt(req: LobbyingRequest) -> dict[str, Any]:
+@app.post("/v1/generate-receipt")
+def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
+    return _generate_fec_receipt_sync(body.candidateId)
+
+
+def _generate_lobbying_receipt_sync(name: str, candidate_id: str | None) -> dict[str, Any]:
     root = _repo_root()
     script = root / "scripts" / "generate-lobbying-receipt.ts"
     if not script.is_file():
         raise HTTPException(status_code=500, detail="generate-lobbying-receipt script missing")
 
     proc = subprocess.run(
-        ["npx", "tsx", str(script), req.name, req.candidateId or ""],
+        ["npx", "tsx", str(script), name, candidate_id or ""],
         capture_output=True,
         text=True,
         check=False,
@@ -312,8 +355,16 @@ def generate_lobbying_receipt(req: LobbyingRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
-@app.post("/v1/generate-combined-receipt")
-def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
+@app.post("/v1/generate-lobbying-receipt")
+def generate_lobbying_receipt(req: LobbyingRequest) -> dict[str, Any]:
+    return _generate_lobbying_receipt_sync(req.name, req.candidateId)
+
+
+def _generate_combined_receipt_sync(
+    candidate_id: str,
+    lobbying_clients: list[str],
+    years: list[int],
+) -> dict[str, Any]:
     root = _repo_root()
     script = root / "scripts" / "generate-combined-receipt.ts"
     if not script.is_file():
@@ -325,9 +376,9 @@ def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
         "npx",
         "tsx",
         str(script),
-        req.candidateId,
-        json.dumps(req.lobbyingClients),
-        json.dumps(req.years),
+        candidate_id,
+        json.dumps(lobbying_clients),
+        json.dumps(years),
         fec_key,
     ]
 
@@ -354,15 +405,19 @@ def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
-@app.post("/v1/generate-990-receipt")
-def generate_990_receipt(req: NineNinetyRequest) -> dict[str, Any]:
+@app.post("/v1/generate-combined-receipt")
+def generate_combined_receipt(req: CombinedReceiptRequest) -> dict[str, Any]:
+    return _generate_combined_receipt_sync(req.candidateId, req.lobbyingClients, req.years)
+
+
+def _generate_990_receipt_sync(org_name: str, ein: str | None) -> dict[str, Any]:
     root = _repo_root()
     script = root / "scripts" / "generate-990-receipt.ts"
     if not script.is_file():
         raise HTTPException(status_code=500, detail="generate-990-receipt script missing")
 
     proc = subprocess.run(
-        ["npx", "tsx", str(script), req.orgName, req.ein or ""],
+        ["npx", "tsx", str(script), org_name, ein or ""],
         capture_output=True,
         text=True,
         check=False,
@@ -384,15 +439,19 @@ def generate_990_receipt(req: NineNinetyRequest) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
 
 
-@app.post("/v1/generate-wikidata-receipt")
-def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
+@app.post("/v1/generate-990-receipt")
+def generate_990_receipt(req: NineNinetyRequest) -> dict[str, Any]:
+    return _generate_990_receipt_sync(req.orgName, req.ein)
+
+
+def _generate_wikidata_receipt_sync(person_name: str, wikidata_id: str | None) -> dict[str, Any]:
     root = _repo_root()
     script = root / "scripts" / "generate-wikidata-receipt.ts"
     if not script.is_file():
         raise HTTPException(status_code=500, detail="generate-wikidata-receipt script missing")
 
     proc = subprocess.run(
-        ["npx", "tsx", str(script), req.personName, req.wikidataId or ""],
+        ["npx", "tsx", str(script), person_name, wikidata_id or ""],
         capture_output=True,
         text=True,
         check=False,
@@ -412,6 +471,198 @@ def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
         return _with_receipt_url(json.loads(proc.stdout.strip()))
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail=f"Invalid JSON: {exc}") from exc
+
+
+@app.post("/v1/generate-wikidata-receipt")
+def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
+    return _generate_wikidata_receipt_sync(req.personName, req.wikidataId)
+
+
+# ─────────────────────────────────────────
+# ASYNC JOB SYSTEM
+# POST /v1/jobs    — submit work, get job_id immediately
+# GET  /v1/jobs/{job_id} — poll for status and receipt
+# POST /v1/intake  — same as POST /v1/jobs (canonical intake)
+# ─────────────────────────────────────────
+
+
+def _describe_job(request: JobRequest) -> str:
+    """Human-readable description of what this job will do."""
+    if request.source_url:
+        return f"Media analysis: {request.source_url[:80]}"
+    if request.receipt_type == "fec":
+        return f"FEC receipt: {request.name or request.candidate_id or 'unknown'}"
+    if request.receipt_type == "lobbying":
+        return f"Lobbying receipt: {request.name or 'unknown'}"
+    if request.receipt_type == "990":
+        return f"990 receipt: {request.name or request.ein or 'unknown'}"
+    if request.receipt_type == "wikidata":
+        return f"Wikidata receipt: {request.name or 'unknown'}"
+    if request.receipt_type == "combined":
+        return f"Combined receipt: {request.name or request.candidate_id or 'unknown'}"
+    if request.receipt_type == "media":
+        return "Media analysis (file)"
+    return "Unknown job type"
+
+
+async def _generate_fec_receipt_for_job(
+    candidate_id: str | None,
+    name: str | None,
+) -> dict[str, Any]:
+    cid = (candidate_id or "").strip()
+    if not cid and name:
+        cid = await asyncio.to_thread(_resolve_fec_candidate_id, name.strip())
+    if not cid:
+        raise ValueError("FEC job requires candidate_id or name")
+    return await asyncio.to_thread(_generate_fec_receipt_sync, cid)
+
+
+async def _generate_lobbying_receipt_for_job(
+    name: str | None,
+    candidate_id: str | None,
+) -> dict[str, Any]:
+    n = (name or "").strip()
+    if not n:
+        raise ValueError("Lobbying job requires name")
+    return await asyncio.to_thread(_generate_lobbying_receipt_sync, n, (candidate_id or "").strip() or None)
+
+
+async def _generate_990_receipt_for_job(name: str | None, ein: str | None) -> dict[str, Any]:
+    org = (name or "").strip()
+    if not org:
+        raise ValueError("990 job requires name (organization name)")
+    return await asyncio.to_thread(_generate_990_receipt_sync, org, (ein or "").strip() or None)
+
+
+async def _generate_wikidata_receipt_for_job(
+    name: str | None,
+    wikidata_id: str | None,
+) -> dict[str, Any]:
+    n = (name or "").strip()
+    if not n:
+        raise ValueError("Wikidata job requires name")
+    return await asyncio.to_thread(
+        _generate_wikidata_receipt_sync,
+        n,
+        (wikidata_id or "").strip() or None,
+    )
+
+
+async def _generate_combined_receipt_for_job(
+    name: str | None,
+    candidate_id: str | None,
+    lobbying_clients: list[str] | None,
+    years: list[int] | None,
+) -> dict[str, Any]:
+    cid = (candidate_id or "").strip()
+    if not cid and name:
+        cid = await asyncio.to_thread(_resolve_fec_candidate_id, name.strip())
+    if not cid:
+        raise ValueError("Combined job requires candidate_id or name")
+    clients = list(lobbying_clients) if lobbying_clients is not None else []
+    ys = list(years) if years is not None else [2022, 2024]
+    return await asyncio.to_thread(_generate_combined_receipt_sync, cid, clients, ys)
+
+
+async def _run_job(job: Job, request: JobRequest) -> None:
+    """
+    Background task. Calls the same adapter logic as synchronous /v1/generate-* routes.
+    Marks job complete or failed. Does not raise — errors are recorded on the job.
+    """
+    mark_processing(job)
+    start_ms = time.time() * 1000
+
+    try:
+        receipt: dict[str, Any] | None = None
+
+        if request.source_url:
+            receipt = {
+                "status": "fetch_adapter_pending",
+                "note": "FetchAdapter not yet wired. URL received and logged.",
+                "source_url": request.source_url,
+            }
+
+        elif request.receipt_type == "fec":
+            receipt = await _generate_fec_receipt_for_job(request.candidate_id, request.name)
+
+        elif request.receipt_type == "lobbying":
+            receipt = await _generate_lobbying_receipt_for_job(request.name, request.candidate_id)
+
+        elif request.receipt_type == "990":
+            receipt = await _generate_990_receipt_for_job(request.name, request.ein)
+
+        elif request.receipt_type == "wikidata":
+            receipt = await _generate_wikidata_receipt_for_job(request.name, request.wikidata_id)
+
+        elif request.receipt_type == "combined":
+            receipt = await _generate_combined_receipt_for_job(
+                request.name,
+                request.candidate_id,
+                request.lobbying_clients,
+                request.years,
+            )
+
+        elif request.receipt_type == "media":
+            receipt = {
+                "status": "media_pipeline_pending",
+                "note": "Use /v1/analyze-and-verify for media uploads; async media job not wired yet.",
+            }
+
+        else:
+            raise ValueError(f"Unknown or missing receipt_type: {request.receipt_type!r}")
+
+        mark_complete(job, receipt, start_ms)
+
+    except HTTPException as e:
+        mark_failed(job, _http_exception_detail(e))
+    except Exception as e:  # noqa: BLE001
+        mark_failed(job, str(e))
+
+
+@app.post("/v1/jobs")
+async def submit_job(request: JobRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """
+    Submit work. Returns job_id immediately.
+    Client polls GET /v1/jobs/{job_id} for status and receipt.
+    """
+    if not request.source_url and not request.receipt_type:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide source_url or receipt_type",
+        )
+    description = _describe_job(request)
+    job = create_job(description=description)
+    background_tasks.add_task(_run_job, job, request)
+    return {
+        "job_id": job.job_id,
+        "status": job.status,
+        "description": description,
+        "poll_url": f"/v1/jobs/{job.job_id}",
+    }
+
+
+@app.get("/v1/jobs/{job_id}")
+async def poll_job(job_id: str) -> dict[str, Any]:
+    """
+    Poll job status.
+    status: "pending" | "processing" | "complete" | "failed"
+    Receipt is present when status is "complete".
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found.")
+    return job.to_dict()
+
+
+@app.post("/v1/intake")
+async def intake(request: JobRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """
+    Primary intake endpoint. Accepts source_url or receipt_type + params.
+    Returns job_id immediately. Client polls /v1/jobs/{job_id}.
+
+    Synchronous /v1/generate-* endpoints remain available for direct use.
+    """
+    return await submit_job(request, background_tasks)
 
 
 # SQLite-backed perceptual hash ledger
