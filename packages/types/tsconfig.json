@@ -1,8 +1,13 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".",
-    "outDir": "dist"
+    "composite": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022"
   },
-  "include": ["index.ts", "implication-notes.ts"]
+  "include": ["src/**/*"]
 }

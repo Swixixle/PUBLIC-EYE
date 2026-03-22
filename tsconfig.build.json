@@ -1,10 +1,8 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/types" },
-    { "path": "./packages/signing" },
-    { "path": "./packages/narrative" },
-    { "path": "./packages/entity" },
-    { "path": "./packages/sources" }
+    { "path": "packages/types" },
+    { "path": "packages/sources" },
+    { "path": "packages/signing" }
   ]
 }
