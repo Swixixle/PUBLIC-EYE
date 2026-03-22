@@ -2,6 +2,20 @@
   "schemaVersion": "1.0.0",
   "receiptId": "3f7a9c12-e84b-4d21-b906-0f1e2a3c4d5e",
   "createdAt": "2026-03-18T00:00:00.000Z",
+  "unknowns": {
+    "operational": [
+      {
+        "text": "OpenFEC or upstream APIs may rate-limit or omit late filings at signing time.",
+        "resolution_possible": true
+      }
+    ],
+    "epistemic": [
+      {
+        "text": "Contribution totals and categories reflect reported filings; they do not establish quid pro quo or coordination.",
+        "resolution_possible": false
+      }
+    ]
+  },
   "claims": [
     {
       "id": "claim-1",
@@ -75,7 +89,7 @@
       "sourceId": "src-senate-disclosure-manchin"
     }
   ],
-  "contentHash": "7ca9716a9f9155e479b336f4ef60e4643248619fc8488066b2cbec171dda8bac",
-  "publicKey": "MCowBQYDK2VwAyEAu08vjSWpDaxR00iq16cgRjuo4CNhSMaPsMYHBVKuuM4=",
-  "signature": "ndTSCP9pYEivXnBLFgmSJTn3r+mjYQyJHfwxGmZk4s1s4LcqHA9q78r/ok2MfSepmOCl7yfgven22pB2/UNuBQ=="
+  "contentHash": "9f2ccd34b6a97148191c6f19207c65f9bb754a92cbe15575dfd1105e25ec78e6",
+  "publicKey": "MCowBQYDK2VwAyEASNrbOtM2iU/VqqrwZ57rb5YkHFmJGgVQJiCB/oT/7Ho=",
+  "signature": "ZSgmdpc2Wqo4vZAGoz0XYYRqrMFJb68CNadkNou1Utm8tauwIA2HggKnQEOaIBQtKY4oGwiUOZhcMG6h6FCtBQ=="
 }

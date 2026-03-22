@@ -4,7 +4,9 @@ import type {
   SourceAdapterResult,
   SourceQuery,
   SourceRecord,
+  UnknownsBlock,
 } from "@frame/types";
+import { epiUnknown, mergeUnknowns, opUnknown } from "@frame/types";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -190,6 +192,15 @@ export async function buildLiveFecReceipt(
     }
   }
 
+  const unknowns: UnknownsBlock = {
+    operational: (result.errors ?? []).map((e) => opUnknown(e)),
+    epistemic: [
+      epiUnknown(
+        "FEC disclosures reflect reported filings; they do not establish unlawful intent, coordination, or the full scope of indirect or issue-advocacy support.",
+      ),
+    ],
+  };
+
   return {
     schemaVersion: "1.0.0",
     receiptId: crypto.randomUUID(),
@@ -203,6 +214,7 @@ export async function buildLiveFecReceipt(
     ],
     sources,
     narrative,
+    unknowns,
     contentHash: "",
   };
 }
@@ -357,6 +369,22 @@ export async function buildLiveLobbyingReceipt(
     });
   }
 
+  const unknowns: UnknownsBlock = {
+    operational: [
+      ...(!filingsOk
+        ? [opUnknown("Senate LDA filings search did not complete successfully at signing time.")]
+        : []),
+      ...(!lobbyistsOk
+        ? [opUnknown("Senate LDA lobbyist directory search did not complete successfully at signing time.")]
+        : []),
+    ],
+    epistemic: [
+      epiUnknown(
+        "Lobbying disclosures report registrations and issues as filed; they do not establish causation or influence on specific legislation or votes.",
+      ),
+    ],
+  };
+
   return {
     schemaVersion: "1.0.0",
     receiptId: crypto.randomUUID(),
@@ -370,6 +398,7 @@ export async function buildLiveLobbyingReceipt(
     ],
     sources,
     narrative,
+    unknowns,
     contentHash: "",
   };
 }
@@ -500,6 +529,15 @@ export async function buildLobbyingCrossReference(
     });
   }
 
+  const unknowns: UnknownsBlock = {
+    operational: [],
+    epistemic: [
+      epiUnknown(
+        "Cross-referenced timelines are descriptive; they do not prove coordination between lobbyists and campaign contributions.",
+      ),
+    ],
+  };
+
   return {
     schemaVersion: "1.0.0",
     receiptId: crypto.randomUUID(),
@@ -513,6 +551,7 @@ export async function buildLobbyingCrossReference(
     ],
     sources,
     narrative,
+    unknowns,
     contentHash: "",
   };
 }
@@ -599,6 +638,7 @@ export async function buildCombinedPoliticianReceipt(
     ],
     sources: allSources,
     narrative: combinedNarrative,
+    unknowns: mergeUnknowns(fecResult.unknowns, ldaResult.unknowns),
     contentHash: "",
   };
 }
@@ -670,6 +710,18 @@ export async function buildLive990Receipt(
       ],
       sources,
       narrative,
+      unknowns: {
+        operational: [
+          opUnknown(
+            "ProPublica Nonprofit Explorer search did not resolve an EIN for this organization at signing time.",
+          ),
+        ],
+        epistemic: [
+          epiUnknown(
+            "Even when filings are available, Form 990 aggregates do not establish private intent or off-balance-sheet activity.",
+          ),
+        ],
+      },
       contentHash: "",
     };
   }
@@ -763,6 +815,14 @@ export async function buildLive990Receipt(
     ],
     sources,
     narrative,
+    unknowns: {
+      operational: [],
+      epistemic: [
+        epiUnknown(
+          "Form 990 figures are self-reported; delays or amendments may change totals after signing.",
+        ),
+      ],
+    },
     contentHash: "",
   };
 }
@@ -829,6 +889,16 @@ export async function buildWikidataReceipt(
       ],
       sources,
       narrative,
+      unknowns: {
+        operational: [
+          opUnknown("Wikidata entity search did not return a matching item at signing time."),
+        ],
+        epistemic: [
+          epiUnknown(
+            "Even when present, Wikidata statements are crowdsourced and may be incomplete or disputed.",
+          ),
+        ],
+      },
       contentHash: "",
     };
   }
@@ -995,6 +1065,14 @@ export async function buildWikidataReceipt(
     ],
     sources,
     narrative,
+    unknowns: {
+      operational: [],
+      epistemic: [
+        epiUnknown(
+          "Wikidata statements are claims about the world, not court findings; presence of a statement does not establish its accuracy.",
+        ),
+      ],
+    },
     contentHash: "",
   };
 }

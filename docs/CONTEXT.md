@@ -21,6 +21,7 @@ Each receipt contains:
 - The claim (verbatim)
 - Sourced neutral narrative sentences
 - Primary source URLs (FEC, lobbying disclosures, IRS 990s, court records, scripture, etc.)
+- **`unknowns`** — split into **`operational`** (timeouts, rate limits, missing keys — may resolve) and **`epistemic`** (intent, causation, limits of public record — not fixable by better infra). Each item is `{ text, resolution_possible }` (`true` operational, `false` epistemic).
 - An Ed25519 signature proving the content hasn't been tampered with since signing
 
 The verification is live. Anyone can check it. Anyone can re-verify independently.
@@ -127,3 +128,10 @@ investigative journalism fellowships, The Markup, Freedom of the Press Foundatio
 Built in one overnight session March 19-20 2026.
 Started: broken 500 error, placeholder payload.
 Ended: live FEC pipeline, cryptographic verification, full UI with evidence chain.
+
+### Day 1 — Task 1.1 (split `unknowns` schema)
+- **`packages/types/index.ts`:** `UnknownItem`, `UnknownsBlock`, helpers `emptyUnknowns`, `opUnknown`, `epiUnknown`, `mergeUnknowns`; **`FrameReceiptPayload.unknowns`** required on every signed payload.
+- **`packages/sources/index.ts`:** All live receipt builders (`buildLiveFecReceipt`, `buildLiveLobbyingReceipt`, `buildLobbyingCrossReference`, `buildCombinedPoliticianReceipt`, `buildLive990Receipt`, `buildWikidataReceipt`) populate `unknowns` with adapter-appropriate operational/epistemic items.
+- **`scripts/sign-media-analysis.ts`:** Media/podcast receipts include `unknowns` (OCR/HIVE/trim limits operational; boundary epistemic).
+- **`apps/api/main.py`:** `SignedReceipt` includes optional **`unknowns`** (`UnknownItem` / `UnknownsBlock`) for `/v1/verify-receipt` compatibility.
+- **`apps/web/demo-payload.json`:** Regenerated via **`npx tsx scripts/regen-demo-payload.ts`** (uses first PEM private key in `apps/api/.env`).

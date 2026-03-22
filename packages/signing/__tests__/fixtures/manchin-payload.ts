@@ -1,10 +1,23 @@
 import type { FrameReceiptPayload } from "../../../types/index.js";
+import { epiUnknown, opUnknown } from "../../../types/index.js";
 
 export function buildManchinFixture(): FrameReceiptPayload {
   return {
     schemaVersion: "1.0.0",
     receiptId: "3f7a9c12-e84b-4d21-b906-0f1e2a3c4d5e",
     createdAt: "2026-03-18T00:00:00.000Z",
+    unknowns: {
+      operational: [
+        opUnknown(
+          "OpenFEC or upstream APIs may rate-limit or omit late filings at signing time.",
+        ),
+      ],
+      epistemic: [
+        epiUnknown(
+          "Contribution totals and categories reflect reported filings; they do not establish quid pro quo or coordination.",
+        ),
+      ],
+    },
     claims: [
       {
         id: "claim-1",

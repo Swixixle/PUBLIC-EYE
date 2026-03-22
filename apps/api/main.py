@@ -110,6 +110,16 @@ class SourceRecord(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class UnknownItem(BaseModel):
+    text: str
+    resolution_possible: bool
+
+
+class UnknownsBlock(BaseModel):
+    operational: list[UnknownItem] = Field(default_factory=list)
+    epistemic: list[UnknownItem] = Field(default_factory=list)
+
+
 class SignedReceipt(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -119,6 +129,7 @@ class SignedReceipt(BaseModel):
     claims: list[ClaimRecord]
     sources: list[SourceRecord]
     narrative: list[NarrativeSentence]
+    unknowns: UnknownsBlock | None = None
     contentHash: str
     signerPublicKey: str | None = None
     signature: str

@@ -38,6 +38,37 @@ export interface NarrativeSentence {
   sourceId: SourceId;
 }
 
+/** One limit or gap: operational (may resolve with better infra) vs epistemic (cannot in principle). */
+export interface UnknownItem {
+  text: string;
+  resolution_possible: boolean;
+}
+
+/** Split unknowns — evidence boundaries, not a flat string list. */
+export interface UnknownsBlock {
+  operational: UnknownItem[];
+  epistemic: UnknownItem[];
+}
+
+export function emptyUnknowns(): UnknownsBlock {
+  return { operational: [], epistemic: [] };
+}
+
+export function opUnknown(text: string): UnknownItem {
+  return { text, resolution_possible: true };
+}
+
+export function epiUnknown(text: string): UnknownItem {
+  return { text, resolution_possible: false };
+}
+
+export function mergeUnknowns(a: UnknownsBlock, b: UnknownsBlock): UnknownsBlock {
+  return {
+    operational: [...a.operational, ...b.operational],
+    epistemic: [...a.epistemic, ...b.epistemic],
+  };
+}
+
 /** High-level claim being framed (neutral wording expected by governance). */
 export interface ClaimRecord {
   id: string;
@@ -76,6 +107,11 @@ export interface FrameReceiptPayload {
   claims: ClaimRecord[];
   sources: SourceRecord[];
   narrative: NarrativeSentence[];
+  /**
+   * What remains unknown or limited: operational (timeouts, rate limits, missing keys)
+   * vs epistemic (intent, causation, absence of proof in public record).
+   */
+  unknowns: UnknownsBlock;
   /** SHA-256 (hex) of the JCS-canonical unsigned payload. */
   contentHash: string;
   /** Optional public key hint (SPKI PEM or base64) for verification UX. */

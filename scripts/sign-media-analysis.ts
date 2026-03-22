@@ -1,4 +1,5 @@
 import type { FrameReceiptPayload } from "@frame/types";
+import { epiUnknown, opUnknown } from "@frame/types";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
 import { signReceipt } from "../packages/signing/index.js";
 
@@ -407,6 +408,27 @@ const mainMetadata = (
       }
 ) as unknown as NonNullable<FrameReceiptPayload["sources"][number]["metadata"]>;
 
+const operationalUnknowns = [];
+if (isPodcast) {
+  operationalUnknowns.push(
+    opUnknown(
+      "Long-form audio may be trimmed to the configured maximum duration (30 minutes in v1). Whisper transcription may time out on very long jobs.",
+    ),
+  );
+}
+if (!hasDetection && !isPodcast) {
+  operationalUnknowns.push(
+    opUnknown(
+      "AI-generated content detection was not configured at signing time (HIVE_API_KEY).",
+    ),
+  );
+}
+if (extractedText.startsWith("OCR unavailable")) {
+  operationalUnknowns.push(
+    opUnknown("OCR vision pipeline was unavailable or failed at signing time."),
+  );
+}
+
 const payload: FrameReceiptPayload = {
   schemaVersion: "1.0.0",
   receiptId: randomUUID(),
@@ -418,6 +440,24 @@ const payload: FrameReceiptPayload = {
       assertedAt: input.timestamp,
     },
   ],
+  unknowns: {
+    operational: operationalUnknowns,
+    epistemic: [
+      epiUnknown(
+        "This receipt documents what was observed and retrieved from cited sources; it does not independently establish the truth of any claim or image.",
+      ),
+      ...(isPodcast
+        ? [
+            epiUnknown(
+              "Transcript and claim extraction rely on model inference; they are not prima facie proof of what was said or meant.",
+            ),
+          ]
+        : []),
+      epiUnknown(
+        "Suggested primary source URLs may not resolve, may omit context, or may reflect summaries rather than primary records.",
+      ),
+    ],
+  },
   sources: [
     {
       id: sourceId,
