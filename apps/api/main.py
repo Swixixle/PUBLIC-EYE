@@ -2672,6 +2672,22 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                 layer_zero=layer_zero,
                 source_input="url",
             )
+            # Stage 2 — adapter dispatch
+            # `claims` is raw output from extract_speaker_claims (not payload.claims)
+            all_entities = list({
+                e for c in claims
+                for e in (c.get("entities") or [])
+                if e and len(e.strip()) > 2
+            })
+            if all_entities:
+                from adapters_podcast import run_stage2_enrichment
+
+                payload = await run_stage2_enrichment(
+                    payload=payload,
+                    entities=all_entities,
+                    claims=claims,
+                )
+            # contentHash is computed in sign-payload.ts from this payload — must run after Stage 2
             signed = await asyncio.to_thread(_sign_frame_payload, payload)
             receipt = _with_receipt_url(signed)
             mark_complete(job, receipt, start_ms)
@@ -2758,6 +2774,22 @@ async def podcast_investigate_upload(
                 layer_zero=layer_zero,
                 source_input="upload",
             )
+            # Stage 2 — adapter dispatch
+            # `claims` is raw output from extract_speaker_claims (not payload.claims)
+            all_entities = list({
+                e for c in claims
+                for e in (c.get("entities") or [])
+                if e and len(e.strip()) > 2
+            })
+            if all_entities:
+                from adapters_podcast import run_stage2_enrichment
+
+                payload = await run_stage2_enrichment(
+                    payload=payload,
+                    entities=all_entities,
+                    claims=claims,
+                )
+            # contentHash is computed in sign-payload.ts from this payload — must run after Stage 2
             signed = await asyncio.to_thread(_sign_frame_payload, payload)
             receipt = _with_receipt_url(signed)
             mark_complete(job, receipt, start_ms)
@@ -2846,34 +2878,65 @@ def jcs_sha256_demo(body: dict[str, Any]) -> dict[str, str]:
 
 
 @app.post("/v1/verify-receipt")
-def verify_receipt(receipt: SignedReceipt) -> dict[str, Any]:
-    # Omit unset optional fields so JCS matches TypeScript payloads.
-    data = receipt.model_dump(mode="json", exclude_none=True, exclude_unset=True)
+async def verify_receipt(request: Request) -> dict[str, Any]:
+    """
+    Verify a signed Frame receipt.
+    Works directly from raw JSON to preserve all fields
+    that TypeScript included in the hash — including
+    mode, meta, layer_zero, entities, and any future fields.
+    """
+    try:
+        data = await request.json()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid JSON: {exc}",
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="Receipt must be a JSON object",
+        )
+
     reasons: list[str] = []
 
-    expected_hash = sha256_hex_jcs(receipt_body_for_content_hash(data))
+    # Recompute contentHash — strip same fields as TypeScript
+    content_hash_body = {
+        k: v for k, v in data.items() if k not in ("contentHash", "signature", "publicKey")
+    }
+    expected_hash = sha256_hex_jcs(content_hash_body)
     if expected_hash != data.get("contentHash"):
         reasons.append("contentHash does not match JCS payload")
 
-    signing_body = receipt_body_for_signing(data)
+    # Recompute signing digest — strip only signature
+    signing_body = {k: v for k, v in data.items() if k != "signature"}
     try:
         canon_signing = jcs_canonicalize(signing_body)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     digest = hashlib.sha256(canon_signing.encode("utf-8")).digest()
 
-    try:
-        der = base64.b64decode(data["publicKey"], validate=True)
-        pub = serialization.load_der_public_key(der)
-        if not isinstance(pub, Ed25519PublicKey):
-            reasons.append("publicKey is not Ed25519")
-        else:
-            try:
-                sig = base64.b64decode(data["signature"], validate=True)
-                pub.verify(sig, digest)
-            except Exception:  # noqa: BLE001
-                reasons.append("signature verification failed")
-    except Exception:  # noqa: BLE001
-        reasons.append("publicKey or signature is not valid base64/DER")
+    # Verify Ed25519 signature
+    pub_key_b64 = data.get("publicKey", "")
+    sig_b64 = data.get("signature", "")
+
+    if not pub_key_b64 or not sig_b64:
+        reasons.append("Missing publicKey or signature")
+    else:
+        try:
+            der = base64.b64decode(pub_key_b64, validate=True)
+            pub = serialization.load_der_public_key(der)
+            if not isinstance(pub, Ed25519PublicKey):
+                reasons.append("publicKey is not Ed25519")
+            else:
+                try:
+                    sig = base64.b64decode(sig_b64, validate=True)
+                    pub.verify(sig, digest)
+                except Exception:
+                    reasons.append("signature verification failed")
+        except Exception:
+            reasons.append("publicKey or signature is not valid base64/DER")
 
     return {"ok": len(reasons) == 0, "reasons": reasons}

@@ -537,6 +537,7 @@ def assemble_podcast_payload(
             "statement": text,
             "type": "observed",
             "implication_risk": c.get("implication_risk", "low"),
+            "entities": c.get("entities") or [],
         }
         if c.get("implication_note"):
             claim["implication_note"] = c["implication_note"]
@@ -586,9 +587,12 @@ def assemble_podcast_payload(
         "meta": {
             "pipeline": "podcast_v2",
             "transcript_chars": len(full_text),
-            "entities_detected": [
-                e for c in claims for e in (c.get("entities") or [])
-            ],
+            "entities_detected": list({
+                e
+                for c in claims
+                for e in (c.get("entities") or [])
+                if e and len(e.strip()) > 2
+            }),
         },
     }
 
@@ -602,5 +606,63 @@ def assemble_podcast_payload(
             "generation_timestamp": layer_zero.get("generation_timestamp", now),
             "source_claim_id": layer_zero.get("source_claim_id"),
         }
+
+    return payload
+
+
+async def run_stage2_enrichment(
+    payload: dict,
+    entities: list[str],
+    claims: list[dict],
+) -> dict:
+    """
+    Run Stage 2 adapter dispatch on an assembled payload.
+    Merges enrichment results back into the payload.
+    Returns updated payload.
+    """
+    try:
+        from enrichment.dispatch import dispatch_entity_enrichment
+
+        enrichment = await dispatch_entity_enrichment(
+            entities=entities,
+            claims=claims,
+        )
+
+        # Merge additional sources
+        existing_ids = {s["id"] for s in payload.get("sources", [])}
+        for src in enrichment.get("additional_sources", []):
+            if src.get("id") not in existing_ids:
+                payload["sources"].append(src)
+                existing_ids.add(src.get("id"))
+
+        # Merge operational unknowns
+        for u in enrichment.get("operational_unknowns", []):
+            payload["unknowns"]["operational"].append(u)
+
+        # Merge epistemic unknowns
+        for u in enrichment.get("epistemic_unknowns", []):
+            payload["unknowns"]["epistemic"].append(u)
+
+        # Add verification notes to meta
+        if enrichment.get("verification_notes"):
+            payload.setdefault("meta", {})
+            payload["meta"]["verification_notes"] = (
+                enrichment["verification_notes"]
+            )
+
+        # Add adapter summary to meta
+        payload["meta"]["adapters_dispatched"] = [
+            r["entity"] for r in enrichment.get("adapter_results", [])
+        ]
+
+    except Exception as e:
+        # Non-fatal — payload still valid without enrichment
+        payload["unknowns"]["operational"].append({
+            "text": (
+                f"Stage 2 enrichment failed: {str(e)[:150]}. "
+                f"Receipt is valid without enrichment data."
+            ),
+            "resolution_possible": True,
+        })
 
     return payload

@@ -1,6 +1,6 @@
 {
   "source_id": "fec",
-  "captured_at": "2026-03-23T03:28:24.775384+00:00",
+  "captured_at": "2026-03-23T13:18:32.486256+00:00",
   "endpoint_description": "FEC baseline capture failed at startup",
   "schema_monitor_version": "schema_monitor_v1",
   "full_schema_hash": "0b4a79988a8a52600a13d17170aa0b89992ee7827a89bf1ed4ed391de8f286b9",
@@ -38,11 +38,21 @@
       "captured_at": "2026-03-23T03:27:44.453637+00:00",
       "full_schema_hash": "2527fea1f0e17347cad0a0bc7f1cfd8381e60a43e9f19307f74283dfc036f6a6",
       "critical_fields_hash": "4b4dfc0d22f9454fe5d01dd81b64df08e41f5dbc36f28bc1fb981b06c450db66"
+    },
+    {
+      "captured_at": "2026-03-23T03:28:24.775384+00:00",
+      "full_schema_hash": "0b4a79988a8a52600a13d17170aa0b89992ee7827a89bf1ed4ed391de8f286b9",
+      "critical_fields_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "captured_at": "2026-03-23T12:42:03.264496+00:00",
+      "full_schema_hash": "2527fea1f0e17347cad0a0bc7f1cfd8381e60a43e9f19307f74283dfc036f6a6",
+      "critical_fields_hash": "4b4dfc0d22f9454fe5d01dd81b64df08e41f5dbc36f28bc1fb981b06c450db66"
     }
   ],
-  "version_history_count": 3,
-  "last_verified_at": "2026-03-23T06:34:12.822568+00:00",
+  "version_history_count": 5,
+  "last_verified_at": "2026-03-23T13:14:46.406131+00:00",
   "previous_full_hash": "2527fea1f0e17347cad0a0bc7f1cfd8381e60a43e9f19307f74283dfc036f6a6",
   "schema_changed": true,
-  "change_detected_at": "2026-03-23T03:28:24.775384+00:00"
+  "change_detected_at": "2026-03-23T13:18:32.486256+00:00"
 }
