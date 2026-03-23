@@ -7,6 +7,7 @@ services:
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -y
       apt-get install -y tesseract-ocr ffmpeg
+      apt-get install -y deno
       npm ci
       npm run build
       pip install -r apps/api/requirements.txt
