@@ -277,14 +277,14 @@ async def _run_schema_baseline_capture() -> None:
 @app.on_event("startup")
 async def capture_schema_baselines() -> None:
     """
-    On startup: fire schema baseline capture in the background (non-blocking).
-    Signing pipeline runs here so startup stays fast for health checks.
+    On startup: schema baselines and signing smoke test run in the background
+    so the app binds and answers /health immediately (Render health checks).
 
     First run: captures genesis baselines.
     Subsequent runs: verifies schema hasn't changed, updates last_verified_at.
     """
     asyncio.create_task(_run_schema_baseline_capture())
-    await _verify_signing_pipeline()
+    asyncio.create_task(_verify_signing_pipeline())
 
 
 async def _verify_signing_pipeline() -> None:
