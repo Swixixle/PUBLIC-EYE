@@ -14,7 +14,7 @@ from typing import Any
 import anthropic
 
 from db import save_dossier
-from enrichment import charitable, courtlistener, fec, opensecrets, sec, socialblade, statements
+from enrichment import charitable, courtlistener, dark_money, fec, opensecrets, sec, socialblade, statements
 from models.dossier import (
     Case,
     CharitableRecord,
@@ -183,6 +183,36 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
                 "fec_url": fec_totals.get("fec_url"),
             }
         )
+
+    # Dark money trace — runs after fec_totals resolves so we have candidate_id
+    dark_money_result: dict[str, Any] = {}
+    if entity.type in ("politician", "corporate_exec"):
+        fec_tot = raw_bundle.get("fec_totals")
+        candidate_id = None
+        if isinstance(fec_tot, dict):
+            candidate_id = fec_tot.get("candidate_id")
+        if not candidate_id and entity.fec_candidate_id:
+            candidate_id = entity.fec_candidate_id
+        if candidate_id:
+            try:
+                dark_money_result = await dark_money.run_dark_money_trace(
+                    candidate_id=candidate_id,
+                    entity_name=entity.canonical_name,
+                )
+                print(
+                    f"[dossier] dark_money trace complete for "
+                    f"{entity.canonical_name}: "
+                    f"{dark_money_result.get('risk_summary', {}).get('disbursement_count', 0)} "
+                    f"disbursements, "
+                    f"${dark_money_result.get('risk_summary', {}).get('total_disbursed', 0):,.0f} total"
+                )
+            except Exception as dm_exc:
+                print(f"[dossier] dark_money trace failed: {dm_exc}")
+                unknowns.append(
+                    f"Dark money trace failed: {str(dm_exc)[:150]}"
+                )
+
+    raw_bundle["dark_money"] = dark_money_result
 
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     sonnet_model = os.environ.get("CLAUDE_SONNET_MODEL", "claude-sonnet-4-20250514")

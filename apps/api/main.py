@@ -1836,6 +1836,30 @@ def get_receipt_json(receipt_id: str) -> dict[str, Any]:
             conn.close()
 
 
+@app.get("/v1/dark-money/{candidate_id}")
+async def dark_money_trace(candidate_id: str, name: str = "") -> dict[str, Any]:
+    """
+    Run dark money trace for a specific FEC candidate ID.
+    Returns disbursement chain with risk flags.
+
+    candidate_id: FEC candidate ID (e.g. S0KY00156 for Rand Paul)
+    name: optional entity name for PAC search
+    """
+    from enrichment.dark_money import run_dark_money_trace
+
+    try:
+        result = await run_dark_money_trace(
+            candidate_id=candidate_id,
+            entity_name=name or candidate_id,
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
 @app.get("/v1/podcast-receipt/{receipt_id}/dossier")
 async def get_podcast_dossier(receipt_id: str) -> dict[str, Any]:
     """
