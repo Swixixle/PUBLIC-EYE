@@ -48,6 +48,43 @@ def _coerce_unknowns_to_list(value: Any) -> list[str]:
     return [str(value)]
 
 
+def _coerce_contributions(raw: list[Any]) -> list[dict[str, Any]]:
+    """
+    Normalize contribution dicts from Claude's JSON.
+    Claude sometimes uses different field names.
+    Map any variant to the canonical Contribution schema.
+    """
+    out: list[dict[str, Any]] = []
+    for c in (raw or []):
+        if not isinstance(c, dict):
+            continue
+        try:
+            amt = float(c.get("amount") or 0.0)
+        except (TypeError, ValueError):
+            amt = 0.0
+        normalized: dict[str, Any] = {
+            "contributor_name": (
+                c.get("contributor_name") or
+                c.get("contributor") or
+                c.get("name") or
+                "unknown"
+            ),
+            "recipient_committee": (
+                c.get("recipient_committee") or
+                c.get("committee") or
+                c.get("recipient") or
+                c.get("committee_name") or
+                "unknown"
+            ),
+            "amount": amt,
+            "transaction_date": c.get("transaction_date") or c.get("date"),
+            "election_cycle": c.get("election_cycle") or c.get("cycle"),
+            "fec_url": c.get("fec_url"),
+        }
+        out.append(normalized)
+    return out
+
+
 async def _run_labeled(
     label: str,
     coro: Any,
@@ -240,6 +277,12 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
             text = "".join(b.text for b in msg.content if getattr(b, "text", None))
             data = _extract_json_object(text)
             data["unknowns"] = _coerce_unknowns_to_list(data.get("unknowns"))
+            if "contributions" in data and isinstance(
+                data["contributions"], list
+            ):
+                data["contributions"] = _coerce_contributions(
+                    data["contributions"]
+                )
             dossier = DossierSchema.model_validate(data)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Claude sonnet dossier structuring failed: %s", exc)
