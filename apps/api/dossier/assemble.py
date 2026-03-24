@@ -14,7 +14,20 @@ from typing import Any
 import anthropic
 
 from db import save_dossier
-from enrichment import charitable, courtlistener, dark_money, fec, opensecrets, sec, socialblade, statements
+from enrichment import (
+    charitable,
+    courtlistener,
+    dark_money,
+    denominator,
+    fara,
+    fec,
+    geographic,
+    opensecrets,
+    sec,
+    socialblade,
+    statements,
+    voting_record,
+)
 from models.dossier import (
     Case,
     CharitableRecord,
@@ -250,6 +263,100 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
                 )
 
     raw_bundle["dark_money"] = dark_money_result
+
+    # Extended enrichment for politicians
+    if entity.type in ("politician",):
+        fec_tot = raw_bundle.get("fec_totals") or {}
+
+        # Voting record
+        try:
+            voting = await voting_record.run_voting_record(
+                entity.canonical_name,
+            )
+            raw_bundle["voting_record"] = voting
+            print(
+                f"[dossier] voting_record for "
+                f"{entity.canonical_name}: "
+                f"{len(voting.get('recent_votes', []))} votes"
+            )
+        except Exception as ve:
+            unknowns.append(
+                f"Voting record lookup failed: {str(ve)[:150]}"
+            )
+
+        # FARA check
+        try:
+            fara_result = await fara.run_fara_check(
+                entity.canonical_name,
+            )
+            raw_bundle["fara"] = fara_result
+            is_agent = fara_result.get(
+                "is_registered_foreign_agent", False,
+            )
+            print(
+                f"[dossier] fara for "
+                f"{entity.canonical_name}: "
+                f"registered_foreign_agent={is_agent}"
+            )
+        except Exception as fe:
+            unknowns.append(
+                f"FARA check failed: {str(fe)[:150]}"
+            )
+
+        # Denominator context
+        try:
+            denom = await denominator.run_denominator(
+                entity.canonical_name,
+                fec_tot if isinstance(fec_tot, dict) else {},
+            )
+            raw_bundle["denominator"] = denom
+            ctx = denom.get("denominator_context", {})
+            stmts = ctx.get("context_statements", [])
+            if stmts:
+                print(
+                    f"[dossier] denominator for "
+                    f"{entity.canonical_name}: "
+                    f"{stmts[0]}"
+                )
+        except Exception as de:
+            unknowns.append(
+                f"Denominator computation failed: "
+                f"{str(de)[:150]}"
+            )
+
+        # Geographic donor analysis
+        try:
+            committee_id = (
+                raw_bundle.get("dark_money", {})
+                .get("disbursements", {})
+                .get("committee_id", "")
+            )
+            home_state = fec_tot.get("state", "") if isinstance(fec_tot, dict) else ""
+            if committee_id and home_state:
+                geo = await geographic.run_geographic_analysis(
+                    entity_name=entity.canonical_name,
+                    home_state=home_state,
+                    committee_id=committee_id,
+                )
+                raw_bundle["geographic"] = geo
+                home_pct = geo.get("home_state_pct", 0)
+                print(
+                    f"[dossier] geographic for "
+                    f"{entity.canonical_name}: "
+                    f"{home_pct}% from home state "
+                    f"{home_state}"
+                )
+            else:
+                raw_bundle["geographic"] = {
+                    "operational_unknown": (
+                        "committee_id or home_state "
+                        "not available for geographic analysis"
+                    ),
+                }
+        except Exception as ge:
+            unknowns.append(
+                f"Geographic analysis failed: {str(ge)[:150]}"
+            )
 
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     sonnet_model = os.environ.get("CLAUDE_SONNET_MODEL", "claude-sonnet-4-20250514")
