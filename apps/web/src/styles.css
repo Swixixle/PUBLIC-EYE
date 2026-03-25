@@ -1911,6 +1911,14 @@ body {
   opacity: 0.85;
 }
 
+.depth-actor-source-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+}
+
 .depth-actor-source-badge {
   font-size: 0.62rem;
   font-weight: 600;
@@ -1922,6 +1930,11 @@ body {
   white-space: nowrap;
 }
 
+.depth-actor-source-ledger {
+  background: #166534;
+  color: #dcfce7;
+}
+
 .depth-actor-source-wikidata,
 .depth-actor-source-wikipedia {
   background: #e2e8f0;
@@ -1931,6 +1944,16 @@ body {
 .depth-actor-source-web {
   background: #fef3c7;
   color: #92400e;
+}
+
+.depth-actor-source-ia {
+  background: #312e81;
+  color: #e0e7ff;
+}
+
+.depth-actor-source-ca {
+  background: #134e4a;
+  color: #ccfbf1;
 }
 
 .depth-actor-absent-chain {

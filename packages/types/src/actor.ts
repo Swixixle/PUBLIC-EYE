@@ -11,7 +11,13 @@ export interface ActorEvent {
 }
 
 /** Where a Layer 4 actor row was resolved. Omitted on on-disk ledger JSON. */
-export type ActorLookupSource = "ledger" | "wikidata" | "wikipedia" | "web_inference";
+export type ActorLookupSource =
+  | "ledger"
+  | "wikidata"
+  | "wikipedia"
+  | "web_inference"
+  | "internet_archive"
+  | "chronicling_america";
 
 /** Append-only actor row (events grow at the end only). */
 export interface ActorRecord {
@@ -19,10 +25,11 @@ export interface ActorRecord {
   name: string;
   aliases: string[];
   events: ActorEvent[];
-  lookup_source?: ActorLookupSource | null;
-  /** Wikidata item id (e.g. Q123) when `lookup_source === "wikidata"`. */
+  /** All systems that contributed resolution or stacked events (ledger + dynamic + archives). */
+  lookup_source?: ActorLookupSource[] | null;
+  /** Wikidata item id (e.g. Q123) when `lookup_source` includes `"wikidata"`. */
   wikidata_id?: string;
-  /** MediaWiki title with underscores when `lookup_source === "wikipedia"`. */
+  /** MediaWiki title with underscores when `lookup_source` includes `"wikipedia"`. */
   wikipedia_title?: string;
   /**
    * Layer 1 surface pass anchored on Wikidata/Wikipedia text (dynamic rows only).

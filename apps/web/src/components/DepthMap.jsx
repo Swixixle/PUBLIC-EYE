@@ -259,34 +259,90 @@ function OriginResultFields({ origin }) {
   );
 }
 
+function normalizeActorLookupSources(src) {
+  if (src == null) return [];
+  if (Array.isArray(src)) return src.filter(Boolean);
+  return [src];
+}
+
+/** Deep link: first match wikidata → wikipedia → ledger API. */
 function actorLayerDeepHref(a) {
-  const src = a.lookup_source;
-  if (src === "wikidata" && a.wikidata_id) {
+  const sources = normalizeActorLookupSources(a.lookup_source);
+  if (sources.includes("wikidata") && a.wikidata_id) {
     return `https://www.wikidata.org/wiki/${encodeURIComponent(a.wikidata_id)}`;
   }
-  if (src === "wikipedia" && a.wikipedia_title) {
+  if (sources.includes("wikipedia") && a.wikipedia_title) {
     return `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wikipedia_title)}`;
   }
-  if (src === "ledger" || src == null) {
-    return `${API}/v1/actor/${encodeURIComponent(a.slug)}`;
+  return `${API}/v1/actor/${encodeURIComponent(a.slug)}`;
+}
+
+const ACTOR_SOURCE_BADGE_ORDER = [
+  "ledger",
+  "wikidata",
+  "wikipedia",
+  "web_inference",
+  "internet_archive",
+  "chronicling_america",
+];
+
+function singleActorSourceBadge(source) {
+  if (source === "ledger") {
+    return (
+      <span key="ledger" className="depth-actor-source-badge depth-actor-source-ledger">
+        LEDGER
+      </span>
+    );
+  }
+  if (source === "wikidata") {
+    return (
+      <span key="wikidata" className="depth-actor-source-badge depth-actor-source-wikidata">
+        WIKIDATA
+      </span>
+    );
+  }
+  if (source === "wikipedia") {
+    return (
+      <span key="wikipedia" className="depth-actor-source-badge depth-actor-source-wikipedia">
+        WIKIPEDIA
+      </span>
+    );
+  }
+  if (source === "web_inference") {
+    return (
+      <span key="web_inference" className="depth-actor-source-badge depth-actor-source-web">
+        WEB — UNVERIFIED
+      </span>
+    );
+  }
+  if (source === "internet_archive") {
+    return (
+      <span key="internet_archive" className="depth-actor-source-badge depth-actor-source-ia">
+        INTERNET ARCHIVE
+      </span>
+    );
+  }
+  if (source === "chronicling_america") {
+    return (
+      <span key="chronicling_america" className="depth-actor-source-badge depth-actor-source-ca">
+        CHRONICLING AMERICA
+      </span>
+    );
   }
   return null;
 }
 
 function ActorLookupSourceBadge({ lookup_source: src }) {
-  if (!src || src === "ledger") return null;
-  if (src === "wikidata") {
-    return <span className="depth-actor-source-badge depth-actor-source-wikidata">WIKIDATA</span>;
-  }
-  if (src === "wikipedia") {
-    return <span className="depth-actor-source-badge depth-actor-source-wikipedia">WIKIPEDIA</span>;
-  }
-  if (src === "web_inference") {
-    return (
-      <span className="depth-actor-source-badge depth-actor-source-web">WEB — UNVERIFIED</span>
-    );
-  }
-  return null;
+  const raw = normalizeActorLookupSources(src).filter(Boolean);
+  if (raw.length === 0) return null;
+  const sorted = [...raw].sort(
+    (a, b) => ACTOR_SOURCE_BADGE_ORDER.indexOf(a) - ACTOR_SOURCE_BADGE_ORDER.indexOf(b),
+  );
+  return (
+    <span className="depth-actor-source-badges">
+      {sorted.map((s) => singleActorSourceBadge(s)).filter(Boolean)}
+    </span>
+  );
 }
 
 function ActorLayerFields({ actorLayer }) {

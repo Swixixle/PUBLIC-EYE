@@ -1,6 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { DepthLayer, ActorLayerResult, ActorRecord } from "@frame/types";
+import type {
+  ActorEvent,
+  ActorLookupSource,
+  DepthLayer,
+  ActorLayerResult,
+  ActorRecord,
+} from "@frame/types";
 import { ConfidenceTier, DEPTH_LAYER_ACTOR } from "@frame/types";
+import { lookupInternetArchive } from "./sources/internet-archive.js";
+import { lookupChroniclingAmerica } from "./sources/chronicling-america.js";
 import {
   findActorByExactNameOrAlias,
   getActor,
@@ -19,6 +27,26 @@ const WD_API = "https://www.wikidata.org/w/api.php";
 const UA = "FrameActorLayer/1.0 (https://github.com/Swixixle/FRAME)";
 
 const SURFACE_MODEL_DEFAULT_CHAIN = ["claude-haiku-4-5", "claude-3-haiku-20240307"] as const;
+
+/** Shared promises so Internet Archive + Chronicling America run in parallel with Wikidata / Wikipedia / web. */
+export type DynamicLookupArchivePromises = {
+  ia: Promise<ActorEvent[]>;
+  ca: Promise<ActorEvent[]>;
+};
+
+function mergeArchiveStack(rec: ActorRecord, iaEvents: ActorEvent[], caEvents: ActorEvent[]): ActorRecord {
+  const base: ActorLookupSource[] = rec.lookup_source ? [...rec.lookup_source] : [];
+  if (iaEvents.length && !base.includes("internet_archive")) base.push("internet_archive");
+  if (caEvents.length && !base.includes("chronicling_america")) base.push("chronicling_america");
+  if (iaEvents.length === 0 && caEvents.length === 0) {
+    return { ...rec, lookup_source: base };
+  }
+  return {
+    ...rec,
+    lookup_source: base,
+    events: [...rec.events, ...iaEvents, ...caEvents],
+  };
+}
 
 function surfaceModelCandidates(): string[] {
   const env = process.env.ANTHROPIC_SURFACE_MODEL?.trim();
@@ -167,7 +195,7 @@ export async function lookupWikidata(name: string): Promise<ActorRecord | null> 
       slug: `wd-${id.toLowerCase()}`,
       name: label,
       aliases: q !== label ? [q] : [],
-      lookup_source: "wikidata",
+      lookup_source: ["wikidata"],
       wikidata_id: id,
       wikipedia_title,
       events: [
@@ -212,7 +240,7 @@ export async function lookupWikipedia(name: string): Promise<ActorRecord | null>
       slug,
       name: pageTitle,
       aliases: [],
-      lookup_source: "wikipedia",
+      lookup_source: ["wikipedia"],
       wikipedia_title: titleForUrl,
       events: [
         {
@@ -293,7 +321,7 @@ export async function lookupWeb(name: string): Promise<ActorRecord | null> {
     slug: `web-${actorNameToSlug(displayName)}-${shortHash(q)}`,
     name: displayName,
     aliases: displayName !== q ? [q] : [],
-    lookup_source: "web_inference",
+    lookup_source: ["web_inference"],
     events: [
       {
         date: dateStr,
@@ -313,7 +341,8 @@ export async function lookupWeb(name: string): Promise<ActorRecord | null> {
  * carries forensic `what` / `cultural_substrate` / `who` / `when`, not only a one-line API blurb.
  */
 async function enrichDynamicRecordWithSurface(rec: ActorRecord): Promise<ActorRecord> {
-  if (rec.lookup_source !== "wikidata" && rec.lookup_source !== "wikipedia") {
+  const sources = rec.lookup_source ?? [];
+  if (!sources.includes("wikidata") && !sources.includes("wikipedia")) {
     return rec;
   }
   const wikidataOneLiner = (rec.events[0]?.description ?? "").trim();
@@ -323,7 +352,7 @@ async function enrichDynamicRecordWithSurface(rec: ActorRecord): Promise<ActorRe
   }
 
   let usedWikipediaExtract = false;
-  if (rec.lookup_source === "wikidata") {
+  if (sources.includes("wikidata")) {
     const titleForRest =
       rec.wikipedia_title?.trim() || rec.name.replace(/\s+/g, "_");
     const wpExtract = await fetchWikipediaPageExtract(titleForRest);
@@ -333,16 +362,16 @@ async function enrichDynamicRecordWithSurface(rec: ActorRecord): Promise<ActorRe
     }
   }
 
-  anchorNarrative = anchorNarrative.slice(0, 2000);
+  anchorNarrative = anchorNarrative.slice(0, 4000);
   if (anchorNarrative.length < 6) return rec;
   try {
     const surface = await getSurfaceLayer({ narrative: anchorNarrative });
     const anchorSource =
-      rec.lookup_source === "wikidata" && rec.wikidata_id
+      sources.includes("wikidata") && rec.wikidata_id
         ? usedWikipediaExtract
           ? `Wikidata (${rec.wikidata_id}) + English Wikipedia extract; Layer 1 surface extraction`
           : `Wikidata anchor (${rec.wikidata_id}); Layer 1 surface extraction`
-        : rec.lookup_source === "wikipedia" && rec.wikipedia_title
+        : sources.includes("wikipedia") && rec.wikipedia_title
           ? `Wikipedia anchor (${rec.wikipedia_title}); Layer 1 surface extraction`
           : "External anchor; Layer 1 surface extraction";
     return {
@@ -367,13 +396,41 @@ async function enrichDynamicRecordWithSurface(rec: ActorRecord): Promise<ActorRe
   }
 }
 
-/** Try Wikidata, then Wikipedia, then constrained LLM extraction. */
-export async function dynamicLookupChain(name: string): Promise<ActorRecord | null> {
+/**
+ * Wikidata → Wikipedia → web inference, merged with Internet Archive + Chronicling America
+ * (archive fetches run in parallel when `archive` passes shared promises from `getActorLayer`).
+ */
+export async function dynamicLookupChain(
+  name: string,
+  archive?: DynamicLookupArchivePromises,
+): Promise<ActorRecord | null> {
+  const iaP = archive?.ia ?? lookupInternetArchive(name);
+  const caP = archive?.ca ?? lookupChroniclingAmerica(name);
+
   const wd = await lookupWikidata(name);
-  if (wd) return enrichDynamicRecordWithSurface(wd);
-  const wp = await lookupWikipedia(name);
-  if (wp) return enrichDynamicRecordWithSurface(wp);
-  return lookupWeb(name);
+  let main: ActorRecord | null = null;
+  if (wd) main = await enrichDynamicRecordWithSurface(wd);
+  else {
+    const wp = await lookupWikipedia(name);
+    if (wp) main = await enrichDynamicRecordWithSurface(wp);
+    else main = await lookupWeb(name);
+  }
+
+  const [iaEvents, caEvents] = await Promise.all([iaP, caP]);
+  if (!main) {
+    if (iaEvents.length === 0 && caEvents.length === 0) return null;
+    const lookup_source: ActorLookupSource[] = [];
+    if (iaEvents.length) lookup_source.push("internet_archive");
+    if (caEvents.length) lookup_source.push("chronicling_america");
+    return {
+      slug: `hist-${actorNameToSlug(name)}-${shortHash(name)}`,
+      name,
+      aliases: [],
+      lookup_source,
+      events: [...iaEvents, ...caEvents],
+    };
+  }
+  return mergeArchiveStack(main, iaEvents, caEvents);
 }
 
 function actorSlugCandidates(name: string): string[] {
@@ -402,10 +459,10 @@ function tryResolveActorCandidate(raw: string): ActorRecord | null {
     for (const slug of actorSlugCandidates(variant)) {
       if (slug === "unknown") continue;
       const row = getActor(slug);
-      if (row) return { ...row, lookup_source: "ledger" };
+      if (row) return { ...row, lookup_source: ["ledger"] };
     }
     const byName = findActorByExactNameOrAlias(variant);
-    if (byName) return { ...byName, lookup_source: "ledger" };
+    if (byName) return { ...byName, lookup_source: ["ledger"] };
   }
   return null;
 }
@@ -513,13 +570,17 @@ export async function getActorLayer(input: { narrative: string }): Promise<Actor
   let dynamic_lookups = 0;
 
   for (const name of candidates) {
-    const rec = tryResolveActorCandidate(name);
-    if (rec) {
+    const iaP = lookupInternetArchive(name);
+    const caP = lookupChroniclingAmerica(name);
+    const ledgerRec = tryResolveActorCandidate(name);
+    if (ledgerRec) {
+      const [iaEvents, caEvents] = await Promise.all([iaP, caP]);
+      const rec = mergeArchiveStack(ledgerRec, iaEvents, caEvents);
       if (!foundBySlug.has(rec.slug)) {
         foundBySlug.set(rec.slug, rec);
       }
     } else {
-      const dyn = await dynamicLookupChain(name);
+      const dyn = await dynamicLookupChain(name, { ia: iaP, ca: caP });
       if (dyn) {
         dynamic_lookups++;
         if (!foundBySlug.has(dyn.slug)) {
