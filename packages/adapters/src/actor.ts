@@ -886,9 +886,9 @@ function subjectsFromIsWas(text: string): string[] {
     const s = m[1].trim();
     if (s.length >= 2) out.push(s);
   }
-  /** No `/i` — with `i`, `[A-Z]` matches lowercase and swallows words like "suburban". */
+  /** No `/i` on the phrase — with `i`, `[A-Z]` matches lowercase and swallows words like "suburban". */
   const reSight =
-    /\b((?:[A-Z][a-z]+\s+){2,}[A-Z][a-z]+)\s+(?:sightings|reports|legend)\b/g;
+    /\b((?:[A-Z][a-z]+\s+){2,}[A-Z][a-z]+)\s+(?:[Ss]ightings|[Rr]eports|[Ll]egend)\b/g;
   while ((m = reSight.exec(text)) !== null) {
     const s = m[1].trim();
     if (s.length >= 2) out.push(s);
