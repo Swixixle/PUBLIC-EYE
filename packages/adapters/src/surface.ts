@@ -6,7 +6,7 @@ import { detectInputType } from "./input-detect.js";
 export { detectInputType, type SurfaceInputKind } from "./input-detect.js";
 
 const MODEL =
-  process.env.ANTHROPIC_SURFACE_MODEL?.trim() || "claude-sonnet-4-5-20251001";
+  process.env.ANTHROPIC_SURFACE_MODEL?.trim() || "claude-haiku-4-5-20251001";
 
 const TIER_VALUES = new Set<string>(Object.values(ConfidenceTier));
 

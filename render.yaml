@@ -11,7 +11,7 @@ services:
       npm ci
       npm run build
       pip install -r apps/api/requirements.txt
-    startCommand: cd /opt/render/project/src && npm run build && cd apps/api && uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: cd /opt/render/project/src && npm start
     healthCheckPath: /health
     plan: starter
     numInstances: 1
