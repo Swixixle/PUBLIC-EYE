@@ -1,4 +1,4 @@
-"""Ed25519 signing for Frame records (uses FRAME_PRIVATE_KEY PEM)."""
+"""Ed25519 signing for Frame records (FRAME_PRIVATE_KEY; honors FRAME_KEY_FORMAT like Node scripts)."""
 
 from __future__ import annotations
 
@@ -14,8 +14,14 @@ def _load_private_key() -> Ed25519PrivateKey:
     raw = os.environ.get("FRAME_PRIVATE_KEY", "").strip()
     if not raw:
         raise RuntimeError("FRAME_PRIVATE_KEY not set")
-    pem = raw.replace("\\n", "\n")
-    key = serialization.load_pem_private_key(pem.encode(), password=None)
+    fmt = (os.environ.get("FRAME_KEY_FORMAT") or "pem").strip().lower()
+    if fmt == "base64":
+        pem = base64.b64decode(raw.strip()).decode("utf-8")
+        pem = pem.replace("\\n", "\n")
+    else:
+        pem = raw.replace("\\n", "\n")
+        pem = pem.strip("\"'")
+    key = serialization.load_pem_private_key(pem.strip().encode(), password=None)
     if not isinstance(key, Ed25519PrivateKey):
         raise RuntimeError("FRAME_PRIVATE_KEY must be Ed25519 PEM")
     return key
