@@ -1911,6 +1911,32 @@ body {
   opacity: 0.85;
 }
 
+.depth-actor-source-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.depth-actor-source-wikidata,
+.depth-actor-source-wikipedia {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.depth-actor-source-web {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.depth-actor-absent-chain {
+  font-size: 0.8rem;
+}
+
 .depth-actor-events {
   list-style: none;
   margin: 4px 0 0;

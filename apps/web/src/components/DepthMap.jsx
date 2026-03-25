@@ -259,26 +259,65 @@ function OriginResultFields({ origin }) {
   );
 }
 
+function actorLayerDeepHref(a) {
+  const src = a.lookup_source;
+  if (src === "wikidata" && a.wikidata_id) {
+    return `https://www.wikidata.org/wiki/${encodeURIComponent(a.wikidata_id)}`;
+  }
+  if (src === "wikipedia" && a.wikipedia_title) {
+    return `https://en.wikipedia.org/wiki/${encodeURIComponent(a.wikipedia_title)}`;
+  }
+  if (src === "ledger" || src == null) {
+    return `${API}/v1/actor/${encodeURIComponent(a.slug)}`;
+  }
+  return null;
+}
+
+function ActorLookupSourceBadge({ lookup_source: src }) {
+  if (!src || src === "ledger") return null;
+  if (src === "wikidata") {
+    return <span className="depth-actor-source-badge depth-actor-source-wikidata">WIKIDATA</span>;
+  }
+  if (src === "wikipedia") {
+    return <span className="depth-actor-source-badge depth-actor-source-wikipedia">WIKIPEDIA</span>;
+  }
+  if (src === "web_inference") {
+    return (
+      <span className="depth-actor-source-badge depth-actor-source-web">WEB — UNVERIFIED</span>
+    );
+  }
+  return null;
+}
+
 function ActorLayerFields({ actorLayer }) {
   if (!actorLayer || typeof actorLayer !== "object") return null;
   const found = actorLayer.actors_found || [];
   const absent = actorLayer.actors_absent || [];
   const gaps = actorLayer.absent_fields || [];
+  const dynamicLookups = actorLayer.dynamic_lookups ?? 0;
   const hasBody = found.length > 0 || absent.length > 0;
   return (
     <div className="depth-actor-layer-result">
       <h3 className="depth-inline-title">Actor ledger</h3>
       <div className="depth-meta-row depth-spread-meta">
         <TierBadge tier={actorLayer.confidence_tier} />
+        {dynamicLookups > 0 ? (
+          <span className="depth-muted" title="Resolved via Wikidata / Wikipedia / web inference">
+            Dynamic: {dynamicLookups}
+          </span>
+        ) : null}
       </div>
       {found.length > 0 ? (
         <ul className="depth-actor-found-list">
-          {found.map((a) => (
+          {found.map((a) => {
+            const deepHref = actorLayerDeepHref(a);
+            return (
             <li key={a.slug} className="depth-actor-card">
               <div className="depth-actor-head">
                 <strong>{a.name}</strong>
+                <ActorLookupSourceBadge lookup_source={a.lookup_source} />
                 <code className="depth-actor-slug">{a.slug}</code>
-                <RabbitNudge href={`${API}/v1/actor/${encodeURIComponent(a.slug)}`} label="deeper" />
+                <RabbitNudge href={deepHref} absent={!deepHref} label="deeper" />
               </div>
               {(a.aliases || []).length > 0 ? (
                 <div className="depth-spread-block">
@@ -309,7 +348,8 @@ function ActorLayerFields({ actorLayer }) {
                 <p className="depth-muted">No events on this ledger row.</p>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       ) : null}
       {absent.length > 0 ? (
@@ -318,7 +358,14 @@ function ActorLayerFields({ actorLayer }) {
           <ul className="depth-actor-absent-list">
             {absent.map((x) => (
               <li key={x.name} className="depth-actor-absent-row">
-                <span>{x.name}</span> <RabbitNudge href={null} absent={true} />
+                <span>{x.name}</span>
+                {x.wikidata_attempted ? (
+                  <span className="depth-muted depth-actor-absent-chain" title="No ledger, Wikidata, Wikipedia, or web hit">
+                    {" "}
+                    (no dynamic match)
+                  </span>
+                ) : null}{" "}
+                <RabbitNudge href={null} absent={true} />
               </li>
             ))}
           </ul>

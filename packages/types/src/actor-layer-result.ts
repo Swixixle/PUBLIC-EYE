@@ -5,6 +5,11 @@ import type { ConfidenceTier } from "./depth.js";
 export interface ActorAbsentRef {
   name: string;
   absent: true;
+  /**
+   * True when the dynamic chain (Wikidata → Wikipedia → web inference) ran and returned no row.
+   * Name kept for API compatibility.
+   */
+  wikidata_attempted?: boolean;
 }
 
 /** Layer 4 — ledger-backed actors tied to narrative mentions (heuristic extraction). */
@@ -16,4 +21,6 @@ export interface ActorLayerResult {
   confidence_tier: ConfidenceTier;
   /** Schema gaps (e.g. no candidates, no ledger hits). */
   absent_fields: string[];
+  /** Actors resolved via Wikidata / Wikipedia / web inference (non-ledger). */
+  dynamic_lookups: number;
 }
