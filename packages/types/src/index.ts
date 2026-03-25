@@ -16,7 +16,14 @@ export type SourceAdapterKind =
   | "congress"
   | "wikidata"
   | "audio_file"
-  | "podcast";
+  | "podcast"
+  /** Five-ring report: provenance for each stacked ring payload. */
+  | "layer_surface"
+  | "layer_spread"
+  | "layer_origin"
+  | "layer_actor"
+  | "layer_pattern"
+  | "pattern_library";
 
 /** A verifiable document or API-backed citation. */
 export interface SourceRecord {
@@ -233,3 +240,4 @@ export * from "./pattern-result.js";
 export * from "./actor.js";
 export * from "./actor-layer-result.js";
 export * from "./dispute.js";
+export * from "./report.js";

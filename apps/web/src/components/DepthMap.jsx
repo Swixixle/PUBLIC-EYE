@@ -286,6 +286,10 @@ const ACTOR_SOURCE_BADGE_ORDER = [
   "chronicling_america",
   "mysterious_universe",
   "anomalist",
+  "cryptomundo",
+  "coast_to_coast",
+  "singular_fortean",
+  "fortean_times",
 ];
 
 const ACTOR_EVENT_CATEGORY_LABEL = {
@@ -384,6 +388,34 @@ function singleActorSourceBadge(source) {
     return (
       <span key="anomalist" className="depth-actor-source-badge depth-actor-source-anom">
         ANOMALIST
+      </span>
+    );
+  }
+  if (source === "cryptomundo") {
+    return (
+      <span key="cryptomundo" className="depth-actor-source-badge depth-actor-source-crypto">
+        CRYPTOMUNDO
+      </span>
+    );
+  }
+  if (source === "coast_to_coast") {
+    return (
+      <span key="coast_to_coast" className="depth-actor-source-badge depth-actor-source-c2c">
+        COAST TO COAST
+      </span>
+    );
+  }
+  if (source === "singular_fortean") {
+    return (
+      <span key="singular_fortean" className="depth-actor-source-badge depth-actor-source-sfs">
+        SINGULAR FORTEAN
+      </span>
+    );
+  }
+  if (source === "fortean_times") {
+    return (
+      <span key="fortean_times" className="depth-actor-source-badge depth-actor-source-ft">
+        FORTEAN TIMES
       </span>
     );
   }
@@ -632,6 +664,102 @@ function MediaClaimsList({ claims, ledgerPresence }) {
   );
 }
 
+function FiveRingReportPanel({ report, loading, error }) {
+  if (loading) {
+    return (
+      <section className="depth-five-ring-report">
+        <p className="depth-muted">Generating five-ring report…</p>
+      </section>
+    );
+  }
+  if (error) {
+    return (
+      <section className="depth-five-ring-report">
+        <p className="depth-banner depth-banner-error">{error}</p>
+      </section>
+    );
+  }
+  if (!report || !Array.isArray(report.rings)) return null;
+  return (
+    <section className="depth-five-ring-report">
+      <h2 className="depth-inline-title depth-five-ring-heading">Five-ring report</h2>
+      <p className="depth-muted depth-report-meta">
+        <code>{report.report_id}</code> · {report.generated_at} ·{" "}
+        {report.signed ? "signed" : "unsigned"}
+      </p>
+      <div className="depth-ring-list">
+        {report.rings.map((r) => (
+          <details key={r.ring} className="depth-ring-details">
+            <summary className="depth-ring-summary">
+              <span className="depth-ring-summary-title">
+                Ring {r.ring}: {r.title}
+              </span>
+              <TierBadge tier={r.confidence_tier} />
+            </summary>
+            <div className="depth-ring-body">
+              {(r.absent_fields || []).length > 0 ? (
+                <div className="depth-ring-absent">
+                  <strong>Absent / gaps</strong>
+                  <ul className="depth-spread-list">
+                    {(r.absent_fields || []).map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {(r.sources || []).length > 0 ? (
+                <div className="depth-ring-sources">
+                  <strong>Sources</strong>
+                  <ul className="depth-spread-list">
+                    {(r.sources || []).map((s) => (
+                      <li key={s.id}>
+                        <span className="depth-muted">{s.adapter}</span> — {s.title}{" "}
+                        {s.url ? (
+                          <a href={s.url} className="depth-ring-src-link" target="_blank" rel="noreferrer">
+                            link
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <pre className="depth-ring-json">{JSON.stringify(r.content, null, 2)}</pre>
+            </div>
+          </details>
+        ))}
+      </div>
+      {report.unknowns &&
+      (report.unknowns.operational?.length > 0 || report.unknowns.epistemic?.length > 0) ? (
+        <div className="depth-report-unknowns">
+          <strong>Unknowns</strong>
+          {report.unknowns.operational?.length > 0 ? (
+            <ul className="depth-spread-list">
+              {report.unknowns.operational.map((u, i) => (
+                <li key={`op-${i}`}>
+                  {u.text}{" "}
+                  <span className="depth-muted">
+                    ({u.resolution_possible ? "operational" : "—"})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {report.unknowns.epistemic?.length > 0 ? (
+            <ul className="depth-spread-list">
+              {report.unknowns.epistemic.map((u, i) => (
+                <li key={`ep-${i}`}>
+                  {u.text} <span className="depth-muted">(epistemic)</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function LayerCard({ layer, children }) {
   const available = layer.depth_available;
   const sealedFloor = layer.layer_number === 6 && !available;
@@ -684,6 +812,63 @@ export default function DepthMap() {
   const [openDispute, setOpenDispute] = useState(null);
   const [exampleTrace, setExampleTrace] = useState(null);
   const [ledgerPresence, setLedgerPresence] = useState({});
+  const [reportPayload, setReportPayload] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState(null);
+
+  const traceComplete = useMemo(
+    () =>
+      !searchBusy &&
+      Boolean(narrative.trim()) &&
+      (surfaceResult != null ||
+        surfaceUnavailable ||
+        spreadResult != null ||
+        originResult != null ||
+        actorLayerResult != null ||
+        patternResult != null),
+    [
+      searchBusy,
+      narrative,
+      surfaceResult,
+      surfaceUnavailable,
+      spreadResult,
+      originResult,
+      actorLayerResult,
+      patternResult,
+    ],
+  );
+
+  const onGenerateReport = useCallback(async () => {
+    const text = narrative.trim();
+    if (!text) return;
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const res = await fetch(`${API}/v1/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ narrative: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReportError(
+          typeof data?.detail === "string"
+            ? data.detail
+            : data?.detail != null
+              ? JSON.stringify(data.detail)
+              : `HTTP ${res.status}`,
+        );
+        setReportPayload(null);
+        return;
+      }
+      setReportPayload(data);
+    } catch (e) {
+      setReportError(e.message || "Report request failed");
+      setReportPayload(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [narrative]);
 
   useEffect(() => {
     const slugs = new Set();
@@ -798,6 +983,8 @@ export default function DepthMap() {
       setActorLayerResult(null);
       setActorLayerError(null);
       setOpenDispute(null);
+      setReportPayload(null);
+      setReportError(null);
 
       const narrativeReq = {
         method: "POST",
@@ -1074,6 +1261,21 @@ export default function DepthMap() {
           );
         })}
       </div>
+
+      {traceComplete ? (
+        <div className="depth-report-actions">
+          <button
+            type="button"
+            className="depth-btn depth-btn-secondary"
+            disabled={reportLoading}
+            onClick={onGenerateReport}
+          >
+            {reportLoading ? "Generating report…" : "Generate Report"}
+          </button>
+        </div>
+      ) : null}
+
+      <FiveRingReportPanel report={reportPayload} loading={reportLoading} error={reportError} />
     </div>
   );
 }

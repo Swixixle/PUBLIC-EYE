@@ -5,12 +5,18 @@ import type {
   DepthLayer,
   ActorLayerResult,
   ActorRecord,
+  ParanormalRssLookupSource,
 } from "@frame/types";
+import { PARANORMAL_RSS_LOOKUP_SOURCES } from "@frame/types";
 import { ConfidenceTier, DEPTH_LAYER_ACTOR } from "@frame/types";
 import { lookupInternetArchive } from "./sources/internet-archive.js";
 import { lookupChroniclingAmerica } from "./sources/chronicling-america.js";
 import { lookupMysteriousUniverse } from "./sources/mysterious-universe.js";
 import { lookupAnomalist } from "./sources/anomalist.js";
+import { lookupCryptomundo } from "./sources/cryptomundo.js";
+import { lookupCoastToCoast } from "./sources/coast-to-coast.js";
+import { lookupSingularFortean } from "./sources/singular-fortean.js";
+import { lookupForteanTimes } from "./sources/fortean-times.js";
 import {
   findActorByExactNameOrAlias,
   getActor,
@@ -34,9 +40,30 @@ const SURFACE_MODEL_DEFAULT_CHAIN = ["claude-haiku-4-5", "claude-3-haiku-2024030
 export type ParallelActorStackPromises = {
   ia: Promise<ActorEvent[]>;
   ca: Promise<ActorEvent[]>;
-  mu: Promise<ActorEvent[]>;
-  an: Promise<ActorEvent[]>;
+  rss: Record<ParanormalRssLookupSource, Promise<ActorEvent[]>>;
 };
+
+function startRssPromises(name: string): Record<ParanormalRssLookupSource, Promise<ActorEvent[]>> {
+  return {
+    mysterious_universe: lookupMysteriousUniverse(name),
+    anomalist: lookupAnomalist(name),
+    cryptomundo: lookupCryptomundo(name),
+    coast_to_coast: lookupCoastToCoast(name),
+    singular_fortean: lookupSingularFortean(name),
+    fortean_times: lookupForteanTimes(name),
+  };
+}
+
+async function awaitRssEvents(
+  rss: Record<ParanormalRssLookupSource, Promise<ActorEvent[]>>,
+): Promise<Record<ParanormalRssLookupSource, ActorEvent[]>> {
+  const keys = [...PARANORMAL_RSS_LOOKUP_SOURCES];
+  const lists = await Promise.all(keys.map((k) => rss[k]));
+  return Object.fromEntries(keys.map((k, i) => [k, lists[i]])) as Record<
+    ParanormalRssLookupSource,
+    ActorEvent[]
+  >;
+}
 
 function withLedgerPrimaryCategory(rec: ActorRecord): ActorRecord {
   const sources = rec.lookup_source ?? [];
@@ -55,8 +82,7 @@ function mergeExternalStacks(
   stacks: {
     ia: ActorEvent[];
     ca: ActorEvent[];
-    mu: ActorEvent[];
-    an: ActorEvent[];
+    rss: Record<ParanormalRssLookupSource, ActorEvent[]>;
   },
 ): ActorRecord {
   const base: ActorLookupSource[] = rec.lookup_source ? [...rec.lookup_source] : [];
@@ -65,9 +91,11 @@ function mergeExternalStacks(
   };
   mark(stacks.ia, "internet_archive");
   mark(stacks.ca, "chronicling_america");
-  mark(stacks.mu, "mysterious_universe");
-  mark(stacks.an, "anomalist");
-  const extra = [...stacks.ia, ...stacks.ca, ...stacks.mu, ...stacks.an];
+  for (const k of PARANORMAL_RSS_LOOKUP_SOURCES) {
+    mark(stacks.rss[k], k);
+  }
+  const rssExtra = PARANORMAL_RSS_LOOKUP_SOURCES.flatMap((k) => stacks.rss[k]);
+  const extra = [...stacks.ia, ...stacks.ca, ...rssExtra];
   if (extra.length === 0) {
     return { ...rec, lookup_source: base };
   }
@@ -436,12 +464,11 @@ async function enrichDynamicRecordWithSurface(rec: ActorRecord): Promise<ActorRe
  */
 export async function dynamicLookupChain(
   name: string,
-  parallel?: ParallelActorStackPromises,
+  parallel?: Partial<ParallelActorStackPromises>,
 ): Promise<ActorRecord | null> {
   const iaP = parallel?.ia ?? lookupInternetArchive(name);
   const caP = parallel?.ca ?? lookupChroniclingAmerica(name);
-  const muP = parallel?.mu ?? lookupMysteriousUniverse(name);
-  const anP = parallel?.an ?? lookupAnomalist(name);
+  const rssP = parallel?.rss ?? startRssPromises(name);
 
   const wd = await lookupWikidata(name);
   let main: ActorRecord | null = null;
@@ -452,15 +479,24 @@ export async function dynamicLookupChain(
     else main = await lookupWeb(name);
   }
 
-  const [iaEvents, caEvents, muEvents, anEvents] = await Promise.all([iaP, caP, muP, anP]);
+  const [iaEvents, caEvents, rssEvents] = await Promise.all([
+    iaP,
+    caP,
+    awaitRssEvents(rssP),
+  ]);
   if (!main) {
-    const stacked = [...iaEvents, ...caEvents, ...muEvents, ...anEvents];
+    const stacked = [
+      ...iaEvents,
+      ...caEvents,
+      ...PARANORMAL_RSS_LOOKUP_SOURCES.flatMap((k) => rssEvents[k]),
+    ];
     if (stacked.length === 0) return null;
     const lookup_source: ActorLookupSource[] = [];
     if (iaEvents.length) lookup_source.push("internet_archive");
     if (caEvents.length) lookup_source.push("chronicling_america");
-    if (muEvents.length) lookup_source.push("mysterious_universe");
-    if (anEvents.length) lookup_source.push("anomalist");
+    for (const k of PARANORMAL_RSS_LOOKUP_SOURCES) {
+      if (rssEvents[k].length) lookup_source.push(k);
+    }
     return {
       slug: `hist-${actorNameToSlug(name)}-${shortHash(name)}`,
       name,
@@ -472,8 +508,7 @@ export async function dynamicLookupChain(
   return mergeExternalStacks(main, {
     ia: iaEvents,
     ca: caEvents,
-    mu: muEvents,
-    an: anEvents,
+    rss: rssEvents,
   });
 }
 
@@ -616,22 +651,24 @@ export async function getActorLayer(input: { narrative: string }): Promise<Actor
   for (const name of candidates) {
     const iaP = lookupInternetArchive(name);
     const caP = lookupChroniclingAmerica(name);
-    const muP = lookupMysteriousUniverse(name);
-    const anP = lookupAnomalist(name);
+    const rssP = startRssPromises(name);
     const ledgerRec = tryResolveActorCandidate(name);
     if (ledgerRec) {
-      const [iaEvents, caEvents, muEvents, anEvents] = await Promise.all([iaP, caP, muP, anP]);
+      const [iaEvents, caEvents, rssEvents] = await Promise.all([
+        iaP,
+        caP,
+        awaitRssEvents(rssP),
+      ]);
       const rec = mergeExternalStacks(ledgerRec, {
         ia: iaEvents,
         ca: caEvents,
-        mu: muEvents,
-        an: anEvents,
+        rss: rssEvents,
       });
       if (!foundBySlug.has(rec.slug)) {
         foundBySlug.set(rec.slug, rec);
       }
     } else {
-      const dyn = await dynamicLookupChain(name, { ia: iaP, ca: caP, mu: muP, an: anP });
+      const dyn = await dynamicLookupChain(name, { ia: iaP, ca: caP, rss: rssP });
       if (dyn) {
         dynamic_lookups++;
         if (!foundBySlug.has(dyn.slug)) {

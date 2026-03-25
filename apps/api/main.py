@@ -96,6 +96,7 @@ from pattern_api import get_pattern_lib_payload, run_pattern_match
 from spread_api import run_spread
 from origin_api import run_origin
 from actor_layer_api import run_actor_layer
+from report_api import build_extended_report
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
 from dispute_api import pattern_ids_in_library, run_dispute_append, run_dispute_get
 from verify_record import verify_generic_record
@@ -241,6 +242,14 @@ class OriginPostBody(BaseModel):
 
 class ActorLayerPostBody(BaseModel):
     """Layer 4 actor ledger — narrative text only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    narrative: str = Field(..., min_length=1)
+
+
+class ReportPostBody(BaseModel):
+    """Assemble five-ring extended report from narrative (unsigned)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -776,6 +785,18 @@ async def actor_layer_post(body: ActorLayerPostBody) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/v1/report")
+async def report_post(body: ReportPostBody) -> dict[str, Any]:
+    """
+    Five-ring library report: surface, spread, origin, actor layer, pattern match (+ citations).
+    Returns unsigned ExtendedReportPayload; per-ring adapter failures are captured in-ring with absent_fields.
+    """
+    try:
+        return await asyncio.to_thread(build_extended_report, body.narrative.strip())
+    except (RuntimeError, OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/v1/pattern-lib")

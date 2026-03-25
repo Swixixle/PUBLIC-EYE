@@ -29,7 +29,23 @@ export type ActorLookupSource =
   | "internet_archive"
   | "chronicling_america"
   | "mysterious_universe"
-  | "anomalist";
+  | "anomalist"
+  | "cryptomundo"
+  | "coast_to_coast"
+  | "singular_fortean"
+  | "fortean_times";
+
+/** Paranormal/community RSS feeds merged into Layer 4 (deterministic iteration order). */
+export const PARANORMAL_RSS_LOOKUP_SOURCES = [
+  "mysterious_universe",
+  "anomalist",
+  "cryptomundo",
+  "coast_to_coast",
+  "singular_fortean",
+  "fortean_times",
+] as const;
+
+export type ParanormalRssLookupSource = (typeof PARANORMAL_RSS_LOOKUP_SOURCES)[number];
 
 /** Append-only actor row (events grow at the end only). */
 export interface ActorRecord {
