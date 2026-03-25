@@ -56,7 +56,8 @@ function collectFirstInstanceIndicators(text: string): string[] {
   return out;
 }
 
-function collectSeedingActors(text: string): string[] {
+/** Exported for Layer 4 actor candidate extraction (same heuristics). */
+export function extractOriginSeedingEntities(text: string): string[] {
   const actors = new Set<string>();
 
   /** Person/org token run; ends before ` on ` / ` in ` / punctuation so glue phrases are not captured. */
@@ -177,7 +178,7 @@ export async function getOriginLayer(input: { narrative: string }): Promise<Orig
   }
   const text = raw;
   const first_instance_indicators = collectFirstInstanceIndicators(text);
-  const seeding_actors = collectSeedingActors(text);
+  const seeding_actors = extractOriginSeedingEntities(text);
   const hasDate = hasDatableTime(text);
   const anchor_exists = computeAnchorExists(
     text,

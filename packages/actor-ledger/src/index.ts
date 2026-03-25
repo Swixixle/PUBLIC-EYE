@@ -57,6 +57,37 @@ function assertActorEvent(event: ActorEvent): void {
   }
 }
 
+/**
+ * Case-insensitive match on ledger row `name` or any `alias` (not fuzzy).
+ * Returns the same shape as getActor for that slug.
+ */
+export function findActorByExactNameOrAlias(query: string): ActorRecord | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return null;
+  const ledger = loadLedger();
+  for (const [slug, row] of Object.entries(ledger)) {
+    if (row.name.trim().toLowerCase() === q) {
+      return {
+        slug,
+        name: row.name,
+        aliases: [...row.aliases],
+        events: sortEventsByDate(row.events),
+      };
+    }
+    for (const al of row.aliases) {
+      if (al.trim().toLowerCase() === q) {
+        return {
+          slug,
+          name: row.name,
+          aliases: [...row.aliases],
+          events: sortEventsByDate(row.events),
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /** Exact slug lookup; returns full record with events sorted ascending by date. */
 export function getActor(slug: string): ActorRecord | null {
   const key = slug.trim();

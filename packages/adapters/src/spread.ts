@@ -50,6 +50,17 @@ function trimCanon(s: string): string {
   return s.trim();
 }
 
+/** Canonical platform / outlet labels mentioned in text (same lexicon as spread layer). */
+export function extractPlatformsMentionedFromNarrative(text: string): string[] {
+  const found = new Set<string>();
+  for (const { canonical, patterns } of PLATFORM_LEXICON) {
+    if (patterns.some((re) => re.test(text))) {
+      found.add(trimCanon(canonical));
+    }
+  }
+  return [...found].sort((a, b) => a.localeCompare(b));
+}
+
 const INDICATOR_RULES: { re: RegExp; label: string }[] = [
   { re: /\bwent\s+viral\b/i, label: "went viral" },
   { re: /\bpicked\s+up\s+by\b/i, label: "picked up by" },

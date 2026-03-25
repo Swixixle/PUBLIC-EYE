@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@frame/actor-ledger": "file:../actor-ledger",
     "@frame/pattern-lib": "file:../pattern-lib",
     "@frame/types": "file:../types"
   },

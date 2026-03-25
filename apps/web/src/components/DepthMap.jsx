@@ -256,6 +256,84 @@ function OriginResultFields({ origin }) {
   );
 }
 
+function ActorLayerFields({ actorLayer }) {
+  if (!actorLayer || typeof actorLayer !== "object") return null;
+  const found = actorLayer.actors_found || [];
+  const absent = actorLayer.actors_absent || [];
+  const gaps = actorLayer.absent_fields || [];
+  const hasBody = found.length > 0 || absent.length > 0;
+  return (
+    <div className="depth-actor-layer-result">
+      <h3 className="depth-inline-title">Actor ledger</h3>
+      <div className="depth-meta-row depth-spread-meta">
+        <TierBadge tier={actorLayer.confidence_tier} />
+      </div>
+      {found.length > 0 ? (
+        <ul className="depth-actor-found-list">
+          {found.map((a) => (
+            <li key={a.slug} className="depth-actor-card">
+              <div className="depth-actor-head">
+                <strong>{a.name}</strong>
+                <code className="depth-actor-slug">{a.slug}</code>
+                <RabbitNudge href={`${API}/v1/actor/${encodeURIComponent(a.slug)}`} label="deeper" />
+              </div>
+              {(a.aliases || []).length > 0 ? (
+                <div className="depth-spread-block">
+                  <strong>Aliases</strong>
+                  <ul className="depth-spread-list">
+                    {(a.aliases || []).map((al) => (
+                      <li key={al}>{al}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {(a.events || []).length > 0 ? (
+                <div className="depth-spread-block">
+                  <strong>Events</strong>
+                  <ul className="depth-actor-events">
+                    {(a.events || []).map((ev, i) => (
+                      <li key={`${ev.date}-${i}`}>
+                        <span className="depth-actor-ev-date">{ev.date}</span>{" "}
+                        <span className="depth-muted">{ev.type}</span>
+                        <TierBadge tier={ev.confidence_tier} />
+                        <p className="depth-actor-ev-desc">{ev.description}</p>
+                        <p className="depth-muted depth-actor-ev-src">{ev.source}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="depth-muted">No events on this ledger row.</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {absent.length > 0 ? (
+        <div className="depth-spread-block">
+          <strong>Not in ledger (extracted)</strong>
+          <ul className="depth-actor-absent-list">
+            {absent.map((x) => (
+              <li key={x.name} className="depth-actor-absent-row">
+                <span>{x.name}</span> <RabbitNudge href={null} absent={true} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {!hasBody ? (
+        <p className="depth-muted depth-spread-absent">
+          No actor-like spans extracted for ledger lookup.{" "}
+          {gaps.length > 0 ? `Gaps: ${gaps.join(", ")}.` : null}
+        </p>
+      ) : null}
+      {hasBody && gaps.length > 0 ? (
+        <p className="depth-muted depth-spread-gaps">Gaps: {gaps.join(", ")}.</p>
+      ) : null}
+    </div>
+  );
+}
+
 function SpreadResultFields({ spread }) {
   if (!spread || typeof spread !== "object") return null;
   const platforms = spread.platforms_mentioned || [];
@@ -396,6 +474,8 @@ export default function DepthMap() {
   const [spreadError, setSpreadError] = useState(null);
   const [originResult, setOriginResult] = useState(null);
   const [originError, setOriginError] = useState(null);
+  const [actorLayerResult, setActorLayerResult] = useState(null);
+  const [actorLayerError, setActorLayerError] = useState(null);
   const [searchBusy, setSearchBusy] = useState(false);
   const [openDispute, setOpenDispute] = useState(null);
   const [exampleTrace, setExampleTrace] = useState(null);
@@ -511,6 +591,8 @@ export default function DepthMap() {
       setSpreadError(null);
       setOriginResult(null);
       setOriginError(null);
+      setActorLayerResult(null);
+      setActorLayerError(null);
       setOpenDispute(null);
 
       const narrativeReq = {
@@ -518,7 +600,7 @@ export default function DepthMap() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ narrative: text }),
       };
-      const [sRes, pRes, sprRes, oRes] = await Promise.all([
+      const [sRes, pRes, sprRes, oRes, aRes] = await Promise.all([
         fetch(`${API}/v1/surface`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -531,6 +613,7 @@ export default function DepthMap() {
         }),
         fetch(`${API}/v1/spread`, narrativeReq),
         fetch(`${API}/v1/origin`, narrativeReq),
+        fetch(`${API}/v1/actor-layer`, narrativeReq),
       ]);
 
       if (sRes.status === 503) {
@@ -573,6 +656,14 @@ export default function DepthMap() {
       } else {
         setOriginResult(null);
         setOriginError(`Origin analysis failed (${oRes.status})`);
+      }
+
+      if (aRes.ok) {
+        setActorLayerResult(await aRes.json());
+        setActorLayerError(null);
+      } else {
+        setActorLayerResult(null);
+        setActorLayerError(`Actor layer failed (${aRes.status})`);
       }
 
       setSearchBusy(false);
@@ -629,6 +720,7 @@ export default function DepthMap() {
           const isL1 = num === 1;
           const isL2 = num === 2;
           const isL3 = num === 3;
+          const isL4 = num === 4;
           const isL5 = num === 5;
 
           return (
@@ -704,8 +796,17 @@ export default function DepthMap() {
                 </div>
               ) : null}
 
-              {num === 4 ? (
-                <p className="depth-limited-msg">Limited sourcing available at this depth.</p>
+              {isL4 ? (
+                <div className="depth-layer-inline">
+                  {searchBusy ? (
+                    <p className="depth-muted depth-trace-hint">Resolving actors…</p>
+                  ) : null}
+                  {!actorLayerResult && !actorLayerError && !searchBusy ? (
+                    <p className="depth-limited-msg">Limited sourcing available at this depth.</p>
+                  ) : null}
+                  {actorLayerError ? <p className="depth-banner-error">{actorLayerError}</p> : null}
+                  {actorLayerResult ? <ActorLayerFields actorLayer={actorLayerResult} /> : null}
+                </div>
               ) : null}
 
               {isL5 ? (

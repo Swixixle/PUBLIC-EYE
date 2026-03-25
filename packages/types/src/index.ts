@@ -231,4 +231,5 @@ export * from "./spread-result.js";
 export * from "./origin-result.js";
 export * from "./pattern-result.js";
 export * from "./actor.js";
+export * from "./actor-layer-result.js";
 export * from "./dispute.js";
