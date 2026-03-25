@@ -342,6 +342,12 @@ class SecReceiptRequest(BaseModel):
     name: str = Field(..., min_length=1)
 
 
+class ScholarlyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., min_length=1)
+
+
 class AdLibraryRequest(BaseModel):
     name: str = Field(..., min_length=1)
     country: str = "US"
@@ -1197,6 +1203,14 @@ async def generate_sec_receipt(req: SecReceiptRequest) -> dict[str, Any]:
     if signed.get("signing_error"):
         return signed
     return _with_receipt_url(signed)
+
+
+@app.post("/v1/scholarly")
+async def scholarly_post(body: ScholarlyRequest) -> dict[str, Any]:
+    """OpenAlex + Semantic Scholar + Crossref (concurrent); merged by DOI / citation."""
+    from adapters.scholarly import scholarly_aggregate
+
+    return await scholarly_aggregate(body.query.strip(), per_source_limit=5)
 
 
 def generate_receipt_id() -> str:

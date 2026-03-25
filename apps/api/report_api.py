@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from actor_layer_fast import run_actor_layer_fast
+from adapters.scholarly import academic_origin_candidates, search_openalex, search_semantic_scholar
 from origin_api import run_origin
 from pattern_api import run_pattern_match
 from spread_api import run_spread
@@ -28,14 +29,18 @@ def _source(
     url: str,
     title: str,
     retrieved_at: str,
+    metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    row: dict[str, Any] = {
         "id": sid,
         "adapter": adapter,
         "url": url,
         "title": title,
         "retrievedAt": retrieved_at,
     }
+    if metadata is not None:
+        row["metadata"] = metadata
+    return row
 
 
 def _merge_source_check_status(a: str, b: str) -> str:
@@ -63,6 +68,8 @@ def _classify_ring_adapter_status(adapter: str, data: dict[str, Any]) -> str:
         return "not_found"
     if adapter == "layer_origin":
         if (data.get("first_instance_indicators") or []) or (data.get("seeding_actors") or []):
+            return "found"
+        if data.get("academic_origin_candidates"):
             return "found"
         return "not_found"
     if adapter == "layer_actor":
@@ -141,6 +148,13 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
         _run_ring_in_executor(loop, "layer_pattern", run_pattern_match, text),
     )
 
+    oa_rows, ss_rows = await asyncio.gather(
+        search_openalex(text, 3),
+        search_semantic_scholar(text, 3),
+    )
+    acad_cand = academic_origin_candidates(oa_rows, ss_rows, cap=5)
+    origin_enriched: dict[str, Any] = {**origin, "academic_origin_candidates": acad_cand}
+
     assert ad_surface == "layer_surface"
     assert ad_spread == "layer_spread"
     assert ad_origin == "layer_origin"
@@ -206,7 +220,7 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
         {
             "ring": 3,
             "title": "Origin",
-            "content": origin,
+            "content": origin_enriched,
             "confidence_tier": o_tier,
             "absent_fields": list(origin.get("absent_fields") or []),
             "sources": [
@@ -217,6 +231,24 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
                     "Layer 3 — origin heuristic (Frame)",
                     now,
                 ),
+            ]
+            + [
+                _source(
+                    f"ring-3-academic-{i + 1}",
+                    "manual",
+                    str(c.get("url") or ""),
+                    (c.get("title") or "Scholarly work")[:280],
+                    now,
+                    metadata={
+                        "source_category": "academic",
+                        "year": c.get("year"),
+                        "cited_by_count": c.get("cited_by_count"),
+                        "doi": c.get("doi"),
+                        "scholarly_source": c.get("scholarly_source"),
+                    },
+                )
+                for i, c in enumerate(acad_cand)
+                if c.get("url")
             ],
         },
         {
@@ -305,7 +337,7 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
     ring_meta = [
         ("layer_surface", st_surface, surface),
         ("layer_spread", st_spread, spread),
-        ("layer_origin", st_origin, origin),
+        ("layer_origin", st_origin, origin_enriched),
         ("layer_actor", st_actor, actor),
         ("layer_pattern", st_pattern, pattern),
     ]

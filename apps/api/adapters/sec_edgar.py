@@ -53,20 +53,7 @@ def cik_int_str(cik_padded: str) -> str:
     return str(int(cik_padded, 10))
 
 
-def search_entity(name: str) -> list[dict[str, Any]]:
-    """
-    Full-text search EDGAR index; returns up to 5 distinct CIKs with names and form types seen.
-    """
-    q = (name or "").strip()
-    if not q:
-        return []
-    params = {
-        "q": q,
-        "dateRange": "custom",
-        "startdt": "2000-01-01",
-        "forms": "4,10-K,SC-13G",
-    }
-    url = f"{EFTS_SEARCH}?{urlencode(params, quote_via=quote_plus)}"
+def _efts_get(url: str) -> dict[str, Any]:
     with httpx.Client(timeout=45.0, headers=_headers(), follow_redirects=True) as client:
         r = client.get(url)
         try:
@@ -80,8 +67,10 @@ def search_entity(name: str) -> list[dict[str, Any]]:
                     "contact information (https://www.sec.gov/os/webmaster-faq#code-support)."
                 ) from exc
             raise
-        data = r.json()
-    hits = (data.get("hits") or {}).get("hits") or []
+        return r.json()
+
+
+def _ranked_entities_from_hits(hits: list[Any]) -> list[dict[str, Any]]:
     by_cik: dict[str, dict[str, Any]] = {}
     for h in hits:
         src = h.get("_source") or {}
@@ -100,13 +89,83 @@ def search_entity(name: str) -> list[dict[str, Any]]:
                 }
             else:
                 by_cik[cik]["max_score"] = max(by_cik[cik]["max_score"], score)
-                if disp and by_cik[cik]["company_name"].startswith("CIK "):
+                if disp and str(by_cik[cik]["company_name"]).startswith("CIK "):
                     by_cik[cik]["company_name"] = disp
             by_cik[cik]["filing_types_found"].update(forms)
-    ranked = sorted(by_cik.values(), key=lambda x: -x["max_score"])[:5]
+    ranked = sorted(by_cik.values(), key=lambda x: -float(x["max_score"]))[:5]
     for row in ranked:
         row["filing_types_found"] = sorted(row["filing_types_found"])
     return ranked
+
+
+def _issuer_name_from_form4_hit_source(src: dict[str, Any]) -> str | None:
+    en = src.get("entity_name")
+    if isinstance(en, str) and en.strip():
+        return en.strip()
+    for dn in src.get("display_names") or []:
+        if not isinstance(dn, str):
+            continue
+        s = re.sub(r"\s*\(CIK\s*[\d]+\)\s*$", "", dn, flags=re.IGNORECASE).strip()
+        if s:
+            return s
+    return None
+
+
+def _form4_name_fallback_issuers(name: str) -> list[str]:
+    """Secondary EFTS query (Form 4 only) to infer issuers tied to a person name search."""
+    q = (name or "").strip()
+    if not q:
+        return []
+    params = {
+        "q": q,
+        "dateRange": "custom",
+        "startdt": "2000-01-01",
+        "forms": "4",
+    }
+    url = f"{EFTS_SEARCH}?{urlencode(params, quote_via=quote_plus)}"
+    try:
+        data = _efts_get(url)
+    except Exception:
+        return []
+    hits = (data.get("hits") or {}).get("hits") or []
+    issuers: set[str] = set()
+    for h in hits:
+        src = h.get("_source") or {}
+        label = _issuer_name_from_form4_hit_source(src)
+        if label:
+            issuers.add(label)
+        # period_of_report / period_ending are present on many filings; parsing validates hit flavor
+        _ = src.get("period_of_report") or src.get("period_ending")
+    return sorted(issuers)
+
+
+def search_entity(name: str) -> dict[str, Any]:
+    """
+    Full-text EDGAR search (forms 4, 10-K, SC 13-G). Optionally Form-4-only fallback issuers
+    for person-like queries when the primary search is empty or low-confidence.
+
+    Returns:
+        entities: top 5 CIK buckets (same shape as before).
+        reporting_owner_of: unique issuer names from Form-4-only search when fallback runs; else [].
+    """
+    q = (name or "").strip()
+    if not q:
+        return {"entities": [], "reporting_owner_of": []}
+    params = {
+        "q": q,
+        "dateRange": "custom",
+        "startdt": "2000-01-01",
+        "forms": "4,10-K,SC-13G",
+    }
+    url = f"{EFTS_SEARCH}?{urlencode(params, quote_via=quote_plus)}"
+    data = _efts_get(url)
+    hits = (data.get("hits") or {}).get("hits") or []
+    ranked = _ranked_entities_from_hits(hits)
+    max_score = max((float(r["max_score"]) for r in ranked), default=0.0)
+    reporting_owner_of: list[str] = []
+    if not ranked or max_score <= 0.5:
+        reporting_owner_of = _form4_name_fallback_issuers(q)
+    return {"entities": ranked, "reporting_owner_of": reporting_owner_of}
 
 
 def _text_el(el: ET.Element | None) -> str | None:
@@ -315,19 +374,25 @@ def sec_edgar_probe(name: str | None, cik: str | None) -> dict[str, Any]:
     picked_name: str | None = None
     picked_cik: str | None = None
     search_hits: list[dict[str, Any]] = []
+    reporting_owner_of: list[str] = []
     if cik and cik.strip():
         picked_cik = pad_cik(cik.strip())
         picked_name = None
     elif name and name.strip():
-        search_hits = search_entity(name.strip())
+        sr = search_entity(name.strip())
+        search_hits = sr.get("entities") or []
+        reporting_owner_of = list(sr.get("reporting_owner_of") or [])
         if not search_hits:
             return {
                 "entity": None,
                 "cik": None,
                 "form4_filings": [],
                 "company_facts": None,
-                "confidence_tier": "no_match",
+                "confidence_tier": (
+                    "no_match" if not reporting_owner_of else "person_form4_issuer_hints"
+                ),
                 "search_hits": [],
+                "reporting_owner_of": reporting_owner_of,
             }
         top = search_hits[0]
         picked_cik = top["cik"]
@@ -346,6 +411,7 @@ def sec_edgar_probe(name: str | None, cik: str | None) -> dict[str, Any]:
         "company_facts": facts,
         "confidence_tier": "aggregated_registry",
         "search_hits": search_hits,
+        "reporting_owner_of": reporting_owner_of,
     }
 
 
@@ -355,6 +421,58 @@ def build_sec_receipt_payload(entity_name: str) -> dict[str, Any]:
     """
     bundle = sec_edgar_probe(entity_name.strip(), None)
     if bundle.get("cik") is None:
+        ro = bundle.get("reporting_owner_of") or []
+        if ro:
+            return {
+                "schemaVersion": "1.0.0",
+                "receiptId": str(uuid.uuid4()),
+                "createdAt": _now_iso(),
+                "claims": [
+                    {
+                        "id": "claim-1",
+                        "statement": (
+                            f"SEC Form 4 index slice lists possible issuer names associated with "
+                            f"search {entity_name.strip()!r} (no high-confidence registrant CIK)."
+                        ),
+                        "type": "observed",
+                        "implication_risk": "low",
+                    },
+                ],
+                "sources": [
+                    {
+                        "id": "sec-efts-form4-fallback",
+                        "adapter": "edgar",
+                        "url": EFTS_SEARCH,
+                        "title": "SEC EDGAR EFTS (Form 4 fallback query)",
+                        "retrievedAt": _now_iso(),
+                        "metadata": {"reporting_owner_of": ro},
+                    },
+                ],
+                "narrative": [
+                    {
+                        "text": (
+                            "Form 4-only EFTS search returned issuer display names: "
+                            + ", ".join(ro[:15])
+                            + ("…" if len(ro) > 15 else "")
+                            + ". These are index hits, not adjudicated identity matches."
+                        ),
+                        "sourceId": "sec-efts-form4-fallback",
+                    },
+                ],
+                "unknowns": {
+                    "operational": [],
+                    "epistemic": [
+                        {
+                            "text": (
+                                "Issuer labels from full-text search are not verified against signature "
+                                "lines or CIK; person-name queries remain ambiguous in EDGAR."
+                            ),
+                            "resolution_possible": False,
+                        },
+                    ],
+                },
+                "contentHash": "",
+            }
         return {
             "schemaVersion": "1.0.0",
             "receiptId": str(uuid.uuid4()),
