@@ -319,6 +319,29 @@ class WikidataRequest(BaseModel):
     wikidataId: str | None = None
 
 
+class SecEdgarRequest(BaseModel):
+    """Exactly one of `name` (EFTS search) or `cik` (zero-padded or numeric)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    cik: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_identifier(self) -> SecEdgarRequest:
+        has_n = bool(self.name and self.name.strip())
+        has_c = bool(self.cik and self.cik.strip())
+        if has_n == has_c:
+            raise ValueError("Provide exactly one of name or cik")
+        return self
+
+
+class SecReceiptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+
+
 class AdLibraryRequest(BaseModel):
     name: str = Field(..., min_length=1)
     country: str = "US"
@@ -1143,6 +1166,37 @@ def _generate_wikidata_receipt_sync(person_name: str, wikidata_id: str | None) -
 @app.post("/v1/generate-wikidata-receipt")
 def generate_wikidata_receipt(req: WikidataRequest) -> dict[str, Any]:
     return _generate_wikidata_receipt_sync(req.personName, req.wikidataId)
+
+
+@app.post("/v1/sec-edgar")
+async def sec_edgar_post(body: SecEdgarRequest) -> dict[str, Any]:
+    """SEC EDGAR probe: search by name or fetch by CIK — Form 4 + company facts (unsigned)."""
+    from adapters.sec_edgar import sec_edgar_probe
+
+    def _run() -> dict[str, Any]:
+        return sec_edgar_probe(
+            body.name.strip() if body.name else None,
+            body.cik.strip() if body.cik else None,
+        )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/v1/generate-sec-receipt")
+async def generate_sec_receipt(req: SecReceiptRequest) -> dict[str, Any]:
+    """Signed Frame receipt for top EDGAR match on `name` (submissions, Form 4 lines, XBRL facts)."""
+    from adapters.sec_edgar import build_sec_receipt_payload
+
+    payload = await asyncio.to_thread(build_sec_receipt_payload, req.name.strip())
+    signed = await asyncio.to_thread(_sign_frame_payload, payload)
+    if signed.get("signing_error"):
+        return signed
+    return _with_receipt_url(signed)
 
 
 def generate_receipt_id() -> str:
