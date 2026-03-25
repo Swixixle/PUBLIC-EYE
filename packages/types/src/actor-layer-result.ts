@@ -2,7 +2,13 @@ import type { ActorRecord } from "./actor.js";
 import type { ConfidenceTier } from "./depth.js";
 
 /** Per-adapter outcome for Layer 4 and five-ring report manifest. */
-export type SourceCheckedStatus = "found" | "not_found" | "timeout" | "error";
+export type SourceCheckedStatus =
+  | "found"
+  | "not_found"
+  | "timeout"
+  | "error"
+  /** External adapters not run in this context (e.g. report Ring 4 fast path). */
+  | "deferred";
 
 export interface SourceCheckedEntry {
   adapter: string;

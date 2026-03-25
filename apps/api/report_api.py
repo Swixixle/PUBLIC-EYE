@@ -8,14 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from actor_layer_api import run_actor_layer
+from actor_layer_fast import run_actor_layer_fast
 from origin_api import run_origin
 from pattern_api import run_pattern_match
 from spread_api import run_spread
 from surface_adapter import run_surface_layer
 
 RING_TIMEOUT_SEC = 8.0
-RING_TIMEOUT_ACTOR_SEC = 25.0
 _RING_EXECUTOR = ThreadPoolExecutor(max_workers=12)
 
 
@@ -46,6 +45,8 @@ def _merge_source_check_status(a: str, b: str) -> str:
         return "timeout"
     if a == "error" or b == "error":
         return "error"
+    if a == "deferred" or b == "deferred":
+        return "deferred"
     return "not_found"
 
 
@@ -117,8 +118,9 @@ def build_extended_report(narrative: str) -> dict[str, Any]:
 
 async def build_extended_report_async(narrative: str) -> dict[str, Any]:
     """
-    Build unsigned ExtendedReportPayload: rings in parallel (8s cap surface/spread/origin/pattern;
-    25s cap actor layer), merged unknowns, plus sources_checked (rings + Layer 4 adapter manifest).
+    Build unsigned ExtendedReportPayload: rings in parallel (8s cap each), merged unknowns,
+    plus sources_checked. Ring 4 uses ledger-only fast path (see actor_layer_fast); full stack
+    remains at POST /v1/actor-layer.
     """
     text = narrative.strip()
     now = _now_iso()
@@ -135,13 +137,7 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
         _run_ring_in_executor(loop, "layer_surface", run_surface_layer, {"narrative": text}),
         _run_ring_in_executor(loop, "layer_spread", run_spread, text),
         _run_ring_in_executor(loop, "layer_origin", run_origin, text),
-        _run_ring_in_executor(
-            loop,
-            "layer_actor",
-            run_actor_layer,
-            text,
-            timeout_sec=RING_TIMEOUT_ACTOR_SEC,
-        ),
+        _run_ring_in_executor(loop, "layer_actor", run_actor_layer_fast, text),
         _run_ring_in_executor(loop, "layer_pattern", run_pattern_match, text),
     )
 
@@ -234,7 +230,14 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
                     "ring-4-layer-actor",
                     "layer_actor",
                     repo_ref,
-                    "Layer 4 — actor ledger + dynamic stack (Frame)",
+                    "Layer 4 — actor ledger fast path for reports (no outbound HTTP in this ring)",
+                    now,
+                ),
+                _source(
+                    "ring-4-actor-layer-full-stack",
+                    "layer_actor",
+                    repo_ref,
+                    "Full source stack (archives, RSS, Wikidata, etc.): POST /v1/actor-layer",
                     now,
                 ),
             ],
@@ -312,8 +315,7 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
             operational.append(
                 {
                     "text": (
-                        f"Adapter {adapter} timed out after "
-                        f"{(RING_TIMEOUT_ACTOR_SEC if adapter == 'layer_actor' else RING_TIMEOUT_SEC):.0f}s "
+                        f"Adapter {adapter} timed out after {RING_TIMEOUT_SEC:.0f}s "
                         f"(operational; report still generated)."
                     ),
                     "resolution_possible": True,
@@ -348,10 +350,18 @@ async def build_extended_report_async(narrative: str) -> dict[str, Any]:
                 }
             )
 
-    sources_checked = [
-        {"adapter": k, "status": v}
-        for k, v in sorted(sources_checked_map.items(), key=lambda x: x[0])
-    ]
+    defer_detail_by_adapter: dict[str, str] = {}
+    for row in actor.get("sources_checked") or []:
+        ad = str(row.get("adapter") or "")
+        if row.get("status") == "deferred" and row.get("detail"):
+            defer_detail_by_adapter[ad] = str(row["detail"])
+
+    sources_checked = []
+    for k, v in sorted(sources_checked_map.items(), key=lambda x: x[0]):
+        entry: dict[str, Any] = {"adapter": k, "status": v}
+        if v == "deferred" and k in defer_detail_by_adapter:
+            entry["detail"] = defer_detail_by_adapter[k]
+        sources_checked.append(entry)
 
     return {
         "report_id": rid,

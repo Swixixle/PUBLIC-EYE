@@ -689,6 +689,7 @@ function sourcesCheckedStatusClass(status) {
   if (s === "found") return "depth-sc-found";
   if (s === "timeout") return "depth-sc-timeout";
   if (s === "error") return "depth-sc-error";
+  if (s === "deferred") return "depth-sc-deferred";
   return "depth-sc-not_found";
 }
 
