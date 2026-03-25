@@ -54,5 +54,96 @@
         "confidence_tier": "cross_corroborated"
       }
     ]
+  },
+  "roswell-incident": {
+    "name": "Roswell Incident",
+    "aliases": ["UFO Crash 1947", "Roswell UFO"],
+    "events": [
+      {
+        "date": "1947-07-01",
+        "type": "first_recorded_instance",
+        "description": "Mac Brazel discovers debris near Roswell, New Mexico. Roswell Army Air Field issues a press release (flying disc) then withdraws it within 24 hours; replacement narrative attributes debris to weather balloon",
+        "source": "Roswell Daily Record — July 8, 1947; concurrent military statements in public record",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  },
+  "ancient-astronaut-theory": {
+    "name": "Ancient Astronaut Theory",
+    "aliases": ["Chariots of the Gods", "Paleocontact"],
+    "events": [
+      {
+        "date": "1968-01-01",
+        "type": "content_creation",
+        "description": "Erich von Däniken publishes Chariots of the Gods? attributing select ancient monuments and texts to extraterrestrial visitation",
+        "source": "von Däniken — Chariots of the Gods? (1968), original German edition Auf den Spuren der All-Mächtigen",
+        "confidence_tier": "single_source"
+      }
+    ]
+  },
+  "vlad-dracula": {
+    "name": "Vlad the Impaler",
+    "aliases": ["Vlad the Impaler", "Vlad III", "Vlad Tepes"],
+    "events": [
+      {
+        "date": "1431-01-01",
+        "type": "first_recorded_instance",
+        "description": "Vlad III born; Wallachian voivode whose life is documented in Ottoman, Hungarian, and Wallachian chronicles; later literary linkage to vampire fiction is separate from the historical record",
+        "source": "Ottoman and Wallachian documentary record; academic historiography",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  },
+  "strigoi": {
+    "name": "Strigoi",
+    "aliases": ["Romanian Vampire", "Strigoi Mort"],
+    "events": [
+      {
+        "date": "1722-01-01",
+        "type": "first_recorded_instance",
+        "description": "Austrian administration produces Visum et Repertum (1722) documenting exhumation and popular belief in vampire revenants in Serbian locale; story syndicated in European newspapers of the period",
+        "source": "Visum et Repertum (1722); contemporary press reproductions (e.g. Wienerisches Diarium)",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  },
+  "osiris": {
+    "name": "Osiris",
+    "aliases": ["Asar", "Usir"],
+    "events": [
+      {
+        "date": "2400-01-01",
+        "type": "first_recorded_instance",
+        "description": "Pyramid Texts in the pyramid of Unas at Saqqara (Old Kingdom, approx. late 24th century BCE) document the death, resurrection, and kingship of Osiris — among the oldest extensive religious compositions on the historic record",
+        "source": "Pyramid Texts — Unas pyramid complex, Saqqara, Egypt (c. 2400–2300 BCE, scholarly dating ranges vary)",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  },
+  "mothman": {
+    "name": "Mothman",
+    "aliases": ["The Mothman of Point Pleasant"],
+    "events": [
+      {
+        "date": "1966-11-12",
+        "type": "first_recorded_instance",
+        "description": "First widely cited sightings of a large winged humanoid figure near Clendenin and Point Pleasant, West Virginia; ongoing coverage in local press (Point Pleasant Register) November–December 1966",
+        "source": "Point Pleasant Register — November 1966; regional newspaper record",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  },
+  "spring-heeled-jack": {
+    "name": "Spring-heeled Jack",
+    "aliases": ["Spring Jack", "The Terror of London"],
+    "events": [
+      {
+        "date": "1837-09-01",
+        "type": "first_recorded_instance",
+        "description": "First reported attacks in and around London (often dated from autumn 1837); complaint letters addressed to the Lord Mayor; accounts widely reprinted in metropolitan press including The Times in 1838",
+        "source": "The Times (London) — 1838; Lord Mayor correspondence (contested copies in record)",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
   }
 }

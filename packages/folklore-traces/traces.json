@@ -50,5 +50,126 @@
     "absent_fields": ["single_named_corporeal_identity_verified_in_vital_records", "uniform_metaphysical_claim_verification"],
     "source_type": "text",
     "ledger_slug": "resurrection-mary"
+  },
+  "roswell-incident": {
+    "what": "The Roswell incident (1947) refers to debris recovery near Roswell, NM, a U.S. Army Air Forces press release describing a flying disc, and its rapid retraction in favor of balloon-related explanations; the episode became the anchor narrative for later UFO crash folklore.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Mac Brazel (rancher, debris discovery in public record)", "confidence_tier": "official_secondary" },
+      { "name": "Roswell Army Air Field (press release and retraction chain)", "confidence_tier": "official_primary" }
+    ],
+    "when": {
+      "earliest_appearance": "July 1947 — debris reports; July 8, 1947 — Roswell Daily Record article citing RAAF public information officer",
+      "source": "Contemporaneous regional press; military statements in public record",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["physical_chain_of_custody_for_all_recovered_material_public_release", "single_unified_agency_narrative_uncontested"],
+    "source_type": "text",
+    "ledger_slug": "roswell-incident"
+  },
+  "ancient-astronaut-theory": {
+    "what": "Ancient astronaut or paleocontact theories reinterpret archaeological and textual remains as evidence of extraterrestrial contact; the mass-market form crystallized with Erich von Däniken’s Chariots of the Gods? (1968), distinct from professional archaeology and assyriology.",
+    "what_confidence_tier": "single_source",
+    "who": [
+      { "name": "Erich von Däniken (popular author, 1968)", "confidence_tier": "single_source" }
+    ],
+    "when": {
+      "earliest_appearance": "1968 — first edition of Chariots of the Gods? / Auf den Spuren der All-Mächtigen",
+      "source": "Publishing record; bibliography",
+      "confidence_tier": "single_source"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["peer_reviewed_archaeological_consensus_alignment", "primary_contemporaneous_et_contact_evidence"],
+    "source_type": "text",
+    "ledger_slug": "ancient-astronaut-theory"
+  },
+  "vlad-dracula": {
+    "what": "Vlad III, voivode of Wallachia (popularly Vlad the Impaler), is attested in 15th-century diplomatic and chronicle sources for military and administrative actions; modern literary Dracula draws loosely on legend and nomenclature but is not a transcript of those records.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Vlad III (historical figure, Wallachia)", "confidence_tier": "official_primary" }
+    ],
+    "when": {
+      "earliest_appearance": "1431 — birth year in scholarly reconstruction; 1450s–1470s — primary narrative sources for reign",
+      "source": "Ottoman, Hungarian, and Wallachian documentary corpus",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["vampire_traits_in_primary_medieval_documents_as_literal_fact", "unitary_bridge_from_chronicle_to_Stoker_novel_without_intervening_fiction"],
+    "source_type": "text",
+    "ledger_slug": "vlad-dracula"
+  },
+  "strigoi": {
+    "what": "Strigoi (Romanian and wider Balkan revenant lore) names undead or troubled-dead figures in folk belief; the 1720s Austrian Visum et Repertum episode is a documented administrative-medical response to regional panic syndicated in European news.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Austrian imperial administration (Visum et Repertum, 1722 context)", "confidence_tier": "official_secondary" }
+    ],
+    "when": {
+      "earliest_appearance": "1722 — Visum et Repertum document; concurrent newspaper echoes through Central Europe",
+      "source": "Administrative filing; periodical reprints",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["forensic_verification_of_post_interment_animation", "single_uniform_definition_across_all_villages"],
+    "source_type": "text",
+    "ledger_slug": "strigoi"
+  },
+  "osiris": {
+    "what": "Osiris is a major funerary and kingship deity in ancient Egyptian religion; narrative of death, restoration, and filial succession (Horus) is spelled out in Pyramid Texts and later temple and papyrus traditions spanning millennia.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Old Kingdom royal cult (Unas pyramid complex)", "confidence_tier": "official_primary" }
+    ],
+    "when": {
+      "earliest_appearance": "Approx. 2400–2300 BCE — Pyramid Texts in pyramid of Unas, Saqqara (scholarly dating range)",
+      "source": "Egyptological publication of pyramid spells; archaeological context of Saqqara",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["literal_extraordinary_verification_outside_inscribed_tradition", "synchronized_transliteration_across_all_pyramid_corpus_editions_here"],
+    "source_type": "text",
+    "ledger_slug": "osiris"
+  },
+  "mothman": {
+    "what": "Mothman is a Point Pleasant, West Virginia-area legend of a large winged humanoid; local newspaper coverage began November 1966. Association with the 1967 Silver Bridge collapse is part of retrospective narrative layering popularized after Keel and derivatives.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Point Pleasant Register (local press, 1966–1967)", "confidence_tier": "official_secondary" }
+    ],
+    "when": {
+      "earliest_appearance": "12 November 1966 onward — cited sightings near Clendenin and Point Pleasant; December 1967 — Ohio River Silver Bridge collapse (engineering failure, public inquiry record)",
+      "source": "Regional newspapers; NTSB / engineering reports for bridge failure (separate from entity claims)",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["zoological_type_specimen", "single_contemporaneous_chain_for_all_claimed_encounters"],
+    "source_type": "text",
+    "ledger_slug": "mothman"
+  },
+  "spring-heeled-jack": {
+    "what": "Spring-heeled Jack is a Victorian urban panic figure: reported assaults and bounding figure accounts in London and environs from 1837 onward, with letters to authorities and extensive press serialization; historicity of any single perpetrator remains contested.",
+    "what_confidence_tier": "cross_corroborated",
+    "who": [
+      { "name": "Metropolitan and provincial press (1837–1838 peak)", "confidence_tier": "official_secondary" },
+      { "name": "Office of the Lord Mayor of London (complaint correspondence, contested corpus)", "confidence_tier": "single_source" }
+    ],
+    "when": {
+      "earliest_appearance": "September 1837 — cluster of attack reports around Barnes and suburban London corridors; 1838 — Times and penny-press amplification",
+      "source": "London newspaper archive; mayoral letter dossiers (mixed authenticity across copies)",
+      "confidence_tier": "cross_corroborated"
+    },
+    "source_url": null,
+    "source_url_confidence_tier": null,
+    "absent_fields": ["arrest_and_trial_record_identifying_one_offender", "forensic_corroboration_of_supernatural_leaps"],
+    "source_type": "text",
+    "ledger_slug": "spring-heeled-jack"
   }
 }

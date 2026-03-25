@@ -29,7 +29,7 @@
       ],
       "min_hits": 2
     },
-    "signed_at": "2026-03-25T06:56:26.232Z",
+    "signed_at": "2026-03-25T07:01:11.981Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -61,7 +61,7 @@
       ],
       "min_hits": 3
     },
-    "signed_at": "2026-03-25T06:56:26.233Z",
+    "signed_at": "2026-03-25T07:01:11.982Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -92,7 +92,7 @@
       "min_hits": 2
     },
     "signature": "292ec4a70997dd64b757dca3d611121dacccf0c321ffdf7aeb893f71accaf610a4622d05633e8236a0f88d5eee1b9dfa4316c78c1761dd56213a699cb683e902",
-    "signed_at": "2026-03-25T06:56:26.234Z",
+    "signed_at": "2026-03-25T07:01:11.982Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -124,7 +124,7 @@
       "min_hits": 2
     },
     "signature": "b9ac70eb967a5a3cf86edfed6c2ee9d09ae76820cbcca16f69da38dd66273e21356cc209c90d0e085584fde24e5f4b7a5d3e93b191acb236a472ffb163e7d606",
-    "signed_at": "2026-03-25T06:56:26.234Z",
+    "signed_at": "2026-03-25T07:01:11.983Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -153,7 +153,7 @@
       "min_hits": 2
     },
     "signature": "ec38db5944287cbb38093814ec64ff847d4c570c933038e9a6b211f0086726c092db651ad1fd2a0b2e4b0ced1bd28109613d7bcf53b44ab56fc9d079e09e4b08",
-    "signed_at": "2026-03-25T06:56:26.235Z",
+    "signed_at": "2026-03-25T07:01:11.983Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -199,7 +199,7 @@
       "min_hits": 3
     },
     "signature": "a308389f245bd56bbe981c41e1645402fdc237a2ab07aa8e3d5fffcf4bd0def8090ccf0179070efb3028d770cf878c4d2a315cfea5ab4a4a89703fbc11ea8806",
-    "signed_at": "2026-03-25T06:56:26.235Z",
+    "signed_at": "2026-03-25T07:01:11.984Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   },
   {
@@ -233,7 +233,120 @@
       "min_hits": 3
     },
     "signature": "e82c414ea59b20d3f98c4f863f000f98d28bbb7f7111018fca48f7c877992c7f3bcb7f7ece6c6de8054f3423e538628897fcbfc9e5c368bc4ffefce081c1150f",
-    "signed_at": "2026-03-25T06:56:26.236Z",
+    "signed_at": "2026-03-25T07:01:11.984Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "retraction-amplification-v1",
+    "label": "Retraction amplification",
+    "summary": "Official denial or retraction issued within 72 hours of an original claim; denial receives wider coverage than the original in some outlets while the original claim persists and grows in public retellings. Historical analog: Roswell Army Air Field press release and rapid withdrawal July 1947.",
+    "constraints": {
+      "window_hours": 72,
+      "retraction_wider_coverage_than_original": true,
+      "original_claim_persistence": true
+    },
+    "literary_analog": "Roswell RAAF press release retraction (1947)",
+    "detection": {
+      "keywords": [
+        "retraction",
+        "retracted",
+        "denial",
+        "official denial",
+        "press release",
+        "72 hour",
+        "72 hours",
+        "72h",
+        "withdrawn",
+        "recanted",
+        "wider coverage",
+        "more coverage",
+        "persisted",
+        "persists",
+        "despite retraction",
+        "roswell",
+        "raaf",
+        "army air field",
+        "balloon",
+        "flying disc"
+      ],
+      "min_hits": 2
+    },
+    "signature": "ae1d8796901955ccb9162281b1415ae6124abbaca3f09c3223071abe34c35e3cbf5947b2e6f84363c235f69e2f5bc7ef8cb32f1818cbf2fff789efc5ab8af000",
+    "signed_at": "2026-03-25T07:01:11.985Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "syncretism-pattern-v1",
+    "label": "Syncretism pattern",
+    "summary": "A narrative entity absorbs attributes of prior cultural figures as it spreads across geographic or cultural boundaries. No fixed time window — accumulation based. Historical analog: documented Greek–Egyptian religious syncretism in the Hellenistic period after Alexander.",
+    "constraints": {
+      "accumulation_based": true,
+      "time_window_hours": null,
+      "cultural_boundary_crossing": true
+    },
+    "literary_analog": "Post-Alexander Hellenistic syncretism (Serapis, Isis cult diffusion)",
+    "detection": {
+      "keywords": [
+        "syncretism",
+        "syncretic",
+        "absorbed",
+        "absorbing",
+        "merged with",
+        "incorporated",
+        "geographic spread",
+        "cultural boundary",
+        "cross-cultural",
+        "hellenistic",
+        "ptolemaic",
+        "isis",
+        "serapis",
+        "alexander",
+        "egyptian",
+        "greek",
+        "attributes of",
+        "accumulation",
+        "layered tradition"
+      ],
+      "min_hits": 2
+    },
+    "signature": "cf27218889710b2073001392a983f13e9f2ec19530449f18e8563c6fb98ab6c703541c761f880fdc270288c2d8e8a3a8c9021b8895b653b3519406d3eb1aa907",
+    "signed_at": "2026-03-25T07:01:11.985Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "witness-chain-self-reference-v1",
+    "label": "Witness chain (self-reference)",
+    "summary": "Each new witness or report cites prior accounts rather than independent observation; the chain exceeds three non-independent citations. Confidence posture: UNSUBSTANTIATED escalating to PATTERN_MATCH when structural chain language is present in the narrative.",
+    "constraints": {
+      "non_independent_chain_threshold": 3,
+      "cites_prior_only": true
+    },
+    "literary_analog": null,
+    "detection": {
+      "keywords": [
+        "witness",
+        "witnesses",
+        "citing prior",
+        "prior account",
+        "prior accounts",
+        "heard it from",
+        "according to others",
+        "secondhand",
+        "thirdhand",
+        "retold",
+        "chain of stories",
+        "each witness cited",
+        "non-independent",
+        "self-referential",
+        "echoes earlier",
+        "same story circulated",
+        "fourth witness",
+        "fifth account"
+      ],
+      "min_hits": 3
+    },
+    "signature": "1dd0fff05b5312cf5c7defc23608f4e97fe02c1d445074db6cfe5099ac66a1d6ca5025cde5d005fbe47b8eec71125346ef137383eb554a04650ccbc4313a8f0e",
+    "signed_at": "2026-03-25T07:01:11.986Z",
     "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
   }
 ]
