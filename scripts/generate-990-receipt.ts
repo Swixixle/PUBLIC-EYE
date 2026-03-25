@@ -1,6 +1,9 @@
-import { createPrivateKey } from "node:crypto";
 import { buildLive990Receipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
+import {
+  loadFramePrivateKeyFromEnv,
+  signReceipt,
+  verifyReceipt,
+} from "../packages/signing/dist/index.js";
 
 const orgName = process.argv[2]?.trim() ?? "";
 const ein = process.argv[3]?.trim() || undefined;
@@ -10,23 +13,7 @@ if (!orgName) {
   process.exit(1);
 }
 
-function getPrivateKeyPem(): string {
-  const format = process.env.FRAME_KEY_FORMAT ?? "pem";
-  const raw = process.env.FRAME_PRIVATE_KEY ?? "";
-  if (!raw) throw new Error("Missing FRAME_PRIVATE_KEY");
-  if (format === "base64") {
-    const decoded = Buffer.from(raw.trim(), "base64").toString("utf8");
-    return decoded.replace(/\\n/g, "\n");
-  }
-  let pem = raw;
-  if (!pem.includes("\n")) {
-    pem = pem.replace(/\\n/g, "\n");
-  }
-  pem = pem.replace(/^["']|["']$/g, "");
-  return pem.trim();
-}
-
-const privateKey = createPrivateKey(getPrivateKeyPem());
+const privateKey = loadFramePrivateKeyFromEnv();
 const payload = await buildLive990Receipt(orgName, ein);
 const signed = signReceipt(payload, { privateKey });
 const v = verifyReceipt(signed);

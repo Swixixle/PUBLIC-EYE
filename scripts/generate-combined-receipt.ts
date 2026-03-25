@@ -1,6 +1,9 @@
-import { createPrivateKey } from "node:crypto";
 import { buildCombinedPoliticianReceipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
+import {
+  loadFramePrivateKeyFromEnv,
+  signReceipt,
+  verifyReceipt,
+} from "../packages/signing/dist/index.js";
 
 const candidateId = process.argv[2]?.trim() ?? "";
 const lobbyingClients: string[] = JSON.parse(process.argv[3] ?? "[]");
@@ -12,23 +15,7 @@ if (!candidateId) {
   process.exit(1);
 }
 
-function getPrivateKeyPem(): string {
-  const format = process.env.FRAME_KEY_FORMAT ?? "pem";
-  const raw = process.env.FRAME_PRIVATE_KEY ?? "";
-  if (!raw) throw new Error("Missing FRAME_PRIVATE_KEY");
-  if (format === "base64") {
-    const decoded = Buffer.from(raw.trim(), "base64").toString("utf8");
-    return decoded.replace(/\\n/g, "\n");
-  }
-  let pem = raw;
-  if (!pem.includes("\n")) {
-    pem = pem.replace(/\\n/g, "\n");
-  }
-  pem = pem.replace(/^["']|["']$/g, "");
-  return pem.trim();
-}
-
-const privateKey = createPrivateKey(getPrivateKeyPem());
+const privateKey = loadFramePrivateKeyFromEnv();
 const payload = await buildCombinedPoliticianReceipt(
   candidateId,
   lobbyingClients,

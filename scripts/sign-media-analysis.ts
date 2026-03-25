@@ -1,7 +1,9 @@
 import type { FrameReceiptPayload, ImplicationRisk } from "@frame/types";
 import { buildClaim, epiUnknown, getImplicationNote, opUnknown } from "@frame/types";
-import { createHash, createPrivateKey, randomUUID } from "node:crypto";
-import { signReceipt } from "../packages/signing/dist/index.js";
+import { createHash, randomUUID } from "node:crypto";
+import { loadFramePrivateKeyFromEnv, signReceipt } from "../packages/signing/dist/index.js";
+
+const privateKey = loadFramePrivateKeyFromEnv();
 
 /** Matches SourceRecord.metadata contract from analyze-media / _verify_and_snapshot_source */
 type VerificationMeta = {
@@ -138,19 +140,6 @@ const input = JSON.parse(
   /** Tesseract OCR result from analyze-media (Task 2.1) */
   ocr?: Record<string, unknown> | null;
 };
-
-function getPrivateKeyPem(): string {
-  const format = process.env.FRAME_KEY_FORMAT ?? "pem";
-  const raw = process.env.FRAME_PRIVATE_KEY ?? "";
-  if (!raw) throw new Error("Missing FRAME_PRIVATE_KEY");
-  if (format === "base64") {
-    const decoded = Buffer.from(raw.trim(), "base64").toString("utf8");
-    return decoded.replace(/\\n/g, "\n");
-  }
-  return raw.replace(/\\n/g, "\n").replace(/^["']|["']$/g, "").trim();
-}
-
-const privateKey = createPrivateKey(getPrivateKeyPem());
 
 function formatTs(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
