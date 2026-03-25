@@ -180,6 +180,32 @@ def trim_audio_max(input_path: str, max_seconds: int = PODCAST_MAX_SECONDS) -> t
     return input_path, False
 
 
+def probe_audio_duration_seconds(path: str) -> float | None:
+    """Best-effort duration via ffprobe (returns None if unavailable)."""
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return float(proc.stdout.strip())
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 _whisper_model: Any = None
 
 
@@ -230,7 +256,14 @@ def transcribe_audio(path: str) -> dict[str, Any]:
     }
 
 
-def extract_speaker_claims(transcript: dict[str, Any], title: str) -> list[dict[str, Any]]:
+def extract_speaker_claims(
+    transcript: dict[str, Any],
+    title: str,
+    *,
+    chunk_index: int | None = None,
+    article_mode: bool = False,
+    precontext: str = "",
+) -> list[dict[str, Any]]:
     """
     Call Claude to extract verifiable factual claims with timestamps and entities.
     Returns list of dicts: text, type, entities, timestamp_start, timestamp_end, speaker, primary_sources.
@@ -247,26 +280,56 @@ def extract_speaker_claims(transcript: dict[str, Any], title: str) -> list[dict[
     if len(full_text) > 24000:
         full_text = full_text[:24000] + "\n\n[… transcript truncated for claim extraction …]"
     seg_preview = json.dumps(segments[:400], ensure_ascii=False)[:12000]
+    if article_mode:
+        seg_preview = "[]"
 
     client = ant.Anthropic(api_key=key)
-    prompt = f"""Episode / clip title: {title}
+    article_intro = ""
+    if article_mode:
+        article_intro = (
+            "This is a written article, not audio. "
+            "Speaker attribution should use the author name if known, "
+            "or 'article states' for unattributed claims.\n\n"
+        )
+    if precontext.strip():
+        article_intro = article_intro + precontext.strip() + "\n\n"
 
-You are analyzing a podcast/video transcript. Return JSON only — no markdown.
+    source_label = (
+        "You are analyzing a written news article, blog post, or op-ed. "
+        "Return JSON only — no markdown."
+        if article_mode
+        else "You are analyzing a podcast/video transcript. Return JSON only — no markdown."
+    )
+    title_line = f"Title: {title}" if article_mode else f"Episode / clip title: {title}"
+    segment_label = (
+        "Segment timestamps (not applicable for static text; use 0.0 if required):"
+        if article_mode
+        else "Segment timestamps (reference for alignment):"
+    )
+    speaker_task = (
+        '- Attribute claims to the author or "article states" when the piece is unsigned.\n'
+        if article_mode
+        else '- Identify distinct speakers when possible (host, guest, or "unknown").\n'
+    )
 
-Full transcript text:
+    prompt = f"""{article_intro}{title_line}
+
+{source_label}
+
+Full text:
 {full_text}
 
-Segment timestamps (reference for alignment):
+{segment_label}
 {seg_preview}
 
 Task:
-- Identify distinct speakers when possible (host, guest, or "unknown").
+{f"- This is chunk {chunk_index} of a multi-part transcription. Extract all claims. Do not summarize — capture everything.\n" if chunk_index is not None and not article_mode else ""}{speaker_task}
 - Extract all **verifiable factual claims** — statements that assert something checkable about the world.
 - This includes: political and financial claims, scientific claims, historical claims, statistical claims, biographical claims, and claims about animal or natural world behavior documented in published research.
 - Do NOT extract: opinions, predictions, hedged speculation, or rhetorical questions.
 - For each claim assign: type (one of: financial, government_action, biographical, lobbying, health, statistical, legal, corporate, election, scientific, ecological, historical, behavioral, general).
 - Named entities per claim (people, orgs, agencies).
-- timestamp_start and timestamp_end in **seconds** (float) covering when the claim is stated (infer from transcript).
+- timestamp_start and timestamp_end in **seconds** (float) covering when the claim is stated ({'infer from transcript' if not article_mode else 'for articles use 0.0 for both if not applicable'}).
 - Up to 2 primary source URLs per claim (real government/database URLs when possible).
 - implication_risk must be exactly one of: low, medium, high
   low = bare fact with no inferential risk
@@ -415,7 +478,12 @@ def _salience_score(claim: dict) -> float:
     return min(1.0, risk_weight + type_bonus + domain_bonus)
 
 
-def generate_layer_zero(claims: list, subject_context: str) -> dict:
+def generate_layer_zero(
+    claims: list,
+    subject_context: str,
+    *,
+    cohort_definition: str | None = None,
+) -> dict:
     """
     Select the most salient claim and generate the 12-word stop signal.
     Synchronous — call via asyncio.to_thread from async routes.
@@ -463,11 +531,12 @@ def generate_layer_zero(claims: list, subject_context: str) -> dict:
             messages=[{"role": "user", "content": prompt}],
         )
         text = response.content[0].text.strip().rstrip(".")
+        cohort = cohort_definition or "Claims extracted from audio via Whisper + Claude"
         return {
             "text": text,
             "selected_finding_type": selected.get("type", "general"),
             "salience_score": round(_salience_score(selected), 3),
-            "cohort_definition": "Claims extracted from audio via Whisper + Claude",
+            "cohort_definition": cohort,
             "generated_by": model_name,
             "generation_timestamp": _now_iso(),
             "source_claim_id": selected.get("id"),
@@ -485,12 +554,21 @@ def assemble_podcast_payload(
     claims: list,
     layer_zero: dict,
     source_input: str,
+    *,
+    tier: str = "pro",
+    chunks_processed: int | None = None,
+    chunk_strategy: str | None = None,
+    canonical_entities_chunked: list[dict] | None = None,
+    content_source: str = "audio",
+    article_source_record: dict[str, Any] | None = None,
 ) -> dict:
     """
     Assemble the full FrameReceiptPayload dict from all pipeline stages.
     This is the object passed to _sign_frame_payload in main.py.
 
     source_input: "url" or "upload"
+    content_source: "audio" or "article" — article skips Whisper-specific copy.
+    article_source_record: when set with content_source article, used as sources[0].
     """
     receipt_id = f"pod_{_uuid_mod.uuid4().hex[:12]}"
     now = _now_iso()
@@ -504,16 +582,19 @@ def assemble_podcast_payload(
         operational.append({"text": lz_op, "resolution_possible": True})
 
     if not full_text:
-        op_msg = transcription.get(
-            "operational_unknown",
-            "Whisper transcription produced no output.",
+        default_op = (
+            "Article extraction produced no usable text."
+            if content_source == "article"
+            else "Whisper transcription produced no output."
         )
+        op_msg = transcription.get("operational_unknown", default_op)
         operational.append({"text": op_msg, "resolution_possible": True})
 
+    medium = "article" if content_source == "article" else "recording"
     epistemic.append({
         "text": (
             "Public records cannot establish the intent behind statements "
-            "made in this recording, regardless of transcription completeness."
+            f"made in this {medium}, regardless of text completeness."
         ),
         "resolution_possible": False,
     })
@@ -541,35 +622,54 @@ def assemble_podcast_payload(
         }
         if c.get("implication_note"):
             claim["implication_note"] = c["implication_note"]
+        if c.get("citation_chain") is not None:
+            claim["citation_chain"] = c["citation_chain"]
+        if c.get("origin_stamp"):
+            claim["origin_stamp"] = c["origin_stamp"]
         built_claims.append(claim)
 
     # ── Sources ──────────────────────────────────────────────
-    sources = [
-        {
-            "id": "s001",
-            "adapter": "audio_file",
-            "url": audio_info.get("source_url", "upload://local"),
-            "title": audio_info.get("title", "Audio source"),
-            "retrievedAt": audio_info.get("downloaded_at", now),
-            "metadata": {
-                "whisper_model": os.environ.get("FRAME_WHISPER_MODEL", "base"),
-                "language": transcription.get("language", "unknown"),
-                "duration_seconds": str(transcription.get("duration", "")),
-            },
-        }
-    ]
+    if content_source == "article" and article_source_record:
+        sources = [article_source_record]
+    else:
+        sources = [
+            {
+                "id": "s001",
+                "adapter": "audio_file",
+                "url": audio_info.get("source_url", "upload://local"),
+                "title": audio_info.get("title", "Audio source"),
+                "retrievedAt": audio_info.get("downloaded_at", now),
+                "metadata": {
+                    "whisper_model": os.environ.get("FRAME_WHISPER_MODEL", "base"),
+                    "language": transcription.get("language", "unknown"),
+                    "duration_seconds": str(transcription.get("duration", "")),
+                },
+            }
+        ]
 
     # ── Narrative ────────────────────────────────────────────
     narrative = []
     if full_text:
-        narrative.append({
-            "text": (
-                f"Audio transcribed via Whisper "
-                f"({os.environ.get('FRAME_WHISPER_MODEL', 'base')} model). "
-                f"{len(built_claims)} factual claim(s) extracted."
-            ),
-            "sourceId": "s001",
-        })
+        if content_source == "article":
+            fm = (
+                (article_source_record or {}).get("metadata") or {}
+            ).get("fetch_method", "unknown")
+            narrative.append({
+                "text": (
+                    f"Article text extracted ({fm}). "
+                    f"{len(built_claims)} factual claim(s) extracted."
+                ),
+                "sourceId": "s001",
+            })
+        else:
+            narrative.append({
+                "text": (
+                    f"Audio transcribed via Whisper "
+                    f"({os.environ.get('FRAME_WHISPER_MODEL', 'base')} model). "
+                    f"{len(built_claims)} factual claim(s) extracted."
+                ),
+                "sourceId": "s001",
+            })
 
     # ── Payload ──────────────────────────────────────────────
     payload: dict = {
@@ -586,6 +686,7 @@ def assemble_podcast_payload(
         },
         "meta": {
             "pipeline": "podcast_v2",
+            "tier": tier,
             "transcript_chars": len(full_text),
             "entities_detected": list({
                 e
@@ -595,6 +696,15 @@ def assemble_podcast_payload(
             }),
         },
     }
+    if content_source == "article":
+        payload["meta"]["input_type"] = "article"
+        payload["meta"]["source_type"] = "text"
+    if chunks_processed is not None:
+        payload["meta"]["chunks_processed"] = chunks_processed
+    if chunk_strategy:
+        payload["meta"]["chunk_strategy"] = chunk_strategy
+    if canonical_entities_chunked:
+        payload["meta"]["canonical_entities"] = canonical_entities_chunked
 
     if layer_zero.get("text"):
         payload["layer_zero"] = {
@@ -652,11 +762,39 @@ async def run_stage2_enrichment(
                 enrichment["verification_notes"]
             )
 
-        # Add adapter summary to meta
-        payload["meta"]["adapters_dispatched"] = [
-            r.get("entity_name") or r.get("entity")
-            for r in enrichment.get("adapter_results", [])
-        ]
+        # Build manifest — replaces flat adapters_dispatched
+        _manifest: list[dict[str, Any]] = []
+        for r in enrichment.get("adapter_results", []):
+            entity_label = r.get("entity_name") or r.get("entity") or "unknown"
+            alog = r.get("adapter_log")
+            if alog:
+                for entry in alog:
+                    _manifest.append({
+                        "source": entry.get("source", "unknown"),
+                        "entity": entity_label,
+                        "status": entry.get("status", "unknown"),
+                        "result_count": entry.get("result_count", 0),
+                        "queried_at": entry.get("queried_at", ""),
+                        "note": entry.get("note", ""),
+                    })
+            elif alog is None:
+                for src in r.get("adapters_run", []):
+                    _manifest.append({
+                        "source": src,
+                        "entity": entity_label,
+                        "status": "found" if r.get("found") else "not_found",
+                        "result_count": len(r.get("sources", []))
+                        if r.get("found")
+                        else 0,
+                        "queried_at": "",
+                        "note": "legacy — no per-adapter timing",
+                    })
+
+        payload["adapters_queried"] = _manifest
+        payload.setdefault("meta", {})
+        payload["meta"]["adapters_dispatched"] = list(
+            {e["source"] for e in _manifest}
+        )
 
     except Exception as e:
         # Non-fatal — payload still valid without enrichment

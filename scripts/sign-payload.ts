@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { createPrivateKey } from "node:crypto";
 import type { FrameReceiptPayload } from "@frame/types";
-import { signReceipt } from "../packages/signing/index.js";
+import { signReceipt } from "../packages/signing/dist/index.js";
 
 function getPrivateKeyPem(): string {
   const format = process.env.FRAME_KEY_FORMAT ?? "pem";

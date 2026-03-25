@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto";
 import { buildLiveLobbyingReceipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/index.js";
+import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
 
 const name = process.argv[2]?.trim() ?? "";
 const candidateId = process.argv[3]?.trim() || undefined;

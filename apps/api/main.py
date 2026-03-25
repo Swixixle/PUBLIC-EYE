@@ -32,9 +32,20 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from datetime import datetime, timezone
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
+import httpx
+
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -46,15 +57,45 @@ from adapters_podcast import (
     download_audio,
     extract_speaker_claims,
     generate_layer_zero,
+    probe_audio_duration_seconds,
     save_uploaded_audio,
     transcribe_audio,
     trim_audio_max,
 )
+from adapters.article_fetcher import ArticleFetcher
+from adapters.citation_tracer import CitationChain, enrich_claims_with_citation_traces
 from adapters.meta_ad_library import AD_LIBRARY_ADAPTER_VERSION, query_ad_library
 from implication_notes import IMPLICATION_NOTES
-from job_store import Job, create_job, get_job, mark_complete, mark_failed, mark_processing
+from adapters.contradiction import ContradictionAnalyzer, _get_source_url as _receipt_source_url
+from job_store import (
+    Job,
+    JobStatus,
+    append_stream_claim,
+    append_stream_entity,
+    create_job,
+    find_receipt_by_receipt_id,
+    get_job,
+    iter_jobs,
+    mark_complete,
+    mark_failed,
+    mark_processing,
+    update_job,
+)
+from core.chunked_pipeline import get_chunk_strategy, process_chunked_audio
+from models.tiers import ProcessingTier, get_tier_config, resolve_tier
 from router import route_claim
+from depth_map import get_depth_map_payload
 from schema_monitor import BASELINES_DIR, SCHEMA_MONITOR_VERSION, capture_baseline, load_baseline
+from actor_ledger_api import (
+    actor_ledger_append_event,
+    actor_ledger_get_actor,
+    actor_ledger_get_events,
+    validate_actor_slug,
+)
+from pattern_api import get_pattern_lib_payload, run_pattern_match
+from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
+from dispute_api import pattern_ids_in_library, run_dispute_append, run_dispute_get
+from verify_record import verify_generic_record
 
 # Repo root: two levels up from apps/api/main.py. Prefer FRAME_REPO_ROOT on Render so
 # Node subprocesses (npx tsx scripts/…) resolve scripts/ and node_modules/ regardless of uvicorn cwd.
@@ -124,6 +165,8 @@ class ClaimRecord(BaseModel):
     implication_risk: ImplicationRisk = ImplicationRisk.low
     implication_note: str | None = None
     assertedAt: str | None = None
+    citation_chain: CitationChain | None = None
+    origin_stamp: str | None = None
 
     @model_validator(mode="after")
     def note_required_for_high(self) -> ClaimRecord:
@@ -150,6 +193,53 @@ class UnknownItem(BaseModel):
 class UnknownsBlock(BaseModel):
     operational: list[UnknownItem] = Field(default_factory=list)
     epistemic: list[UnknownItem] = Field(default_factory=list)
+
+
+class SurfacePostBody(BaseModel):
+    """Layer 1 surface extraction — exactly one of `narrative` or `url`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    narrative: str | None = None
+    url: str | None = None
+
+    @model_validator(mode="after")
+    def exactly_one(self) -> SurfacePostBody:
+        has_n = bool(self.narrative and self.narrative.strip())
+        has_u = bool(self.url and self.url.strip())
+        if has_n == has_u:
+            raise ValueError("Provide exactly one of narrative or url")
+        return self
+
+
+class PatternMatchBody(BaseModel):
+    """Layer 5 pattern heuristic — narrative text only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    narrative: str = Field(..., min_length=1)
+
+
+class ActorEventBody(BaseModel):
+    """Append-only actor ledger event."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: str = Field(..., min_length=1)
+    type: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+    source: str = Field(..., min_length=1)
+    confidence_tier: str = Field(..., min_length=1)
+
+
+class DisputePostBody(BaseModel):
+    """Challenge to a pattern match flag (credibility gate)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pattern_id: str = Field(..., min_length=1)
+    counter_evidence: str = Field(..., min_length=1)
+    submitter_note: str | None = None
 
 
 class SignedReceipt(BaseModel):
@@ -219,6 +309,12 @@ class JobRequest(BaseModel):
 class PodcastInvestigateRequest(BaseModel):
     source_url: str | None = None
     subject_context: str | None = "public figure"
+
+
+class ContradictionAnalysisRequest(BaseModel):
+    receipt_a_id: str = Field(..., min_length=1)
+    receipt_b_id: str = Field(..., min_length=1)
+    entity_name: str = Field(..., min_length=1)
 
 
 app = FastAPI(title="Frame API", version="0.1.0")
@@ -571,6 +667,155 @@ def adapters() -> dict[str, list[str]]:
         "kinds": ["fec", "opensecrets", "propublica", "lobbying", "edgar", "manual", "congress", "wikidata"],
         "note": "Adapters normalize third-party data into Frame SourceRecord rows. Gap 3 routes OCR claims to fec/propublica/lobbying/congress/wikidata.",
     }
+
+
+@app.get("/v1/depth-map")
+def depth_map() -> dict[str, Any]:
+    """
+    Topographical depth map: six stacked jurisdictions, each with adapter wiring and
+    current depth availability (explicit absences are labeled, not hidden).
+    """
+    return get_depth_map_payload()
+
+
+@app.post("/v1/surface")
+async def surface_post(body: SurfacePostBody) -> dict[str, Any]:
+    """
+    Layer 1 (Surface): structured extraction from narrative text or URL via the TypeScript adapter (Anthropic).
+    """
+    if body.narrative and body.narrative.strip():
+        payload = {"narrative": body.narrative.strip()}
+    else:
+        u = (body.url or "").strip()
+        payload = {"url": u}
+    try:
+        return await asyncio.to_thread(run_surface_layer, payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=f"surface adapter output: {exc}") from exc
+
+
+@app.get("/v1/surface/slenderman")
+def surface_slenderman_benchmark() -> dict[str, Any]:
+    """
+    Inoculation baseline: fully traced Layer 1 for Slender Man (2009, Eric Knudsen / Victor Surge, Something Awful).
+    Does not invoke the adapter.
+    """
+    return SLENDERMAN_SURFACE_BASELINE
+
+
+@app.post("/v1/pattern-match")
+async def pattern_match_post(body: PatternMatchBody) -> dict[str, Any]:
+    """Layer 5: keyword/structural match against the pattern catalog (no AI, no external calls)."""
+    try:
+        return await asyncio.to_thread(run_pattern_match, body.narrative.strip())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/v1/pattern-lib")
+def pattern_lib_get() -> dict[str, Any]:
+    """Full pattern library plus counts for unsigned (not yet sealed) records."""
+    return get_pattern_lib_payload()
+
+
+@app.post("/v1/dispute")
+async def dispute_create(body: DisputePostBody) -> dict[str, Any]:
+    """Append-only dispute against a catalogued pattern (must exist in signed library)."""
+    pid = body.pattern_id.strip()
+    try:
+        ids = await asyncio.to_thread(pattern_ids_in_library)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if pid not in ids:
+        raise HTTPException(
+            status_code=404,
+            detail={"absent": True, "reason": "Pattern not found in signed library"},
+        )
+    note = body.submitter_note
+    submitter_note = (
+        note.strip()
+        if isinstance(note, str) and note.strip()
+        else None
+    )
+    entry: dict[str, Any] = {
+        "dispute_id": str(uuid.uuid4()),
+        "pattern_id": pid,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "counter_evidence": body.counter_evidence.strip(),
+        "submitter_note": submitter_note,
+        "status": "RECEIVED",
+        "resolution_note": None,
+    }
+    try:
+        return await asyncio.to_thread(run_dispute_append, entry)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/v1/dispute/{pattern_id}")
+async def dispute_list_for_pattern(pattern_id: str) -> list[dict[str, Any]]:
+    """Public transparency: all disputes filed against this pattern id."""
+    pid = pattern_id.strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="pattern_id required")
+    try:
+        return await asyncio.to_thread(run_dispute_get, pid)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/v1/actor/{slug}/events")
+async def actor_events_list(slug: str) -> list[dict[str, Any]]:
+    """Layer 4: sorted events for an actor (empty list if not in ledger)."""
+    try:
+        s = validate_actor_slug(slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        return await asyncio.to_thread(actor_ledger_get_events, s)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/v1/actor/{slug}/events")
+async def actor_events_append(slug: str, body: ActorEventBody) -> dict[str, Any]:
+    """Layer 4: append one event (creates actor row if slug is new)."""
+    try:
+        s = validate_actor_slug(slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    payload = body.model_dump()
+    try:
+        return await asyncio.to_thread(actor_ledger_append_event, s, payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/v1/actor/{slug}")
+async def actor_get(slug: str) -> dict[str, Any]:
+    """Layer 4: full actor record or explicit absent response."""
+    try:
+        s = validate_actor_slug(slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        rec = await asyncio.to_thread(actor_ledger_get_actor, s)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if rec is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"absent": True, "reason": "Actor not found in ledger"},
+        )
+    return rec
 
 
 @app.get("/v1/fec-search")
@@ -1550,6 +1795,132 @@ async def poll_job(job_id: str) -> dict[str, Any]:
     return job.to_dict()
 
 
+SSE_JOB_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+    "Access-Control-Allow-Origin": "*",
+}
+
+STAGE_PROGRESS: dict[str, int] = {
+    "pending": 5,
+    "fetching": 15,
+    "downloading": 12,
+    "transcribing": 25,
+    "extracting": 45,
+    "routing": 60,
+    "dossier": 75,
+    "narrative": 88,
+    "signing": 95,
+    "complete": 100,
+    "failed": 0,
+}
+
+STAGE_MESSAGES: dict[str, str] = {
+    "pending": "Preparing...",
+    "fetching": "Fetching article...",
+    "downloading": "Downloading source audio...",
+    "transcribing": "Transcribing audio...",
+    "extracting": "Extracting claims...",
+    "routing": "Routing entities to public records...",
+    "dossier": "Assembling dossier...",
+    "narrative": "Writing auditor narrative...",
+    "signing": "Sealing receipt...",
+    "complete": "The record is sealed.",
+    "failed": "Pipeline failed.",
+}
+
+
+def _emit_entities_from_claims(job: Job, claims: list[Any]) -> None:
+    for c in claims:
+        if not isinstance(c, dict):
+            continue
+        for e in (c.get("entities") or []):
+            if e and len(str(e).strip()) > 2:
+                append_stream_entity(job, str(e).strip(), "unknown")
+
+
+async def stream_job_events(job_id: str):
+    """Server-Sent Events: tail job stage, transcript, claims, entities, layer zero, receipt."""
+    last_stage: str | None = None
+    claimed_sent: set[str] = set()
+    entity_sent: set[str] = set()
+    layer_zero_draft_sent = False
+    layer_zero_final_sent = False
+    transcript_sent = False
+    for _ in range(720):
+        await asyncio.sleep(0.5)
+        job = get_job(job_id)
+        if not job:
+            yield f"data: {json.dumps({'event': 'error', 'message': 'job not found'})}\n\n"
+            return
+
+        st = getattr(job, "stage", "pending")
+        if st != last_stage:
+            prog = STAGE_PROGRESS.get(st, 0)
+            msg = STAGE_MESSAGES.get(st, st)
+            yield f"data: {json.dumps({'event': 'stage_update', 'stage': st, 'message': msg, 'progress': prog})}\n\n"
+            last_stage = st
+
+        receipt = job.receipt if isinstance(job.receipt, dict) else {}
+
+        if not transcript_sent and job.transcript:
+            transcript_sent = True
+            tr = str(job.transcript)
+            preview = tr[:500]
+            wc = len(tr.split())
+            yield f"data: {json.dumps({'event': 'transcript_ready', 'transcript_preview': preview, 'word_count': wc}, default=str)}\n\n"
+
+        for claim in list(job.stream_claims):
+            cid = claim.get("id")
+            if cid and cid not in claimed_sent:
+                claimed_sent.add(str(cid))
+                yield f"data: {json.dumps({'event': 'claim_found', 'claim': claim}, default=str)}\n\n"
+
+        for claim in receipt.get("claims", []) if isinstance(receipt, dict) else []:
+            cid = claim.get("id")
+            if cid and str(cid) not in claimed_sent:
+                claimed_sent.add(str(cid))
+                yield f"data: {json.dumps({'event': 'claim_found', 'claim': claim}, default=str)}\n\n"
+
+        for row in job.stream_entities:
+            name = row.get("name")
+            typ = row.get("type", "unknown")
+            key = (name or "").lower()
+            if name and key not in entity_sent:
+                entity_sent.add(key)
+                yield f"data: {json.dumps({'event': 'entity_detected', 'entity_name': name, 'entity_type': typ})}\n\n"
+
+        lz = job.stream_layer_zero or (
+            receipt.get("layer_zero") if isinstance(receipt, dict) else None
+        )
+        if isinstance(lz, dict) and not layer_zero_draft_sent:
+            layer_zero_draft_sent = True
+            yield f"data: {json.dumps({'event': 'layer_zero_draft', 'text': lz.get('text', ''), 'salience': lz.get('salience_score', 0), 'is_final': False}, default=str)}\n\n"
+
+        if job.status == JobStatus.COMPLETE and job.receipt:
+            r = job.receipt
+            if isinstance(lz, dict) and not layer_zero_final_sent:
+                layer_zero_final_sent = True
+                yield f"data: {json.dumps({'event': 'layer_zero_final', 'text': lz.get('text', ''), 'salience': lz.get('salience_score', 0), 'is_final': True}, default=str)}\n\n"
+            yield f"data: {json.dumps({'event': 'receipt_sealed', 'receipt_id': r.get('receiptId', ''), 'receipt_url': r.get('receiptUrl', ''), 'signature': r.get('signature', ''), 'content_hash': r.get('contentHash', '')}, default=str)}\n\n"
+            return
+
+        if job.status == JobStatus.FAILED:
+            yield f"data: {json.dumps({'event': 'error', 'message': job.error or 'unknown error'})}\n\n"
+            return
+
+    yield f"data: {json.dumps({'event': 'error', 'message': 'stream timeout'})}\n\n"
+
+
+@app.get("/v1/jobs/{job_id}/stream")
+async def job_events_stream(job_id: str):
+    return StreamingResponse(
+        stream_job_events(job_id),
+        media_type="text/event-stream",
+        headers=SSE_JOB_HEADERS,
+    )
+
+
 @app.post("/v1/intake")
 async def intake(request: JobRequest, background_tasks: BackgroundTasks) -> dict[str, Any]:
     """
@@ -1834,6 +2205,99 @@ def get_receipt_json(receipt_id: str) -> dict[str, Any]:
             return json.loads(row["payload"])
         finally:
             conn.close()
+
+
+def _load_receipt_for_contradiction(receipt_id: str) -> dict[str, Any] | None:
+    """Resolve signed receipt from in-memory jobs first, then SQLite ledger."""
+    rid = (receipt_id or "").strip()
+    if not rid:
+        return None
+    r = find_receipt_by_receipt_id(rid)
+    if r:
+        return r
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute("SELECT payload FROM receipts WHERE id = ?", (rid,)).fetchone()
+            if not row:
+                return None
+            return json.loads(row["payload"])
+        finally:
+            conn.close()
+
+
+@app.get("/v1/receipts")
+def list_receipts_catalog() -> dict[str, Any]:
+    """Receipt IDs and source URLs known to this server (jobs + persisted ledger)."""
+    seen: set[str] = set()
+    items: list[dict[str, Any]] = []
+    for job in iter_jobs():
+        if job.status != JobStatus.COMPLETE or not job.receipt:
+            continue
+        rec = job.receipt
+        if not isinstance(rec, dict):
+            continue
+        rid = rec.get("receiptId")
+        if not rid or rid in seen:
+            continue
+        seen.add(rid)
+        items.append(
+            {
+                "receipt_id": rid,
+                "source_url": _receipt_source_url(rec),
+                "job_id": job.job_id,
+            }
+        )
+    with _db_lock:
+        conn = sqlite3.connect(str(_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT id, payload FROM receipts ORDER BY created_at DESC LIMIT 500",
+            ).fetchall()
+            for row in rows:
+                rid = row["id"]
+                if rid in seen:
+                    continue
+                seen.add(rid)
+                try:
+                    data = json.loads(row["payload"])
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                items.append(
+                    {
+                        "receipt_id": rid,
+                        "source_url": _receipt_source_url(data),
+                        "job_id": None,
+                    }
+                )
+        finally:
+            conn.close()
+    return {"receipts": items, "count": len(items)}
+
+
+@app.post("/v1/contradiction-analysis")
+async def contradiction_analysis(
+    request: ContradictionAnalysisRequest,
+) -> dict[str, Any]:
+    a = _load_receipt_for_contradiction(request.receipt_a_id.strip())
+    b = _load_receipt_for_contradiction(request.receipt_b_id.strip())
+    if not a:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Receipt not found: {request.receipt_a_id}",
+        )
+    if not b:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Receipt not found: {request.receipt_b_id}",
+        )
+    analyzer = ContradictionAnalyzer()
+    dossier = await analyzer.compare(a, b, request.entity_name.strip())
+    return dossier.model_dump(mode="json")
 
 
 @app.get("/v1/dark-money/{candidate_id}")
@@ -2464,6 +2928,11 @@ async def _build_podcast_analysis_response(
                 results.append({"adapter": adapter, "data": None, "error": str(e)[:500]})
         claim_obj["adapterResults"] = results
 
+    try:
+        await enrich_claims_with_citation_traces(extracted_claim_objects)
+    except Exception:  # noqa: BLE001
+        pass
+
     note_parts = [
         "v1: First "
         + str(PODCAST_MAX_SECONDS // 60)
@@ -2665,38 +3134,381 @@ async def analyze_and_verify(file: UploadFile = File(...)) -> dict[str, Any]:
     return {**out, "extractedClaimObjects": body.get("extractedClaimObjects", [])}
 
 
-@app.post("/v1/podcast-investigate")
-async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, Any]:
+async def is_article_url(url: str) -> bool:
     """
-    Full investigative pipeline for audio/video URLs.
-    URL → yt-dlp → Whisper → Claude claim extraction →
-    Layer Zero → signed receipt.
-    Returns job_id immediately. Poll /v1/jobs/{job_id} for result.
+    True if URL is likely a text article, not audio/video or known podcast hosts.
+    """
+    u = (url or "").strip()
+    if not u.startswith(("http://", "https://")):
+        return False
+    try:
+        parsed = urllib.parse.urlparse(u)
+    except Exception:  # noqa: BLE001
+        return False
+    path = (parsed.path or "").lower()
+    host = (parsed.netloc or "").lower()
+    if ":" in host and not host.startswith("["):
+        host = host.split(":")[0]
+    if host.startswith("www."):
+        host = host[4:]
+
+    for ext in (".mp3", ".mp4", ".m4a", ".wav", ".ogg", ".webm"):
+        if path.endswith(ext):
+            return False
+
+    blacklist = (
+        "youtube.com",
+        "youtu.be",
+        "spotify.com",
+        "soundcloud.com",
+        "podtrac.com",
+        "megaphone.fm",
+        "simplecast.com",
+        "buzzsprout.com",
+        "anchor.fm",
+    )
+    for b in blacklist:
+        if host == b or host.endswith(f".{b}"):
+            return False
+
+    article_domains = (
+        "nytimes.com",
+        "washingtonpost.com",
+        "propublica.org",
+        "reuters.com",
+        "apnews.com",
+        "theguardian.com",
+        "substack.com",
+        "medium.com",
+        "theintercept.com",
+        "motherjones.com",
+        "politico.com",
+        "thehill.com",
+        "rollcall.com",
+        "axios.com",
+        "bloomberg.com",
+        "wsj.com",
+        "ft.com",
+    )
+    for d in article_domains:
+        if host == d or host.endswith(f".{d}"):
+            return True
+
+    for marker in ("/article/", "/news/", "/story/", "/post/"):
+        if marker in path:
+            return True
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(10.0),
+            follow_redirects=True,
+        ) as client:
+            r = await client.head(u)
+            ct = (r.headers.get("content-type") or "").lower()
+            if "text/html" in ct:
+                return True
+    except Exception:  # noqa: BLE001
+        pass
+
+    return False
+
+
+async def _investigate_article(
+    job: Job,
+    url: str,
+    tier_config: Any,
+    subject_context: str,
+    start_ms: float,
+    tier_enum: ProcessingTier,
+) -> None:
+    """Article pipeline: fetch text → claims → enrichment → signed receipt (no Whisper)."""
+    update_job(job, stage="fetching")
+    fetcher = ArticleFetcher()
+    result = await fetcher.fetch(url)
+    if not result.resolved:
+        mark_failed(
+            job,
+            f"Could not fetch article: {result.error or 'unknown error'}",
+        )
+        return
+
+    update_job(job, stage="extracting", transcript=result.text)
+
+    precontext = (
+        f"Article: {result.title or 'unknown'}\n"
+        f"Author: {result.author or 'unknown'}\n"
+        f"Publication: {result.publication or 'unknown'}\n"
+        f"Date: {result.published_date or 'unknown'}\n"
+    )
+
+    transcription: dict[str, Any] = {
+        "full_text": result.text,
+        "segments": [],
+        "duration": 0.0,
+        "language": "unknown",
+    }
+
+    claims: list[dict[str, Any]] = []
+    if result.text.strip() and os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+
+            def _extract_claims() -> list[dict[str, Any]]:
+                return extract_speaker_claims(
+                    transcription,
+                    result.title or "article",
+                    article_mode=True,
+                    precontext=precontext,
+                )
+
+            claims = await asyncio.to_thread(_extract_claims)
+        except Exception as claim_err:  # noqa: BLE001
+            print(f"[article-investigate] Claim extraction failed: {claim_err}")
+    for c in claims:
+        append_stream_claim(job, c)
+
+    if tier_config.citation_tracing:
+        try:
+            await enrich_claims_with_citation_traces(claims)
+        except Exception:  # noqa: BLE001
+            pass
+
+    update_job(job, stage="routing")
+    _emit_entities_from_claims(job, claims)
+    all_entities = list(
+        {
+            e
+            for c in claims
+            for e in (c.get("entities") or [])
+            if e and len(e) > 2
+        }
+    )
+    if all_entities:
+        try:
+            from entity.resolver import resolve_entity
+
+            for entity_name in all_entities[:5]:
+                resolved = await resolve_entity(entity_name)
+                if resolved:
+                    append_stream_entity(
+                        job,
+                        resolved.canonical_name,
+                        str(resolved.type),
+                    )
+                    print(
+                        "[article-investigate] entity resolved: "
+                        f"{resolved.canonical_name} ({resolved.type})"
+                    )
+        except Exception as entity_err:  # noqa: BLE001
+            print(f"[article-investigate] entity resolution skipped: {entity_err}")
+
+    update_job(job, stage="narrative")
+    layer_zero: dict[str, Any] = {}
+    if claims and os.environ.get("ANTHROPIC_API_KEY"):
+
+        def _gen_lz() -> dict[str, Any]:
+            return generate_layer_zero(
+                claims,
+                subject_context,
+                cohort_definition="Claims extracted from article text via Claude",
+            )
+
+        layer_zero = await asyncio.to_thread(_gen_lz)
+    update_job(job, stream_layer_zero=layer_zero)
+
+    retrieved_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    audio_info = {
+        "title": result.title or "article",
+        "source_url": url,
+        "downloaded_at": retrieved_at,
+        "path": "",
+    }
+    article_source_record = {
+        "id": "s001",
+        "adapter": "article",
+        "url": url,
+        "title": result.title or url,
+        "author": result.author,
+        "publication": result.publication,
+        "retrievedAt": retrieved_at,
+        "metadata": {
+            "word_count": result.word_count,
+            "fetch_method": result.fetch_method,
+            "published_date": result.published_date,
+        },
+    }
+
+    payload = assemble_podcast_payload(
+        audio_info=audio_info,
+        transcription=transcription,
+        claims=claims,
+        layer_zero=layer_zero,
+        source_input="url",
+        tier=tier_enum.value,
+        chunks_processed=None,
+        chunk_strategy=None,
+        canonical_entities_chunked=None,
+        content_source="article",
+        article_source_record=article_source_record,
+    )
+    update_job(job, stage="dossier")
+    all_entities_claims = list({
+        e for c in claims
+        for e in (c.get("entities") or [])
+        if e and len(e.strip()) > 2
+    })
+    stage2_adapter_results: list[dict[str, Any]] = []
+    if all_entities_claims:
+        from adapters_podcast import run_stage2_enrichment
+
+        payload, stage2_adapter_results = await run_stage2_enrichment(
+            payload=payload,
+            entities=all_entities_claims,
+            claims=claims,
+        )
+    update_job(job, stage="signing")
+    signed = await asyncio.to_thread(_sign_frame_payload, payload)
+    receipt = _with_receipt_url(signed)
+    mark_complete(job, receipt, start_ms)
+    if stage2_adapter_results and tier_config.dossier_enabled:
+        async def _run_stage3() -> None:
+            try:
+                from enrichment.stage3 import run_stage3_dossier
+
+                print(
+                    f"[stage3] background task started for receipt "
+                    f"{signed.get('receiptId')}",
+                )
+                await run_stage3_dossier(
+                    receipt=receipt,
+                    claims=claims,
+                    entities_resolved=stage2_adapter_results,
+                    dossier_enabled=tier_config.dossier_enabled,
+                    opus_narrative=tier_config.opus_narrative,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[stage3] dossier assembly error: {exc}")
+
+        asyncio.create_task(_run_stage3())
+
+
+@app.post("/v1/podcast-investigate")
+async def podcast_investigate(
+    request: PodcastInvestigateRequest,
+    x_whistle_tier: str | None = Header(default=None, alias="X-Whistle-Tier"),
+    tier: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """
+    Investigative pipeline for URLs: article pages (fetch + extract text) or
+    audio/video (yt-dlp → Whisper → claims). Same downstream stages: routing,
+    enrichment, Layer Zero, signed receipt. Returns job_id immediately;
+    poll /v1/jobs/{job_id} for result.
     """
     if not request.source_url:
         raise HTTPException(status_code=400, detail="source_url is required")
 
-    job = create_job(f"Podcast investigation: {request.source_url[:80]}")
+    tier_enum = resolve_tier(x_whistle_tier, tier)
+    tier_config = get_tier_config(tier_enum)
+    job = create_job(
+        f"Podcast investigation: {request.source_url[:80]}",
+        tier=tier_enum.value,
+    )
 
     async def _run() -> None:
         mark_processing(job)
         start_ms = time.time() * 1000
         try:
+            src = (request.source_url or "").strip()
+            if await is_article_url(src):
+                await _investigate_article(
+                    job,
+                    src,
+                    tier_config,
+                    request.subject_context or "public figure",
+                    start_ms,
+                    tier_enum,
+                )
+                return
+            update_job(job, stage="downloading")
             audio_info = await asyncio.to_thread(download_audio, request.source_url)
+            update_job(job, stage="transcribing")
+            orig_path = audio_info["path"]
+            duration_sec: float | None = audio_info.get("duration")
+            if duration_sec is None:
+                duration_sec = probe_audio_duration_seconds(orig_path)
+            if (
+                tier_config.max_duration_seconds is not None
+                and duration_sec is not None
+                and duration_sec > tier_config.max_duration_seconds
+            ):
+                mark_failed(
+                    job,
+                    (
+                        f"Audio duration exceeds {tier_enum.value} tier limit "
+                        f"({tier_config.max_duration_seconds}s). "
+                        "Upgrade to PRO for unlimited."
+                    ),
+                )
+                return
             audio_path, _was_trimmed = await asyncio.to_thread(
-                trim_audio_max, audio_info["path"], PODCAST_MAX_SECONDS
+                trim_audio_max, orig_path, PODCAST_MAX_SECONDS
             )
-            transcription = await asyncio.to_thread(transcribe_audio, audio_path)
-            claims: list[dict[str, Any]] = []
-            if transcription.get("full_text") and os.environ.get("ANTHROPIC_API_KEY"):
+            trimmed_duration = probe_audio_duration_seconds(audio_path)
+            if trimmed_duration is None:
+                trimmed_duration = 0.0
+            strategy = get_chunk_strategy(int(trimmed_duration))
+            chunked_meta: dict[str, Any] | None = None
+            used_chunked = False
+            if strategy.method != "single":
                 try:
-                    claims = await asyncio.to_thread(
-                        extract_speaker_claims,
-                        transcription,
-                        audio_info.get("title", "untitled"),
+                    chunked = await process_chunked_audio(
+                        audio_path=audio_path,
+                        duration_seconds=float(trimmed_duration),
+                        precontext=request.subject_context or "public figure",
+                        tier_config=tier_config,
                     )
-                except Exception as claim_err:  # noqa: BLE001
-                    print(f"[podcast-investigate] Claim extraction failed: {claim_err}")
+                    if chunked is not None:
+                        transcription = {
+                            "full_text": chunked["transcript"],
+                            "segments": [],
+                            "duration": float(trimmed_duration),
+                            "language": "unknown",
+                        }
+                        claims = chunked["claims"]
+                        chunked_meta = {
+                            "chunks_processed": chunked["chunks_processed"],
+                            "chunk_strategy": chunked["strategy"],
+                            "canonical_entities": chunked.get("canonical_entities") or [],
+                        }
+                        used_chunked = True
+                        ft = transcription.get("full_text") or ""
+                        update_job(job, transcript=ft, stage="extracting")
+                        for c in claims:
+                            append_stream_claim(job, c)
+                except Exception as chunk_exc:  # noqa: BLE001
+                    print(f"[podcast-investigate] chunked pipeline failed, fallback: {chunk_exc}")
+
+            if not used_chunked:
+                transcription = await asyncio.to_thread(transcribe_audio, audio_path)
+                update_job(job, transcript=transcription.get("full_text", ""), stage="extracting")
+                claims = []
+                if transcription.get("full_text") and os.environ.get("ANTHROPIC_API_KEY"):
+                    try:
+                        claims = await asyncio.to_thread(
+                            extract_speaker_claims,
+                            transcription,
+                            audio_info.get("title", "untitled"),
+                        )
+                    except Exception as claim_err:  # noqa: BLE001
+                        print(f"[podcast-investigate] Claim extraction failed: {claim_err}")
+                for c in claims:
+                    append_stream_claim(job, c)
+            if tier_config.citation_tracing:
+                try:
+                    await enrich_claims_with_citation_traces(claims)
+                except Exception:  # noqa: BLE001
+                    pass
+            update_job(job, stage="routing")
+            _emit_entities_from_claims(job, claims)
             # Wire entities from transcript into enrichment pipeline
             all_entities = list(
                 {
@@ -2713,6 +3525,11 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                     for entity_name in all_entities[:5]:  # cap at 5 per receipt
                         resolved = await resolve_entity(entity_name)
                         if resolved:
+                            append_stream_entity(
+                                job,
+                                resolved.canonical_name,
+                                str(resolved.type),
+                            )
                             print(
                                 "[podcast-investigate] entity resolved: "
                                 f"{resolved.canonical_name} ({resolved.type})"
@@ -2722,6 +3539,7 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                     print(
                         f"[podcast-investigate] entity resolution skipped: {entity_err}"
                     )
+            update_job(job, stage="narrative")
             layer_zero: dict[str, Any] = {}
             if claims and os.environ.get("ANTHROPIC_API_KEY"):
                 layer_zero = await asyncio.to_thread(
@@ -2729,13 +3547,21 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                     claims,
                     request.subject_context or "public figure",
                 )
+            update_job(job, stream_layer_zero=layer_zero)
             payload = assemble_podcast_payload(
                 audio_info=audio_info,
                 transcription=transcription,
                 claims=claims,
                 layer_zero=layer_zero,
                 source_input="url",
+                tier=tier_enum.value,
+                chunks_processed=chunked_meta["chunks_processed"] if chunked_meta else None,
+                chunk_strategy=chunked_meta["chunk_strategy"] if chunked_meta else None,
+                canonical_entities_chunked=chunked_meta.get("canonical_entities")
+                if chunked_meta
+                else None,
             )
+            update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch
             # `claims` is raw output from extract_speaker_claims (not payload.claims)
             all_entities = list({
@@ -2753,11 +3579,12 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                     claims=claims,
                 )
             # contentHash is computed in sign-payload.ts from this payload — must run after Stage 2
+            update_job(job, stage="signing")
             signed = await asyncio.to_thread(_sign_frame_payload, payload)
             receipt = _with_receipt_url(signed)
             mark_complete(job, receipt, start_ms)
             # Stage 3 — dossier assembly (background, non-blocking)
-            if stage2_adapter_results:
+            if stage2_adapter_results and tier_config.dossier_enabled:
                 async def _run_stage3() -> None:
                     try:
                         from enrichment.stage3 import run_stage3_dossier
@@ -2770,6 +3597,8 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
                             receipt=receipt,
                             claims=claims,
                             entities_resolved=stage2_adapter_results,
+                            dossier_enabled=tier_config.dossier_enabled,
+                            opus_narrative=tier_config.opus_narrative,
                         )
                     except Exception as exc:  # noqa: BLE001
                         print(f"[stage3] dossier assembly error: {exc}")
@@ -2784,6 +3613,53 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
         "status": job.status,
         "poll_url": f"/v1/jobs/{job.job_id}",
         "description": job.description,
+        "tier": tier_enum.value,
+    }
+
+
+@app.post("/v1/article-investigate")
+async def article_investigate(
+    request: PodcastInvestigateRequest,
+    x_whistle_tier: str | None = Header(default=None, alias="X-Whistle-Tier"),
+    tier: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """
+    Full investigative pipeline for article URLs (explicit).
+    Always uses the article fetch path regardless of URL heuristics.
+    Returns job_id immediately. Poll /v1/jobs/{job_id} for result.
+    """
+    if not request.source_url:
+        raise HTTPException(status_code=400, detail="source_url is required")
+
+    tier_enum = resolve_tier(x_whistle_tier, tier)
+    tier_config = get_tier_config(tier_enum)
+    job = create_job(
+        f"Article investigation: {request.source_url[:80]}",
+        tier=tier_enum.value,
+    )
+
+    async def _run() -> None:
+        mark_processing(job)
+        start_ms = time.time() * 1000
+        try:
+            await _investigate_article(
+                job,
+                request.source_url.strip(),
+                tier_config,
+                request.subject_context or "public figure",
+                start_ms,
+                tier_enum,
+            )
+        except Exception as exc:  # noqa: BLE001
+            mark_failed(job, str(exc))
+
+    asyncio.create_task(_run())
+    return {
+        "job_id": job.job_id,
+        "status": job.status,
+        "poll_url": f"/v1/jobs/{job.job_id}",
+        "description": job.description,
+        "tier": tier_enum.value,
     }
 
 
@@ -2791,6 +3667,8 @@ async def podcast_investigate(request: PodcastInvestigateRequest) -> dict[str, A
 async def podcast_investigate_upload(
     file: UploadFile = File(...),
     subject_context: str = "public figure",
+    x_whistle_tier: str | None = Header(default=None, alias="X-Whistle-Tier"),
+    tier: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """
     Same pipeline as /v1/podcast-investigate but accepts an uploaded file.
@@ -2798,27 +3676,98 @@ async def podcast_investigate_upload(
     """
     data = await file.read()
     filename = file.filename or "upload.mp3"
-    job = create_job(f"Podcast investigation (upload): {filename}")
+    tier_enum = resolve_tier(x_whistle_tier, tier)
+    tier_config = get_tier_config(tier_enum)
+    job = create_job(
+        f"Podcast investigation (upload): {filename}",
+        tier=tier_enum.value,
+    )
 
     async def _run() -> None:
         mark_processing(job)
+        update_job(job, stage="downloading")
         start_ms = time.time() * 1000
         try:
             audio_info = await asyncio.to_thread(save_uploaded_audio, data, filename)
+            update_job(job, stage="transcribing")
+            orig_path = audio_info["path"]
+            duration_sec: float | None = audio_info.get("duration")
+            if duration_sec is None:
+                duration_sec = probe_audio_duration_seconds(orig_path)
+            if (
+                tier_config.max_duration_seconds is not None
+                and duration_sec is not None
+                and duration_sec > tier_config.max_duration_seconds
+            ):
+                mark_failed(
+                    job,
+                    (
+                        f"Audio duration exceeds {tier_enum.value} tier limit "
+                        f"({tier_config.max_duration_seconds}s). "
+                        "Upgrade to PRO for unlimited."
+                    ),
+                )
+                return
             audio_path, _was_trimmed = await asyncio.to_thread(
-                trim_audio_max, audio_info["path"], PODCAST_MAX_SECONDS
+                trim_audio_max, orig_path, PODCAST_MAX_SECONDS
             )
-            transcription = await asyncio.to_thread(transcribe_audio, audio_path)
-            claims: list[dict[str, Any]] = []
-            if transcription.get("full_text") and os.environ.get("ANTHROPIC_API_KEY"):
+            trimmed_duration = probe_audio_duration_seconds(audio_path)
+            if trimmed_duration is None:
+                trimmed_duration = 0.0
+            strategy = get_chunk_strategy(int(trimmed_duration))
+            chunked_meta: dict[str, Any] | None = None
+            used_chunked = False
+            if strategy.method != "single":
                 try:
-                    claims = await asyncio.to_thread(
-                        extract_speaker_claims,
-                        transcription,
-                        audio_info.get("title", "untitled"),
+                    chunked = await process_chunked_audio(
+                        audio_path=audio_path,
+                        duration_seconds=float(trimmed_duration),
+                        precontext=subject_context or "public figure",
+                        tier_config=tier_config,
                     )
-                except Exception as claim_err:  # noqa: BLE001
-                    print(f"[podcast-investigate-upload] Claim extraction failed: {claim_err}")
+                    if chunked is not None:
+                        transcription = {
+                            "full_text": chunked["transcript"],
+                            "segments": [],
+                            "duration": float(trimmed_duration),
+                            "language": "unknown",
+                        }
+                        claims = chunked["claims"]
+                        chunked_meta = {
+                            "chunks_processed": chunked["chunks_processed"],
+                            "chunk_strategy": chunked["strategy"],
+                            "canonical_entities": chunked.get("canonical_entities") or [],
+                        }
+                        used_chunked = True
+                        ft = transcription.get("full_text") or ""
+                        update_job(job, transcript=ft, stage="extracting")
+                        for c in claims:
+                            append_stream_claim(job, c)
+                except Exception as chunk_exc:  # noqa: BLE001
+                    print(f"[podcast-investigate-upload] chunked pipeline failed, fallback: {chunk_exc}")
+
+            if not used_chunked:
+                transcription = await asyncio.to_thread(transcribe_audio, audio_path)
+                update_job(job, transcript=transcription.get("full_text", ""), stage="extracting")
+                claims = []
+                if transcription.get("full_text") and os.environ.get("ANTHROPIC_API_KEY"):
+                    try:
+                        claims = await asyncio.to_thread(
+                            extract_speaker_claims,
+                            transcription,
+                            audio_info.get("title", "untitled"),
+                        )
+                    except Exception as claim_err:  # noqa: BLE001
+                        print(f"[podcast-investigate-upload] Claim extraction failed: {claim_err}")
+                for c in claims:
+                    append_stream_claim(job, c)
+            if tier_config.citation_tracing:
+                try:
+                    await enrich_claims_with_citation_traces(claims)
+                except Exception:  # noqa: BLE001
+                    pass
+            update_job(job, stage="routing")
+            _emit_entities_from_claims(job, claims)
             # Wire entities from transcript into enrichment pipeline
             all_entities = list(
                 {
@@ -2835,6 +3784,11 @@ async def podcast_investigate_upload(
                     for entity_name in all_entities[:5]:  # cap at 5 per receipt
                         resolved = await resolve_entity(entity_name)
                         if resolved:
+                            append_stream_entity(
+                                job,
+                                resolved.canonical_name,
+                                str(resolved.type),
+                            )
                             print(
                                 "[podcast-investigate-upload] entity resolved: "
                                 f"{resolved.canonical_name} ({resolved.type})"
@@ -2844,6 +3798,7 @@ async def podcast_investigate_upload(
                     print(
                         f"[podcast-investigate-upload] entity resolution skipped: {entity_err}"
                     )
+            update_job(job, stage="narrative")
             layer_zero: dict[str, Any] = {}
             if claims and os.environ.get("ANTHROPIC_API_KEY"):
                 layer_zero = await asyncio.to_thread(
@@ -2851,13 +3806,21 @@ async def podcast_investigate_upload(
                     claims,
                     subject_context or "public figure",
                 )
+            update_job(job, stream_layer_zero=layer_zero)
             payload = assemble_podcast_payload(
                 audio_info=audio_info,
                 transcription=transcription,
                 claims=claims,
                 layer_zero=layer_zero,
                 source_input="upload",
+                tier=tier_enum.value,
+                chunks_processed=chunked_meta["chunks_processed"] if chunked_meta else None,
+                chunk_strategy=chunked_meta["chunk_strategy"] if chunked_meta else None,
+                canonical_entities_chunked=chunked_meta.get("canonical_entities")
+                if chunked_meta
+                else None,
             )
+            update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch
             # `claims` is raw output from extract_speaker_claims (not payload.claims)
             all_entities = list({
@@ -2875,11 +3838,12 @@ async def podcast_investigate_upload(
                     claims=claims,
                 )
             # contentHash is computed in sign-payload.ts from this payload — must run after Stage 2
+            update_job(job, stage="signing")
             signed = await asyncio.to_thread(_sign_frame_payload, payload)
             receipt = _with_receipt_url(signed)
             mark_complete(job, receipt, start_ms)
             # Stage 3 — dossier assembly (background, non-blocking)
-            if stage2_adapter_results:
+            if stage2_adapter_results and tier_config.dossier_enabled:
                 async def _run_stage3() -> None:
                     try:
                         from enrichment.stage3 import run_stage3_dossier
@@ -2892,6 +3856,8 @@ async def podcast_investigate_upload(
                             receipt=receipt,
                             claims=claims,
                             entities_resolved=stage2_adapter_results,
+                            dossier_enabled=tier_config.dossier_enabled,
+                            opus_narrative=tier_config.opus_narrative,
                         )
                     except Exception as exc:  # noqa: BLE001
                         print(f"[stage3] dossier assembly error: {exc}")
@@ -2906,6 +3872,7 @@ async def podcast_investigate_upload(
         "status": job.status,
         "poll_url": f"/v1/jobs/{job.job_id}",
         "description": job.description,
+        "tier": tier_enum.value,
     }
 
 
@@ -2984,10 +3951,13 @@ def jcs_sha256_demo(body: dict[str, Any]) -> dict[str, str]:
 @app.post("/v1/verify-receipt")
 async def verify_receipt(request: Request) -> dict[str, Any]:
     """
-    Verify a signed Frame receipt.
-    Works directly from raw JSON to preserve all fields
-    that TypeScript included in the hash — including
-    mode, meta, layer_zero, entities, and any future fields.
+    Two shapes:
+
+    - **Generic record:** `{ "record": object, "signature": hex, "public_key": hex }` →
+      `{ "valid": bool, "checked_at": ISO }` (JCS + @noble/ed25519, same as pattern signing).
+
+    - **Frame receipt:** signed receipt JSON with `contentHash`, `publicKey` (base64 SPKI),
+      `signature` (base64) → `{ "ok": bool, "reasons": [...] }`.
     """
     try:
         data = await request.json()
@@ -3002,6 +3972,19 @@ async def verify_receipt(request: Request) -> dict[str, Any]:
             status_code=400,
             detail="Receipt must be a JSON object",
         )
+
+    # Generic JCS + Ed25519 (hex) record verify — pattern lib, Rabbit Hole, etc.
+    if (
+        isinstance(data.get("record"), dict)
+        and isinstance(data.get("signature"), str)
+        and isinstance(data.get("public_key"), str)
+    ):
+        try:
+            return await asyncio.to_thread(verify_generic_record, data)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     reasons: list[str] = []
 

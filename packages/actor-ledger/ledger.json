@@ -1,0 +1,15 @@
+{
+  "eric-knudsen": {
+    "name": "Eric Knudsen",
+    "aliases": ["Victor Surge"],
+    "events": [
+      {
+        "date": "2009-06-10",
+        "type": "content_creation",
+        "description": "Created Slenderman character on Something Awful forums",
+        "source": "Something Awful forums thread",
+        "confidence_tier": "cross_corroborated"
+      }
+    ]
+  }
+}

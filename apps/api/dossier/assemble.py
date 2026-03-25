@@ -37,9 +37,69 @@ from models.dossier import (
 )
 from models.entity import ResolvedEntity
 
+from adapters.fara_crossref import FARACrossRefAdapter
+from adapters.revolving_door import RevolvingDoorAdapter
+
 logger = logging.getLogger(__name__)
 
 AUDITOR_SYSTEM = """You are a neutral forensic auditor for public-record alignment. You output structured factual records only: no verdict, no spin, no moral judgment. Do not use adjectives except where they denote measurable quantities (e.g. "three", "$1.2M"). Every assertion must map to a cited source id or be placed in `unknowns`. If data is missing, say so explicitly. Never infer intent from patterns alone."""
+
+
+def _collect_dossier_entity_names(
+    raw_bundle: dict[str, Any],
+    entity: ResolvedEntity,
+    dossier: DossierSchema,
+) -> list[str]:
+    """Names and labels from the dossier and raw bundle for FARA cross-reference."""
+    names: set[str] = {entity.canonical_name.strip()}
+    if entity.organization and str(entity.organization).strip():
+        names.add(str(entity.organization).strip()[:300])
+    for c in dossier.contributions:
+        if c.contributor_name:
+            names.add(c.contributor_name.strip()[:300])
+        if c.recipient_committee:
+            names.add(c.recipient_committee.strip()[:300])
+    for s in dossier.sponsors:
+        if s.sponsor_name:
+            names.add(s.sponsor_name.strip()[:300])
+    for stmt in dossier.statements:
+        t = (stmt.text or "").strip()
+        if len(t) > 3:
+            names.add(t[:200])
+    fc = raw_bundle.get("fec_contributions")
+    if isinstance(fc, list):
+        for row in fc[:30]:
+            if not isinstance(row, dict):
+                continue
+            for k in ("contributor_name", "recipient_committee"):
+                v = row.get(k)
+                if v and len(str(v)) > 2:
+                    names.add(str(v).strip()[:300])
+    return sorted({n for n in names if len(n) > 1})[:80]
+
+
+def _should_run_legal_citations(raw_bundle: dict[str, Any]) -> bool:
+    fec = raw_bundle.get("fec_totals")
+    dm = raw_bundle.get("dark_money") or {}
+    career = 0.0
+    if isinstance(fec, dict):
+        try:
+            career = float(fec.get("career_total_receipts") or 0)
+        except (TypeError, ValueError):
+            career = 0
+    has_dm = False
+    if isinstance(dm, dict) and dm:
+        rs = dm.get("risk_summary") if isinstance(dm.get("risk_summary"), dict) else {}
+        try:
+            dc = int(rs.get("disbursement_count", 0) or 0)
+        except (TypeError, ValueError):
+            dc = 0
+        try:
+            td = float(rs.get("total_disbursed") or 0)
+        except (TypeError, ValueError):
+            td = 0.0
+        has_dm = bool(dm.get("disbursements") or dc > 0 or td > 0)
+    return bool(fec) or has_dm or career > 0
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -59,6 +119,20 @@ def _coerce_unknowns_to_list(value: Any) -> list[str]:
     if isinstance(value, dict):
         return [f"{k}: {v}" for k, v in value.items()]
     return [str(value)]
+
+
+def _coerce_sonnet_dossier_payload(data: dict[str, Any]) -> None:
+    """
+    Sonnet sometimes returns social_metrics as [] (list) or sources as a mix of dicts and
+    bare strings (e.g. 'fec'). DossierSchema expects social_metrics: dict|None and
+    sources: list[dict].
+    """
+    sm = data.get("social_metrics")
+    if isinstance(sm, list):
+        data["social_metrics"] = {}
+    src = data.get("sources")
+    if isinstance(src, list):
+        data["sources"] = [s for s in src if isinstance(s, dict)]
 
 
 def _coerce_contributions(raw: list[Any]) -> list[dict[str, Any]]:
@@ -116,7 +190,17 @@ async def _run_labeled(
         return label, None
 
 
-async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSchema:
+NARRATIVE_SUMMARY_TIER_FALLBACK = (
+    "Structured public-record fields below replace the long-form narrative for this tier."
+)
+
+
+async def assemble_dossier(
+    frame_id: str,
+    entity: ResolvedEntity,
+    *,
+    opus_narrative: bool = True,
+) -> DossierSchema:
     sources: list[dict[str, Any]] = []
     unknowns: list[str] = []
 
@@ -390,6 +474,7 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
                 data["contributions"] = _coerce_contributions(
                     data["contributions"]
                 )
+            _coerce_sonnet_dossier_payload(data)
             dossier = DossierSchema.model_validate(data)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Claude sonnet dossier structuring failed: %s", exc)
@@ -464,7 +549,7 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
         )
 
     narrative = ""
-    if key:
+    if key and opus_narrative:
         try:
             client = anthropic.AsyncAnthropic(api_key=key)
             opus_context_extra = ""
@@ -504,12 +589,45 @@ async def assemble_dossier(frame_id: str, entity: ResolvedEntity) -> DossierSche
         except Exception as exc:  # noqa: BLE001
             logger.warning("Claude opus narrative failed: %s", exc)
             unknowns.append(f"opus narrative: {exc}")
+    elif not opus_narrative:
+        narrative = NARRATIVE_SUMMARY_TIER_FALLBACK
 
     if narrative:
         dossier.narrative_summary = narrative
 
     dossier.sources = sources
     dossier.unknowns = list(dict.fromkeys([*dossier.unknowns, *unknowns]))
+
+    if _should_run_legal_citations(raw_bundle):
+        try:
+            from adapters.legal_citations import LegalCitationAdapter
+
+            legal_adapter = LegalCitationAdapter()
+            legal_result = await legal_adapter.analyze(
+                entity.canonical_name,
+                raw_bundle,
+            )
+            dossier.legal_citations = legal_result.model_dump(mode="json")
+        except Exception as legal_exc:  # noqa: BLE001
+            logger.warning("Legal citation adapter failed: %s", legal_exc)
+
+    try:
+        revolving_door_adapter = RevolvingDoorAdapter()
+        revolving_result = await revolving_door_adapter.analyze(entity.canonical_name)
+        dossier.revolving_door = revolving_result.model_dump(mode="json")
+    except Exception as rd_exc:  # noqa: BLE001
+        logger.warning("Revolving door adapter failed: %s", rd_exc)
+
+    try:
+        existing_entities = _collect_dossier_entity_names(raw_bundle, entity, dossier)
+        fara_adapter = FARACrossRefAdapter()
+        fara_result = await fara_adapter.analyze(
+            entity.canonical_name,
+            existing_dossier_entities=existing_entities,
+        )
+        dossier.fara_chain = fara_result.model_dump(mode="json")
+    except Exception as fara_exc:  # noqa: BLE001
+        logger.warning("FARA cross-reference adapter failed: %s", fara_exc)
 
     await save_dossier(dossier)
     return dossier

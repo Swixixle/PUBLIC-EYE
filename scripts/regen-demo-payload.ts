@@ -8,7 +8,7 @@ import { createPrivateKey } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { signReceipt, verifyReceipt } from "../packages/signing/index.js";
+import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
 import { buildManchinFixture } from "../packages/signing/__tests__/fixtures/manchin-payload.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -1,5 +1,5 @@
-import type { FrameReceiptPayload } from "../../../types/index.js";
-import { buildClaim, epiUnknown, getImplicationNote, opUnknown } from "../../../types/index.js";
+import type { FrameReceiptPayload } from "@frame/types";
+import { buildClaim, epiUnknown, getImplicationNote, opUnknown } from "@frame/types";
 
 export function buildManchinFixture(): FrameReceiptPayload {
   return {

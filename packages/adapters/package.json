@@ -1,0 +1,20 @@
+{
+  "name": "@frame/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@frame/pattern-lib": "file:../pattern-lib",
+    "@frame/types": "file:../types"
+  },
+  "files": ["dist"]
+}

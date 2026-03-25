@@ -1,0 +1,159 @@
+[
+  {
+    "id": "coordinated-lateral-spread-v1",
+    "label": "Coordinated lateral spread",
+    "summary": "Three or more distinct organizations disseminating aligned messaging within a 72-hour window; documentable affiliation in the public record is required before enforcement claims.",
+    "constraints": {
+      "min_distinct_orgs": 3,
+      "window_hours": 72,
+      "documented_affiliation_required": true
+    },
+    "literary_analog": "Goebbels' big lie technique",
+    "signature": "8d352087e112c430bce33bb4a071d0d2bb7c986f018671f88258ed4f64b34ef39e5f3262c460aaf4aabfec47325cec7cd6f647ba8d63ecdcfe8b5a08b5f3f00c",
+    "detection": {
+      "keywords": [
+        "think tank",
+        "talking points",
+        "72 hour",
+        "72 hours",
+        "72h",
+        "coordinated",
+        "lateral",
+        "spread",
+        "organization",
+        "organizations",
+        "affiliation",
+        "alignment",
+        "messaging",
+        "multiple org"
+      ],
+      "min_hits": 2
+    },
+    "signed_at": "2026-03-25T05:25:42.299Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "astroturf-grassroots-v1",
+    "label": "Astroturf grassroots",
+    "summary": "Manufactured grassroots campaign: identical citizen-voice framing appearing across accounts that appear unaffiliated when common funding or coordination is traceable in the record; minimum five accounts; 96-hour coordination window.",
+    "constraints": {
+      "min_accounts": 5,
+      "window_hours": 96,
+      "traceable_funding_or_coordination": true
+    },
+    "literary_analog": null,
+    "signature": "548b5958dabb812c38a97cdfc6ddae9b2995c7b69309d657b1a6316c778d9f25217ff7bbb5c57b2a2bea3395595f2eeaf966f84207cc1c042054a0230e04d807",
+    "detection": {
+      "keywords": [
+        "grassroots",
+        "citizen",
+        "citizens",
+        "authentic",
+        "campaign",
+        "astroturf",
+        "funding",
+        "coordination",
+        "accounts",
+        "framing",
+        "unaffiliated",
+        "identical",
+        "talking points"
+      ],
+      "min_hits": 3
+    },
+    "signed_at": "2026-03-25T05:25:42.300Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "big-lie-repetition-v1",
+    "label": "Big lie repetition",
+    "summary": "False or unverified claim repeated across channels until familiarity is mistaken for verification; accumulation-based (no fixed time window). Documented mass-propaganda technique (e.g. Goebbels-era documentation in historical record — not a verdict on any specific modern claim).",
+    "constraints": {
+      "accumulation_based": true,
+      "time_window_hours": null
+    },
+    "literary_analog": "Goebbels — repetition and saturation",
+    "detection": {
+      "keywords": [
+        "repeated",
+        "repetition",
+        "echo chamber",
+        "every outlet",
+        "saturation",
+        "drumbeat",
+        "talking point",
+        "talking points",
+        "big lie",
+        "big-lie",
+        "parroted",
+        "echoed",
+        "misinformation repeated"
+      ],
+      "min_hits": 2
+    },
+    "signature": "292ec4a70997dd64b757dca3d611121dacccf0c321ffdf7aeb893f71accaf610a4622d05633e8236a0f88d5eee1b9dfa4316c78c1761dd56213a699cb683e902",
+    "signed_at": "2026-03-25T05:25:42.301Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "manufactured-grassroots-v1",
+    "label": "Manufactured grassroots (infrastructure)",
+    "summary": "Synthetic local-movement infrastructure: front groups, pop-up nonprofits, or paid field ops presented as organic community action when sponsor or budget provenance is obscured in the record. Complements astroturf-grassroots-v1 (which targets identical cross-account citizen framing within a short window); this pattern targets organizational shells and staged locality, not only message duplication.",
+    "constraints": {
+      "front_group_or_shell_org_emphasis": true,
+      "obscured_sponsor_or_budget": true
+    },
+    "literary_analog": null,
+    "detection": {
+      "keywords": [
+        "front group",
+        "front-group",
+        "shell nonprofit",
+        "shell organization",
+        "pop-up nonprofit",
+        "paid canvasser",
+        "paid signature",
+        "petition drive",
+        "bused in",
+        "rented crowd",
+        "astroturf",
+        "grassroots",
+        "local chapter",
+        "community coalition"
+      ],
+      "min_hits": 2
+    },
+    "signature": "b9ac70eb967a5a3cf86edfed6c2ee9d09ae76820cbcca16f69da38dd66273e21356cc209c90d0e085584fde24e5f4b7a5d3e93b191acb236a472ffb163e7d606",
+    "signed_at": "2026-03-25T05:25:42.301Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  },
+  {
+    "id": "appeal-to-ancient-wisdom-v1",
+    "label": "Appeal to ancient wisdom (origin unknown)",
+    "summary": "Claim gains credibility by attributing it to historical, ancestral, or religious authority when no contemporaneous primary source is cited in the narrative — Origin Unknown tier signal in Layer 1 when source lines are absent.",
+    "constraints": {
+      "primary_source_required_for_tier_upgrade": true
+    },
+    "literary_analog": null,
+    "detection": {
+      "keywords": [
+        "ancient wisdom",
+        "our ancestors",
+        "elders knew",
+        "tradition says",
+        "traditionally",
+        "for millennia",
+        "since ancient times",
+        "scripture",
+        "the prophets",
+        "sacred text",
+        "timeless truth",
+        "old wisdom"
+      ],
+      "min_hits": 2
+    },
+    "signature": "ec38db5944287cbb38093814ec64ff847d4c570c933038e9a6b211f0086726c092db651ad1fd2a0b2e4b0ced1bd28109613d7bcf53b44ab56fc9d079e09e4b08",
+    "signed_at": "2026-03-25T05:25:42.301Z",
+    "public_key": "13609a48177ff29523089a970c7d2278fd759b8ef76a73c406bea6c9ca1d015a"
+  }
+]

@@ -1,6 +1,6 @@
 {
   "source_id": "lda",
-  "captured_at": "2026-03-23T13:39:12.339321+00:00",
+  "captured_at": "2026-03-24T05:24:54.635208+00:00",
   "endpoint_description": "Senate LDA /api/v1/filings/ \u2014 registrant name search",
   "schema_monitor_version": "schema_monitor_v1",
   "full_schema_hash": "b94a36769b3da1819da0c4faec5499c8d511da8b424f0605893bd51fb5a7a5c4",
@@ -628,11 +628,21 @@
       "captured_at": "2026-03-23T13:38:17.439630+00:00",
       "full_schema_hash": "0b4a79988a8a52600a13d17170aa0b89992ee7827a89bf1ed4ed391de8f286b9",
       "critical_fields_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "captured_at": "2026-03-23T13:39:12.339321+00:00",
+      "full_schema_hash": "b94a36769b3da1819da0c4faec5499c8d511da8b424f0605893bd51fb5a7a5c4",
+      "critical_fields_hash": "736e75816e34368586bfdf9e2d47e38bdb51fb2806e779b26f7a53e5c06c7250"
+    },
+    {
+      "captured_at": "2026-03-24T05:02:07.645558+00:00",
+      "full_schema_hash": "0b4a79988a8a52600a13d17170aa0b89992ee7827a89bf1ed4ed391de8f286b9",
+      "critical_fields_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ],
-  "version_history_count": 14,
-  "last_verified_at": "2026-03-24T01:23:39.820598+00:00",
+  "version_history_count": 16,
+  "last_verified_at": "2026-03-25T01:25:55.371144+00:00",
   "previous_full_hash": "0b4a79988a8a52600a13d17170aa0b89992ee7827a89bf1ed4ed391de8f286b9",
   "schema_changed": true,
-  "change_detected_at": "2026-03-23T13:39:12.339321+00:00"
+  "change_detected_at": "2026-03-24T05:24:54.635208+00:00"
 }

@@ -25,6 +25,10 @@ services:
         sync: false
       - key: FRAME_PUBLIC_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FEC_API_KEY
+        sync: false
   - type: worker
     name: frame-worker
     runtime: python

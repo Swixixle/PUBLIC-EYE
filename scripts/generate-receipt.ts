@@ -1,6 +1,6 @@
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { buildLiveFecReceipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/index.js";
+import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
 
 function getPrivateKeyPem(): string {
   const format = process.env.FRAME_KEY_FORMAT ?? "pem";

@@ -98,6 +98,10 @@ export interface ClaimRecord {
   implication_risk: ImplicationRisk;
   /** Required when `implication_risk` is `high` — deterministic boundary, signed into the receipt. */
   implication_note?: string;
+  /** Optional citation provenance chain (e.g. from CitationTracer). */
+  citation_chain?: Record<string, unknown> | null;
+  /** Human-readable origin hint, e.g. entity + outlet + date. */
+  origin_stamp?: string | null;
   source_model?: {
     model: string;
     version: string;
@@ -220,3 +224,9 @@ export interface NarrativeViolation {
   /** Matched token when applicable. */
   token?: string;
 }
+
+export * from "./depth.js";
+export * from "./surface-result.js";
+export * from "./pattern-result.js";
+export * from "./actor.js";
+export * from "./dispute.js";

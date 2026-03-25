@@ -17,6 +17,9 @@ async def run_stage3_dossier(
     receipt: dict,
     claims: list[dict],
     entities_resolved: list[dict],
+    *,
+    dossier_enabled: bool = True,
+    opus_narrative: bool = True,
 ) -> dict[str, Any]:
     """
     For each resolved entity from Stage 2, assemble a full dossier.
@@ -35,6 +38,13 @@ async def run_stage3_dossier(
         "dossier_ids": [],
         "operational_unknowns": [],
     }
+
+    if not dossier_enabled:
+        summary["operational_unknowns"].append({
+            "text": "Dossier assembly disabled for this processing tier.",
+            "resolution_possible": True,
+        })
+        return summary
 
     if not entities_resolved:
         summary["operational_unknowns"].append({
@@ -65,6 +75,7 @@ async def run_stage3_dossier(
                 entity_name=entity_name,
                 entity_info=entity_info,
                 receipt=receipt,
+                opus_narrative=opus_narrative,
             )
             summary["dossiers_complete"] += 1
             summary["dossier_ids"].append(dossier_id)
@@ -99,6 +110,8 @@ async def _assemble_one_dossier(
     entity_name: str,
     entity_info: dict,
     receipt: dict,
+    *,
+    opus_narrative: bool = True,
 ) -> str:
     """
     Build a Frame + ResolvedEntity and run assemble_dossier.
@@ -143,7 +156,7 @@ async def _assemble_one_dossier(
         enrichment_path=enrichment_path,
     )
 
-    dossier = await assemble_dossier(frame_id, resolved)
+    dossier = await assemble_dossier(frame_id, resolved, opus_narrative=opus_narrative)
     return dossier.frame_id
 
 

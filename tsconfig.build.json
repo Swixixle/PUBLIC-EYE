@@ -2,6 +2,10 @@
   "files": [],
   "references": [
     { "path": "packages/types" },
+    { "path": "packages/dispute-log" },
+    { "path": "packages/actor-ledger" },
+    { "path": "packages/pattern-lib" },
+    { "path": "packages/adapters" },
     { "path": "packages/sources" },
     { "path": "packages/signing" }
   ]

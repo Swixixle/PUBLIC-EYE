@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Frame — Full System Brief</title>
+<title>Rabbit Hole — Full System Brief</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -95,7 +95,7 @@ function RoundtableSection() {
   );
 }
 
-function FramePitch() {
+function RabbitHolePitch() {
   const [tab, setTab] = useState(0);
   const tabs = [
     'Mission',
@@ -153,7 +153,7 @@ function FramePitch() {
         {tab === 0 && (
           <section>
             <p style={{ fontSize: 17, lineHeight: 1.85, color: COLORS.text }}>
-              Frame turns claims about public figures into <strong style={{ color: COLORS.accent, fontWeight: 500 }}>signed receipts</strong>:
+              Rabbit Hole turns claims about public figures into <strong style={{ color: COLORS.accent, fontWeight: 500 }}>signed receipts</strong>:
               neutral narrative, primary sources, split <code style={{ fontSize: 14 }}>unknowns</code>, and Ed25519 over JCS (RFC 8785).
             </p>
           </section>
@@ -162,7 +162,7 @@ function FramePitch() {
           <section>
             <p style={{ fontSize: 16, lineHeight: 1.8, color: COLORS.muted }}>
               Screenshots and clips spread faster than fact-checks. Long synchronous API calls time out on free tiers and in browsers.
-              Frame separates <strong style={{ color: COLORS.text }}>fetch</strong>, <strong style={{ color: COLORS.text }}>adapters</strong>, and <strong style={{ color: COLORS.text }}>signing</strong> so each layer can evolve independently.
+              Rabbit Hole separates <strong style={{ color: COLORS.text }}>fetch</strong>, <strong style={{ color: COLORS.text }}>adapters</strong>, and <strong style={{ color: COLORS.text }}>signing</strong> so each layer can evolve independently.
             </p>
           </section>
         )}
@@ -217,14 +217,14 @@ function FramePitch() {
         )}
       </main>
       <footer style={{ padding: 24, borderTop: `1px solid ${COLORS.border}`, textAlign: 'center', fontSize: 11, color: COLORS.muted, letterSpacing: '0.1em' }}>
-        Frame · Ed25519 · JCS · FetchAdapter
+        Rabbit Hole · Ed25519 · JCS · FetchAdapter
       </footer>
     </div>
   );
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<FramePitch />);
+root.render(<RabbitHolePitch />);
 </script>
 </body>
 </html>

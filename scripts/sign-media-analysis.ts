@@ -1,7 +1,7 @@
 import type { FrameReceiptPayload, ImplicationRisk } from "@frame/types";
 import { buildClaim, epiUnknown, getImplicationNote, opUnknown } from "@frame/types";
 import { createHash, createPrivateKey, randomUUID } from "node:crypto";
-import { signReceipt } from "../packages/signing/index.js";
+import { signReceipt } from "../packages/signing/dist/index.js";
 
 /** Matches SourceRecord.metadata contract from analyze-media / _verify_and_snapshot_source */
 type VerificationMeta = {

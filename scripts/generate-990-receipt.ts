@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto";
 import { buildLive990Receipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/index.js";
+import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
 
 const orgName = process.argv[2]?.trim() ?? "";
 const ein = process.argv[3]?.trim() || undefined;

@@ -90,3 +90,6 @@ class DossierSchema(BaseModel):
     sources: list[dict[str, Any]] = Field(default_factory=list)
     unknowns: list[str] = Field(default_factory=list)
     narrative_summary: str = ""
+    legal_citations: dict[str, Any] | None = None
+    revolving_door: dict[str, Any] | None = None
+    fara_chain: dict[str, Any] | None = None

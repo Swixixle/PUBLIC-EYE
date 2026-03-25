@@ -1,6 +1,6 @@
 import { createPrivateKey } from "node:crypto";
 import { buildCombinedPoliticianReceipt } from "../packages/sources/index.js";
-import { signReceipt, verifyReceipt } from "../packages/signing/index.js";
+import { signReceipt, verifyReceipt } from "../packages/signing/dist/index.js";
 
 const candidateId = process.argv[2]?.trim() ?? "";
 const lobbyingClients: string[] = JSON.parse(process.argv[3] ?? "[]");

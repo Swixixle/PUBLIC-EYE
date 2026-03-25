@@ -83,6 +83,7 @@ async def dispatch_entity_enrichment(
                 "fec_id": result.get("fec_id"),
                 "wikidata_id": result.get("wikidata_id"),
                 "organization": result.get("organization", ""),
+                "adapter_log": result.get("adapter_log", []),
             })
 
     # If no named entities produced results, document that
@@ -116,12 +117,14 @@ async def _enrich_single_entity(
         "operational_unknowns": [],
         "found": False,
     }
+    adapter_log: list[dict] = []
 
     # Determine entity type from name patterns
     is_person = _looks_like_person(entity)
     is_org = not is_person
 
     # Always try Wikidata for named entities
+    _t = _now_iso()
     try:
         wikidata_result = await asyncio.wait_for(
             asyncio.to_thread(_fetch_wikidata, entity),
@@ -138,7 +141,23 @@ async def _enrich_single_entity(
             )
             if wikidata_id:
                 result["wikidata_id"] = wikidata_id
-    except Exception:
+        wd_src = (
+            wikidata_result.get("sources", []) if wikidata_result else []
+        )
+        adapter_log.append({
+            "source": "wikidata",
+            "status": "found" if wd_src else "not_found",
+            "result_count": len(wd_src),
+            "queried_at": _t,
+        })
+    except Exception as exc:
+        adapter_log.append({
+            "source": "wikidata",
+            "status": "error",
+            "result_count": 0,
+            "queried_at": _t,
+            "note": str(exc)[:120],
+        })
         result["operational_unknowns"].append({
             "text": f"Wikidata lookup timed out for '{entity}'.",
             "resolution_possible": True,
@@ -146,6 +165,7 @@ async def _enrich_single_entity(
 
     # Try ProPublica 990 for orgs and known philanthropists
     if is_org or _known_philanthropist(entity):
+        _t = _now_iso()
         try:
             nonprofit_result = await asyncio.wait_for(
                 asyncio.to_thread(_fetch_990, entity),
@@ -171,7 +191,25 @@ async def _enrich_single_entity(
                         f"ProPublica 990 data found for '{entity}': "
                         f"most recent total revenue ${total:,.0f}"
                     )
-        except Exception:
+            np_src = (
+                nonprofit_result.get("sources", [])
+                if nonprofit_result
+                else []
+            )
+            adapter_log.append({
+                "source": "propublica_990",
+                "status": "found" if np_src else "not_found",
+                "result_count": len(np_src),
+                "queried_at": _t,
+            })
+        except Exception as exc:
+            adapter_log.append({
+                "source": "propublica_990",
+                "status": "error",
+                "result_count": 0,
+                "queried_at": _t,
+                "note": str(exc)[:120],
+            })
             result["operational_unknowns"].append({
                 "text": (
                     f"ProPublica 990 lookup failed for '{entity}'. "
@@ -183,6 +221,7 @@ async def _enrich_single_entity(
 
     # Try FEC for politicians and known political donors
     if _known_political_donor(entity) or _looks_like_politician(entity):
+        _t = _now_iso()
         try:
             fec_result = await asyncio.wait_for(
                 asyncio.to_thread(_fetch_fec, entity),
@@ -198,7 +237,21 @@ async def _enrich_single_entity(
                         f"FEC records found for '{entity}': "
                         f"${amount:,.0f} in documented contributions"
                     )
-        except Exception:
+            fec_src = fec_result.get("sources", []) if fec_result else []
+            adapter_log.append({
+                "source": "fec",
+                "status": "found" if fec_src else "not_found",
+                "result_count": len(fec_src),
+                "queried_at": _t,
+            })
+        except Exception as exc:
+            adapter_log.append({
+                "source": "fec",
+                "status": "error",
+                "result_count": 0,
+                "queried_at": _t,
+                "note": str(exc)[:120],
+            })
             result["operational_unknowns"].append({
                 "text": (
                     f"FEC lookup failed for '{entity}'. "
@@ -207,6 +260,7 @@ async def _enrich_single_entity(
                 "resolution_possible": True,
             })
 
+    result["adapter_log"] = adapter_log
     return result
 
 

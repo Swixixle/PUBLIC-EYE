@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rabbit Hole — Public Record Verification</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=IBM+Plex+Mono:wght@300;400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a09;
+    --surface: #111110;
+    --surface-2: #181816;
+    --border: #252520;
+    --border-light: #1c1c19;
+    --text: #ede8dc;
+    --text-2: #8a8478;
+    --text-3: #4a4840;
+    --amber: #c8992a;
+    --amber-bright: #e8b840;
+    --amber-dim: #7a5e1a;
+    --amber-glow: rgba(200,153,42,0.08);
+    --green: #3a7a4c;
+    --green-bright: #4ea864;
+    --red: #7a3a3a;
+    --red-bright: #b04848;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:300;line-height:1.6;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+  .page{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:0 28px;}
+  header{padding:44px 0 36px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;animation:fadeDown 0.5s ease both;}
+  .header-left{display:flex;align-items:baseline;gap:18px;}
+  .logo{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:0.35em;text-transform:uppercase;color:var(--amber);}
+  .logo-sep{width:1px;height:13px;background:var(--border);display:inline-block;vertical-align:middle;}
+  .header-tag{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);letter-spacing:0.1em;}
+  .header-right{display:flex;align-items:center;gap:6px;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green-bright);animation:pulse 2s infinite;}
+  .live-label{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--green-bright);letter-spacing:0.2em;text-transform:uppercase;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+  .hero{padding:72px 0 56px;border-bottom:1px solid var(--border);animation:fadeUp 0.6s ease 0.1s both;}
+  .hero-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-3);margin-bottom:24px;}
+  .hero-title{font-family:'Cormorant Garamond',serif;font-size:clamp(38px,6vw,64px);font-weight:300;line-height:1.1;color:var(--text);margin-bottom:20px;max-width:640px;}
+  .hero-title em{font-style:italic;color:var(--amber);}
+  .hero-sub{font-size:14px;color:var(--text-2);max-width:520px;line-height:1.8;margin-bottom:48px;}
+  .search-form{display:flex;flex-direction:column;gap:16px;}
+  .search-row{display:flex;gap:0;border:1px solid var(--border);background:var(--surface);transition:border-color 0.2s;}
+  .search-row:focus-within{border-color:var(--amber-dim);}
+  .search-input{flex:1;background:transparent;border:none;color:var(--text);font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic;padding:18px 24px;outline:none;}
+  .search-input::placeholder{color:var(--text-3);font-style:italic;}
+  .search-btn{background:var(--amber-dim);border:none;color:var(--amber-bright);font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.3em;text-transform:uppercase;padding:0 28px;cursor:pointer;transition:background 0.2s,color 0.2s;white-space:nowrap;}
+  .search-btn:hover{background:var(--amber);color:var(--bg);}
+  .search-btn:disabled{opacity:0.4;cursor:not-allowed;}
+  .type-selector{display:flex;gap:0;flex-wrap:wrap;}
+  .type-btn{background:transparent;border:1px solid var(--border);border-right:none;color:var(--text-3);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;padding:10px 18px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+  .type-btn:last-child{border-right:1px solid var(--border);}
+  .type-btn:hover{color:var(--text);background:var(--surface);}
+  .type-btn.active{background:var(--amber-glow);border-color:var(--amber-dim);color:var(--amber);}
+  .extra-fields{display:none;flex-direction:column;gap:10px;}
+  .extra-fields.visible{display:flex;}
+  .field-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .field-input{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:10px 14px;outline:none;transition:border-color 0.2s;}
+  .field-input::placeholder{color:var(--text-3);}
+  .field-input:focus{border-color:var(--amber-dim);color:var(--text);}
+  .field-label{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px;}
+  .type-desc{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);line-height:1.8;min-height:18px;}
+  .status-bar{display:none;align-items:center;gap:12px;padding:14px 0;}
+  .status-bar.visible{display:flex;}
+  .status-spinner{width:10px;height:10px;border:1.5px solid var(--amber-dim);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .status-text{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-2);letter-spacing:0.1em;}
+  .error-box{display:none;padding:16px 20px;background:rgba(122,58,58,0.08);border:1px solid var(--red);border-left:3px solid var(--red-bright);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--red-bright);line-height:1.7;}
+  .error-box.visible{display:block;}
+  .receipt-output{display:none;padding:56px 0;border-bottom:1px solid var(--border);animation:fadeUp 0.5s ease both;}
+  .receipt-output.visible{display:block;}
+  .section-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px;}
+  .receipt-claim{font-family:'Cormorant Garamond',serif;font-size:clamp(26px,4vw,42px);font-weight:300;font-style:italic;line-height:1.25;color:var(--text);margin-bottom:20px;}
+  .receipt-meta{display:flex;flex-wrap:wrap;gap:20px;margin-bottom:32px;}
+  .receipt-meta-item{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-3);}
+  .receipt-meta-item strong{color:var(--text-2);font-weight:400;}
+  .verify-stamp{display:flex;align-items:center;gap:14px;opacity:0;transform:translateY(6px);transition:all 0.4s ease;}
+  .verify-stamp.visible{opacity:1;transform:translateY(0);}
+  .stamp-badge{display:flex;align-items:center;gap:8px;padding:9px 18px;border:1.5px solid;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:0.2em;text-transform:uppercase;}
+  .stamp-badge.valid{border-color:var(--green);color:var(--green-bright);background:rgba(58,122,76,0.06);}
+  .stamp-badge.invalid{border-color:var(--red);color:var(--red-bright);background:rgba(122,58,58,0.06);}
+  .stamp-detail{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);line-height:1.9;}
+  .hash-display{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);word-break:break-all;padding:10px 14px;background:var(--surface);border-left:2px solid var(--amber-dim);margin-top:12px;display:none;}
+  .hash-display.visible{display:block;}
+  .evidence-section{margin-top:48px;}
+  .evidence-list{list-style:none;margin-top:20px;}
+  .evidence-item{display:grid;grid-template-columns:44px 1fr;opacity:0;transform:translateX(-10px);transition:all 0.35s ease;}
+  .evidence-item.visible{opacity:1;transform:translateX(0);}
+  .evidence-num{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber-dim);padding-top:20px;}
+  .evidence-body{padding:20px 0;border-bottom:1px solid var(--border-light);}
+  .evidence-item:last-child .evidence-body{border-bottom:none;}
+  .evidence-text{font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:400;line-height:1.55;color:var(--text);margin-bottom:8px;}
+  .evidence-source{display:inline-flex;align-items:center;gap:5px;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.08em;color:var(--amber);text-decoration:none;opacity:0.6;text-transform:uppercase;transition:opacity 0.2s;}
+  .evidence-source:hover{opacity:1;}
+  .evidence-source::before{content:'→';}
+  .sources-section{margin-top:48px;}
+  .sources-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:20px;}
+  .source-card{background:var(--surface);border:1px solid var(--border);padding:14px 16px;text-decoration:none;color:inherit;display:block;transition:border-color 0.2s,background 0.2s;position:relative;overflow:hidden;}
+  .source-card::after{content:'↗';position:absolute;top:10px;right:12px;font-size:11px;color:var(--text-3);transition:all 0.2s;}
+  .source-card:hover{border-color:var(--amber-dim);background:var(--surface-2);}
+  .source-card:hover::after{color:var(--amber);transform:translate(2px,-2px);}
+  .source-type{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:0.3em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;opacity:0.6;}
+  .source-title{font-size:12px;color:var(--text);line-height:1.4;margin-bottom:6px;padding-right:18px;}
+  .source-domain{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);}
+  .sample-section{padding:48px 0;border-bottom:1px solid var(--border);}
+  .sample-card{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:border-color 0.2s,background 0.2s;gap:20px;flex-wrap:wrap;}
+  .sample-card:hover{border-color:var(--amber-dim);background:var(--surface-2);}
+  .sample-claim{font-family:'Cormorant Garamond',serif;font-size:18px;font-style:italic;color:var(--text);flex:1;}
+  .sample-meta{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);text-align:right;white-space:nowrap;}
+  .sample-arrow{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber-dim);transition:all 0.2s;flex-shrink:0;}
+  .sample-card:hover .sample-arrow{color:var(--amber);transform:translateX(4px);}
+  .verify-section{padding:48px 0;border-bottom:1px solid var(--border);}
+  .verify-intro{font-size:13px;color:var(--text-3);margin-top:8px;margin-bottom:16px;}
+  textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:14px;resize:vertical;min-height:120px;line-height:1.6;outline:none;transition:border-color 0.2s;}
+  textarea:focus{border-color:var(--amber-dim);}
+  .btn{background:transparent;border:1px solid var(--amber-dim);color:var(--amber);font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;text-transform:uppercase;padding:9px 22px;cursor:pointer;margin-top:10px;transition:background 0.2s,color 0.2s;}
+  .btn:hover{background:var(--amber-glow);color:var(--amber-bright);}
+  #manual-result{display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);color:var(--text-2);white-space:pre-wrap;}
+  #manual-result.visible{display:block;}
+  footer{padding:24px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  .footer-left{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);letter-spacing:0.08em;}
+  .footer-right a{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);text-decoration:none;letter-spacing:0.08em;transition:color 0.2s;}
+  .footer-right a:hover{color:var(--amber);}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadeDown{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);}}
+  .main-tabs{max-width:900px;margin:0 auto;padding:0 28px;display:flex;gap:0;border-bottom:1px solid var(--border);}
+  .main-tab{background:transparent;border:none;color:var(--text-3);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;padding:14px 22px;cursor:pointer;border-bottom:2px solid transparent;transition:color .2s;}
+  .main-tab:hover{color:var(--text-2);}
+  .main-tab.active{color:var(--amber);border-bottom-color:var(--amber);}
+  .ts-badge{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--amber-bright);letter-spacing:0.08em;margin-right:8px;}
+  @media(max-width:600px){.type-selector{flex-direction:column;}.type-btn{border-right:1px solid var(--border)!important;}.sources-grid{grid-template-columns:1fr;}.evidence-item{grid-template-columns:36px 1fr;}}
+
+  /* —— Media tab (Task 2.1) —— */
+  .media-tab-panel .input-group{margin-bottom:8px;}
+  .media-tab-panel .input-label{display:block;margin-bottom:4px;}
+  .media-url-input{width:100%;font-size:16px;padding:12px 16px;border-radius:6px;margin-top:6px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;}
+  .media-url-input:focus{outline:none;border-color:var(--amber-dim);}
+  .input-hint{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:6px;}
+  .or-divider{text-align:center;color:var(--text-3);margin:20px 0;font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .or-divider span{padding:0 12px;}
+  .media-dropzone{border:2px dashed var(--border);border-radius:8px;padding:40px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--surface);}
+  .media-dropzone:hover,.media-dropzone.dragover{border-color:var(--amber-dim);background:var(--amber-glow);}
+  .dropzone-icon{font-size:24px;margin-bottom:8px;color:var(--text-3);}
+  .dropzone-label{font-size:15px;margin-bottom:4px;color:var(--text);}
+  .dropzone-hint{font-size:12px;color:var(--text-3);font-family:'IBM Plex Mono',monospace;}
+  .file-selected-indicator{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .clear-file-btn{background:transparent;border:none;color:var(--text-3);cursor:pointer;font-size:14px;}
+  .media-analyze-btn{width:100%;padding:14px;font-size:14px;font-weight:500;margin-top:16px;border-radius:6px;cursor:pointer;border:none;background:var(--amber-dim);color:var(--amber-bright);font-family:'IBM Plex Mono',monospace;letter-spacing:0.2em;text-transform:uppercase;transition:background .2s;}
+  .media-analyze-btn:hover:not(:disabled){background:var(--amber);color:var(--bg);}
+  .media-analyze-btn:disabled{opacity:.4;cursor:not-allowed;}
+  .processing-status{text-align:center;padding:40px 0;}
+  .media-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .job-id-display{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:8px;word-break:break-all;}
+  .hash-preview-block{margin:16px 0;padding:16px;border-radius:6px;background:var(--surface);border-left:3px solid var(--amber-dim);}
+  .hash-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;color:var(--text-3);margin-bottom:6px;}
+  .hash-value-line{font-family:'IBM Plex Mono',monospace;font-size:11px;word-break:break-all;color:var(--amber-bright);}
+  .receipt-card{border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:16px;background:var(--surface);}
+  .receipt-header{padding:20px 24px;background:var(--surface-2);border-bottom:1px solid var(--border);}
+  .receipt-title{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;color:var(--amber);margin-bottom:8px;}
+  .receipt-id-line,.receipt-ts-line{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-2);}
+  .receipt-section{padding:20px 24px;border-bottom:1px solid var(--border-light);}
+  .receipt-section .section-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.25em;color:var(--text-3);margin-bottom:10px;}
+  .receipt-subject{font-size:15px;line-height:1.6;color:var(--text);}
+  .receipt-hash.monospace{font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .unknowns-section{background:rgba(200,153,42,0.04);border-left:3px solid var(--amber-dim);}
+  .unknown-item{font-size:13px;line-height:1.6;padding:8px 0;border-bottom:1px solid var(--border-light);color:var(--text-2);}
+  .unknown-item:last-child{border-bottom:none;}
+  .unknown-type{font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:500;letter-spacing:0.15em;margin-right:8px;padding:2px 6px;border-radius:3px;background:var(--surface);}
+  .unknown-item.operational .unknown-type{color:var(--amber-bright);}
+  .unknown-item.epistemic .unknown-type{color:var(--text-3);}
+  .source-item{font-size:12px;line-height:1.8;color:var(--text-2);font-family:'IBM Plex Mono',monospace;}
+  .trust-footer{padding:16px 24px;}
+  .trust-footer summary{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.15em;cursor:pointer;color:var(--text-3);}
+  .trust-footer-content{margin-top:16px;}
+  .trust-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;color:var(--text-3);margin-bottom:6px;}
+  .verify-btn{margin-top:16px;padding:10px 20px;font-size:11px;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--amber);font-family:'IBM Plex Mono',monospace;}
+  .verify-pass{color:var(--green-bright);font-weight:500;}
+  .verify-fail{color:var(--red-bright);font-weight:500;}
+  .raw-json{font-family:'IBM Plex Mono',monospace;font-size:10px;overflow-x:auto;padding:12px;background:var(--bg);border-radius:4px;margin-top:8px;max-height:300px;overflow-y:auto;color:var(--text-2);}
+  .reset-btn{width:100%;padding:12px;font-size:12px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;color:var(--text-2);font-family:'IBM Plex Mono',monospace;margin-top:8px;}
+  .error-banner{padding:12px 16px;background:rgba(122,58,58,0.12);border:1px solid var(--red);border-radius:6px;font-size:13px;color:var(--red-bright);margin-bottom:16px;font-family:'IBM Plex Mono',monospace;}
+  .ocr-text{font-size:13px;line-height:1.6;white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:4px;font-family:'IBM Plex Mono',monospace;color:var(--text-2);}
+  .custody-line{font-size:12px;line-height:1.8;color:var(--text-2);font-family:'IBM Plex Mono',monospace;}
+  @media(max-width:480px){.receipt-section{padding:16px;}.receipt-header{padding:16px;}.media-url-input{font-size:16px;}}
+
+  /* Ad Spend / Meta Ad Library */
+  .ad-library-inputs{display:none;flex:1;align-items:center;gap:12px;flex-wrap:wrap;min-width:0;}
+  .ad-library-inputs .search-input{flex:1;min-width:180px;}
+  .country-select{min-width:160px;width:auto;background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:10px 14px;border-radius:0;}
+  #ad-library-summary{margin-bottom:20px;}
+  .ad-library-result{padding:8px 0 16px;}
+  .ad-library-result .result-headline{font-size:18px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:10px;color:var(--text);font-family:'Cormorant Garamond',serif;}
+  .active-badge{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.1em;padding:3px 8px;background:rgba(176,72,72,0.12);border:1px solid var(--red);color:var(--red-bright);border-radius:3px;text-transform:uppercase;}
+  .active-dot{color:var(--red-bright);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  .funding-section{margin:16px 0;}
+  .ad-library-result .funding-label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.2em;color:var(--text-3);margin-bottom:8px;}
+  .funding-entity{font-size:14px;padding:6px 0;border-bottom:1px solid var(--border-light);font-weight:500;color:var(--text);}
+  .no-entity{font-size:13px;color:var(--text-3);font-style:italic;}
+  .ad-library-caveat{font-size:12px;color:var(--text-3);font-style:italic;margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light);}
+  .result-caveat{font-size:12px;color:var(--text-3);font-style:italic;margin-top:8px;}
+  .ad-spend-table-wrapper{margin:16px 0;overflow-x:auto;}
+  .ad-spend-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .ad-spend-table th{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.1em;color:var(--text-3);text-align:left;padding:8px;border-bottom:1px solid var(--border);}
+  .ad-spend-table td{padding:8px;border-bottom:1px solid var(--border-light);vertical-align:top;color:var(--text-2);}
+  .table-overflow-note{font-size:11px;color:var(--text-3);text-align:right;margin-top:4px;font-family:'IBM Plex Mono',monospace;}
+  .ad-library-result.no-results .result-headline{color:var(--text-3);}
+  .ad-library-result .result-sub{font-size:14px;color:var(--text-2);line-height:1.6;}
+  @media(max-width:480px){
+    .ad-spend-table th:nth-child(3),.ad-spend-table td:nth-child(3){display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="header-left">
+      <span class="logo">Rabbit Hole</span>
+      <span class="logo-sep"></span>
+      <span class="header-tag">cryptographic public record verification</span>
+    </div>
+    <div class="header-right">
+      <div class="live-dot"></div>
+      <span class="live-label">Live</span>
+    </div>
+  </header>
+
+  <nav class="main-tabs">
+    <button type="button" class="main-tab active" id="tab-records" onclick="showMainPanel('records')">Public records</button>
+    <button type="button" class="main-tab" id="tab-media" onclick="showMainPanel('media')">Media</button>
+    <button type="button" class="main-tab" id="tab-podcast" onclick="showMainPanel('podcast')">Podcast / Video</button>
+  </nav>
+
+  <div id="panel-records">
+  <section class="hero">
+    <div class="hero-eyebrow">Public Record Infrastructure</div>
+    <h1 class="hero-title">The public record,<br><em>signed and verified.</em></h1>
+    <p class="hero-sub">Enter any public figure, politician, nonprofit, or organization. Rabbit Hole pulls live data from FEC, Senate LDA, IRS 990s, and Wikidata — then cryptographically signs the receipt so it can never be altered.</p>
+
+    <div class="search-form">
+      <div class="type-selector">
+        <button class="type-btn active" data-type="fec" onclick="setType('fec',this)">FEC Campaign Finance</button>
+        <button class="type-btn" data-type="990" onclick="setType('990',this)">IRS 990 Nonprofit</button>
+        <button class="type-btn" data-type="wikidata" onclick="setType('wikidata',this)">Public Figure</button>
+        <button class="type-btn" data-type="combined" onclick="setType('combined',this)">Combined</button>
+        <button class="type-btn" data-type="ad_library" onclick="setType('ad_library',this)">Ad Spend</button>
+      </div>
+
+      <div class="type-desc" id="type-desc">FEC candidate ID or name search. Returns campaign finance totals by election cycle.</div>
+
+      <div class="search-row" id="records-search-row">
+        <input type="text" class="search-input" id="search-input" placeholder="Joe Manchin, Bernie Sanders, Ted Cruz..." autocomplete="off">
+        <div id="ad-library-inputs" class="ad-library-inputs" style="display:none">
+          <input type="text" class="search-input" id="ad-library-name" placeholder="Name, page name, or search term" autocomplete="off" />
+          <select id="ad-library-country" class="field-input country-select" aria-label="Country">
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="AU">Australia</option>
+          </select>
+        </div>
+        <button class="search-btn" id="search-btn" onclick="runSearch()">Generate Receipt →</button>
+      </div>
+
+      <div class="extra-fields" id="extra-fields-fec">
+        <div>
+          <div class="field-label">FEC Candidate ID (optional — speeds up lookup)</div>
+          <input type="text" class="field-input" id="fec-candidate-id" placeholder="e.g. S0WV00090">
+        </div>
+      </div>
+
+      <div class="extra-fields" id="extra-fields-990">
+        <div>
+          <div class="field-label">EIN (optional)</div>
+          <input type="text" class="field-input" id="ein-input" placeholder="e.g. 562618866">
+        </div>
+      </div>
+
+      <div class="extra-fields" id="extra-fields-wikidata">
+        <div>
+          <div class="field-label">Wikidata ID (optional)</div>
+          <input type="text" class="field-input" id="wikidata-id-input" placeholder="e.g. Q743162">
+        </div>
+      </div>
+
+      <div class="extra-fields" id="extra-fields-combined">
+        <div class="field-row">
+          <div style="flex:1">
+            <div class="field-label">FEC Candidate ID</div>
+            <input type="text" class="field-input" id="combined-candidate-id" placeholder="e.g. S0WV00090">
+          </div>
+          <div style="flex:2">
+            <div class="field-label">Lobbying clients (comma separated)</div>
+            <input type="text" class="field-input" id="combined-clients" placeholder="ExxonMobil, Chevron, American Petroleum Institute">
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Years (comma separated)</div>
+          <input type="text" class="field-input" id="combined-years" placeholder="2021, 2022, 2018, 2024">
+        </div>
+      </div>
+
+      <div class="status-bar" id="status-bar">
+        <div class="status-spinner"></div>
+        <span class="status-text" id="status-text">Querying live data sources...</span>
+      </div>
+
+      <div class="error-box" id="error-box"></div>
+    </div>
+  </section>
+
+  </div>
+
+  <div id="panel-media" class="media-tab-panel" style="display:none;padding:0 28px 48px;max-width:900px;margin:0 auto;">
+    <div class="hero-eyebrow" style="padding-top:32px;">Media verification</div>
+    <h2 class="hero-title" style="font-size:clamp(26px,4vw,40px);margin-bottom:12px;">URL or file → <em>readable receipt</em></h2>
+    <p class="hero-sub" style="max-width:560px;margin-bottom:28px;">Paste an Instagram, TikTok, or direct image link — or drop a file. Rabbit Hole fetches, fingerprints, runs Hive AI detection and OCR, then signs a receipt you can verify.</p>
+
+    <div id="media-input-panel">
+      <div class="input-group">
+        <label class="field-label input-label">Paste a URL to verify</label>
+        <input type="url" id="media-url-input" placeholder="https://instagram.com/reel/... or any image/video URL" class="media-url-input" autocomplete="off" />
+        <div class="input-hint">Instagram, TikTok, YouTube, or any direct image/video link</div>
+      </div>
+      <div class="or-divider"><span>or</span></div>
+      <div id="media-dropzone" class="media-dropzone" ondragover="mediaHandleDragOver(event)" ondragleave="mediaHandleDragLeave(event)" ondrop="mediaHandleDrop(event)" onclick="document.getElementById('media-tab-file-input').click()">
+        <div class="dropzone-icon">↑</div>
+        <div class="dropzone-label">Drop a file here or click to upload</div>
+        <div class="dropzone-hint">Image or video · Max 50MB</div>
+        <input type="file" id="media-tab-file-input" accept="image/*,video/*" style="display:none" onchange="mediaHandleFileSelect(event)" />
+      </div>
+      <div id="media-file-selected" style="display:none" class="file-selected-indicator">
+        <span id="media-file-name"></span>
+        <button type="button" onclick="clearFileSelection()" class="clear-file-btn">✕</button>
+      </div>
+      <button type="button" id="media-analyze-btn" onclick="analyzeMediaTab()" class="media-analyze-btn" disabled>Analyze</button>
+    </div>
+
+    <div id="media-processing-panel" style="display:none">
+      <div class="processing-status">
+        <div class="media-spinner"></div>
+        <div id="processing-label">Analyzing...</div>
+        <div id="processing-job-id" class="job-id-display"></div>
+      </div>
+      <div id="media-hash-preview" style="display:none" class="hash-preview-block">
+        <div class="hash-label">FILE FINGERPRINT</div>
+        <div id="media-hash-value" class="hash-value-line"></div>
+        <div class="hash-note">Hash computed. Analysis in progress.</div>
+      </div>
+    </div>
+
+    <div id="media-receipt-panel" style="display:none">
+      <div class="receipt-card">
+        <div class="receipt-header">
+          <div class="receipt-title">FRAME RECEIPT — MEDIA VERIFICATION</div>
+          <div id="receipt-id-display" class="receipt-id-line"></div>
+          <div id="receipt-timestamp" class="receipt-ts-line"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">WHAT WAS CHECKED</div>
+          <div id="receipt-subject" class="receipt-subject"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">FILE FINGERPRINT</div>
+          <div id="receipt-hash" class="receipt-hash monospace"></div>
+          <div class="hash-note">If this file is modified in any way, this hash will not match.</div>
+        </div>
+        <div id="receipt-detection-section" class="receipt-section" style="display:none">
+          <div class="section-label">AI DETECTION</div>
+          <div id="receipt-detection-result"></div>
+          <div class="implication-note" id="receipt-detection-note"></div>
+        </div>
+        <div id="receipt-ocr-section" class="receipt-section" style="display:none">
+          <div class="section-label">TEXT FOUND IN FILE</div>
+          <div id="receipt-ocr-text" class="ocr-text"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">CHAIN OF CUSTODY</div>
+          <div id="receipt-custody" class="custody-block"></div>
+        </div>
+        <div class="receipt-section unknowns-section">
+          <div class="section-label">WHAT WE DON'T KNOW</div>
+          <div id="receipt-operational-unknowns"></div>
+          <div id="receipt-epistemic-unknowns"></div>
+        </div>
+        <div class="receipt-section">
+          <div class="section-label">SOURCES CONSULTED</div>
+          <div id="receipt-sources"></div>
+        </div>
+        <details class="trust-footer">
+          <summary>Verify this receipt</summary>
+          <div class="trust-footer-content">
+            <div class="trust-label">SIGNATURE</div>
+            <div id="receipt-signature" class="monospace truncate"></div>
+            <div class="trust-label" style="margin-top:12px">PUBLIC KEY</div>
+            <div id="receipt-pubkey" class="monospace truncate"></div>
+            <button type="button" id="media-verify-btn" onclick="verifyMediaReceiptSignature()" class="verify-btn">Verify Signature</button>
+            <div id="media-verify-result"></div>
+            <details style="margin-top:16px">
+              <summary class="raw-json-toggle">View raw receipt JSON</summary>
+              <pre id="receipt-raw-json" class="raw-json"></pre>
+            </details>
+          </div>
+        </details>
+      </div>
+      <button type="button" onclick="resetMediaPanel()" class="reset-btn">Check another</button>
+    </div>
+  </div>
+
+  <section class="receipt-output" id="receipt-output">
+    <div class="section-label">Verified Receipt</div>
+    <div id="ad-library-summary" style="display:none"></div>
+    <div class="receipt-claim" id="receipt-claim">—</div>
+    <div class="receipt-meta">
+      <span class="receipt-meta-item">Generated: <strong id="receipt-date">—</strong></span>
+      <span class="receipt-meta-item">Receipt ID: <strong id="receipt-id">—</strong></span>
+    </div>
+
+    <div class="verify-stamp" id="verify-stamp">
+      <div class="stamp-badge" id="stamp-badge"></div>
+      <div class="stamp-detail" id="stamp-detail"></div>
+    </div>
+    <div class="hash-display" id="hash-display"></div>
+
+    <div id="receipt-share-wrap" style="display:none;margin-top:20px;">
+      <button type="button" class="btn" id="receipt-share-btn">Share this receipt</button>
+    </div>
+
+    <div class="evidence-section">
+      <div class="section-label">Evidence</div>
+      <ul class="evidence-list" id="evidence-list"></ul>
+    </div>
+
+    <div class="sources-section">
+      <div class="section-label">Primary Sources</div>
+      <div class="sources-grid" id="sources-grid"></div>
+    </div>
+  </section>
+
+  <section id="panel-podcast" class="hero" style="display:none;padding-top:32px;">
+    <div class="hero-eyebrow">Whisper · Claude · adapters</div>
+    <h2 class="hero-title" style="font-size:clamp(28px,4.5vw,48px);">Podcast &amp; video</h2>
+    <p class="hero-sub" style="max-width:640px;">YouTube, podcast RSS episode pages, or direct audio links. Local transcription (Whisper <code style="font-size:12px;color:var(--amber);">base</code>), claim extraction, then the same public-record routing as screenshots. <strong>v1: first 30 minutes only</strong> — longer audio is trimmed. First server run downloads ~140MB model weights.</p>
+    <div style="margin-bottom:14px;">
+      <div class="field-label">URL — YouTube, RSS episode, or direct mp3/m4a</div>
+      <input type="url" class="field-input" id="podcast-url" style="width:100%;max-width:640px;" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+    </div>
+    <div id="podcast-drop-zone" style="border:1px dashed var(--border);padding:32px 20px;text-align:center;cursor:pointer;margin-bottom:16px;background:var(--surface);max-width:640px;" onclick="document.getElementById('podcast-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--amber-dim)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handlePodcastDrop(event)">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-3);">Or drop audio / video file</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-top:8px;">mp3, m4a, wav, webm</div>
+    </div>
+    <input type="file" id="podcast-file-input" accept="audio/*,video/*" style="display:none" onchange="document.getElementById('podcast-file-label').textContent=this.files[0]?this.files[0].name:''">
+    <div id="podcast-file-label" style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-3);margin-bottom:12px;"></div>
+    <button type="button" class="search-btn" id="podcast-submit-btn" onclick="runPodcastVerify()">Transcribe &amp; Verify →</button>
+    <div id="podcast-stage" style="display:none;margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--amber);letter-spacing:0.1em;"></div>
+    <div id="podcast-result" style="display:none;margin-top:20px;"></div>
+  </section>
+
+  <section class="sample-section">
+    <div class="section-label">Sample Receipt</div>
+    <div class="sample-card" onclick="loadSampleReceipt()">
+      <div class="sample-claim">"I've never taken a dime from the fossil fuel industry"</div>
+      <div class="sample-meta">Joe Manchin III<br>FEC + LDA Cross-Reference</div>
+      <div class="sample-arrow">→</div>
+    </div>
+  </section>
+
+  <section class="verify-section">
+    <div class="section-label">Verify Any Receipt</div>
+    <p class="verify-intro">Paste any signed Rabbit Hole receipt JSON to verify it against the live API.</p>
+    <textarea id="manual-payload" spellcheck="false" placeholder='{"schemaVersion": "1.0.0", ...}'></textarea>
+    <button class="btn" onclick="manualVerify()">Verify Receipt</button>
+    <pre id="manual-result"></pre>
+  </section>
+
+  <footer>
+    <div class="footer-left">Rabbit Hole v1.0 · Ed25519 · JCS (RFC 8785) · SHA-256</div>
+    <div class="footer-right"><a href="https://github.com/Swixixle/FRAME" target="_blank" rel="noopener">github.com/Swixixle/FRAME</a></div>
+  </footer>
+
+</div>
+<script>
+const API_BASE=(new URLSearchParams(location.search).get('api')||'https://frame-2yxu.onrender.com').replace(/\/$/,'');
+
+/** Submit async job and poll until complete, failed, or 3-minute timeout. */
+async function submitJobAndPoll(jobRequest, onProgress) {
+  const base = API_BASE;
+  const submitRes = await fetch(`${base}/v1/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(jobRequest),
+  });
+  if (!submitRes.ok) {
+    const t = await submitRes.text();
+    throw new Error(t || `HTTP ${submitRes.status}`);
+  }
+  const body = await submitRes.json();
+  const job_id = body.job_id;
+  const poll_url = body.poll_url;
+  const pollUrl = poll_url && poll_url.startsWith('http') ? poll_url : `${base}${poll_url || '/v1/jobs/' + job_id}`;
+
+  if (onProgress) onProgress({ status: 'pending', job_id });
+
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    const pollRes = await fetch(pollUrl);
+    if (!pollRes.ok) {
+      const t = await pollRes.text();
+      throw new Error(t || `Poll HTTP ${pollRes.status}`);
+    }
+    const job = await pollRes.json();
+    if (onProgress) onProgress(job);
+
+    if (job.status === 'complete') {
+      return { receipt: job.receipt, processing_time_ms: job.processing_time_ms };
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error || 'Job failed');
+    }
+    await new Promise(function (r) { setTimeout(r, 2000); });
+  }
+  throw new Error('Job timed out after 3 minutes.');
+}
+
+function stripReceiptUrl(obj){if(!obj||typeof obj!=='object')return obj;const{receiptUrl,extractedClaimObjects,transcript,sourceUrl,podcastTitle,note,...rest}=obj;return rest;}
+function showMainPanel(which){
+  const rec=document.getElementById('panel-records');
+  const pod=document.getElementById('panel-podcast');
+  const med=document.getElementById('panel-media');
+  rec.style.display=which==='records'?'block':'none';
+  pod.style.display=which==='podcast'?'block':'none';
+  if(med) med.style.display=which==='media'?'block':'none';
+  document.getElementById('tab-records').classList.toggle('active',which==='records');
+  document.getElementById('tab-media').classList.toggle('active',which==='media');
+  document.getElementById('tab-podcast').classList.toggle('active',which==='podcast');
+}
+
+// ─────────────────────────────────────────
+// MEDIA TAB — URL / file → receipt card
+// ─────────────────────────────────────────
+let mediaSelectedFile = null;
+let mediaCurrentReceipt = null;
+
+function mediaShowPanel(id, visible) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = visible ? 'block' : 'none';
+}
+
+function mediaHandleDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.add('dragover');
+}
+function mediaHandleDragLeave(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.remove('dragover');
+}
+function mediaHandleDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('media-dropzone');
+  if (dz) dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) mediaSetSelectedFile(file);
+}
+function mediaHandleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) mediaSetSelectedFile(file);
+}
+
+function mediaSetSelectedFile(file) {
+  mediaSelectedFile = file;
+  const nameEl = document.getElementById('media-file-name');
+  const sel = document.getElementById('media-file-selected');
+  if (nameEl) nameEl.textContent = file.name;
+  if (sel) sel.style.display = 'flex';
+  const urlIn = document.getElementById('media-url-input');
+  if (urlIn) urlIn.value = '';
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = false;
+}
+
+function clearFileSelection() {
+  mediaSelectedFile = null;
+  const sel = document.getElementById('media-file-selected');
+  if (sel) sel.style.display = 'none';
+  const fin = document.getElementById('media-tab-file-input');
+  if (fin) fin.value = '';
+  checkAnalyzeButton();
+}
+
+function checkAnalyzeButton() {
+  const url = (document.getElementById('media-url-input') && document.getElementById('media-url-input').value.trim()) || '';
+  const hasFile = mediaSelectedFile !== null;
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = !url && !hasFile;
+}
+
+if (document.getElementById('media-url-input')) {
+  document.getElementById('media-url-input').addEventListener('input', checkAnalyzeButton);
+}
+
+function getMediaProcessingMessage(status) {
+  const messages = {
+    pending: 'Queued...',
+    processing: 'Analyzing...',
+    complete: 'Done.',
+    failed: 'Failed.',
+  };
+  return messages[status] || 'Processing...';
+}
+
+function setProcessingLabel(text) {
+  const el = document.getElementById('processing-label');
+  if (el) el.textContent = text;
+}
+
+function showMediaError(message) {
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-input-panel', true);
+  const existing = document.getElementById('media-error');
+  if (existing) existing.remove();
+  const err = document.createElement('div');
+  err.id = 'media-error';
+  err.className = 'error-banner';
+  err.textContent = 'Analysis failed: ' + message;
+  const panel = document.getElementById('media-input-panel');
+  if (panel) panel.prepend(err);
+}
+
+async function analyzeMediaTab() {
+  const urlIn = document.getElementById('media-url-input');
+  const url = urlIn ? urlIn.value.trim() : '';
+  const file = mediaSelectedFile;
+  if (!url && !file) return;
+
+  mediaShowPanel('media-input-panel', false);
+  mediaShowPanel('media-processing-panel', true);
+  mediaShowPanel('media-receipt-panel', false);
+  setProcessingLabel('Submitting...');
+  const hp = document.getElementById('media-hash-preview');
+  if (hp) hp.style.display = 'none';
+
+  try {
+    if (url) {
+      const { receipt, processing_time_ms } = await submitJobAndPoll(
+        { source_url: url },
+        function (job) {
+          setProcessingLabel(getMediaProcessingMessage(job.status));
+          const jid = document.getElementById('processing-job-id');
+          if (jid) jid.textContent = job.job_id || '';
+        },
+      );
+      renderMediaReceipt(receipt, processing_time_ms);
+    } else {
+      setProcessingLabel('Uploading file...');
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const analyzeRes = await fetch(`${API_BASE}/v1/analyze-media`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!analyzeRes.ok) throw new Error('Analysis failed: ' + analyzeRes.status);
+      const analysis = await analyzeRes.json();
+
+      if (analysis.fileHash) {
+        const hv = document.getElementById('media-hash-value');
+        if (hv) hv.textContent = 'sha256:' + analysis.fileHash;
+        const hprev = document.getElementById('media-hash-preview');
+        if (hprev) hprev.style.display = 'block';
+      }
+
+      setProcessingLabel('Signing receipt...');
+
+      const signRes = await fetch(`${API_BASE}/v1/sign-media-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(analysis),
+      });
+
+      if (!signRes.ok) throw new Error('Signing failed: ' + signRes.status);
+      const receipt = await signRes.json();
+      renderMediaReceipt(receipt, null);
+    }
+  } catch (err) {
+    showMediaError(err && err.message ? err.message : String(err));
+  }
+}
+
+function renderMediaReceipt(receipt, processingMs) {
+  mediaCurrentReceipt = receipt;
+
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-receipt-panel', true);
+
+  const detSec = document.getElementById('receipt-detection-section');
+  const ocrSec = document.getElementById('receipt-ocr-section');
+  if (detSec) detSec.style.display = 'none';
+  if (ocrSec) ocrSec.style.display = 'none';
+
+  const receiptId = receipt.receiptId || receipt.receipt_id || 'FRM-' + Date.now();
+  const ridEl = document.getElementById('receipt-id-display');
+  if (ridEl) ridEl.textContent = receiptId;
+
+  const ts = receipt.createdAt || receipt.metadata?.generated_at || new Date().toISOString();
+  const tsEl = document.getElementById('receipt-timestamp');
+  if (tsEl) tsEl.textContent = 'Observed ' + new Date(ts).toLocaleString();
+
+  const subject =
+    receipt.subject?.display_name ||
+    receipt.subject?.identifier ||
+    (receipt.sources && receipt.sources[0] && receipt.sources[0].url) ||
+    (receipt.claims && receipt.claims[0] && receipt.claims[0].statement) ||
+    'Media file';
+  const subEl = document.getElementById('receipt-subject');
+  if (subEl) subEl.textContent = subject;
+
+  const hash = findHash(receipt);
+  const hashEl = document.getElementById('receipt-hash');
+  if (hashEl && hash) hashEl.textContent = 'sha256:' + hash;
+
+  const detection = findDetection(receipt);
+  if (detection) {
+    const score = detection.ai_generated_probability != null ? detection.ai_generated_probability : detection.ai_generated_score;
+    if (detection.detector === 'hive' && score != null && typeof score === 'number') {
+      const pct = Math.round(score * 100);
+      const rr = document.getElementById('receipt-detection-result');
+      const rn = document.getElementById('receipt-detection-note');
+      if (rr) rr.innerHTML = 'AI-generated probability: <strong>' + pct + '%</strong>';
+      if (rn) rn.textContent = detection.implication_note || 'This score reflects model output probabilities. It does not constitute a determination that content is or is not AI-generated.';
+      if (detSec) detSec.style.display = 'block';
+    } else if (detection.detector === 'hive' && detection.error) {
+      const rr = document.getElementById('receipt-detection-result');
+      const rn = document.getElementById('receipt-detection-note');
+      if (rr) rr.textContent = 'Hive returned an error.';
+      if (rn) rn.textContent = detection.note || detection.error;
+      if (detSec) detSec.style.display = 'block';
+    }
+  }
+
+  const ocr = findOcr(receipt);
+  if (ocr && ocr.status === 'success' && ocr.text) {
+    const ot = document.getElementById('receipt-ocr-text');
+    if (ot) {
+      const t = String(ocr.text);
+      ot.textContent = t.substring(0, 500) + (t.length > 500 ? '...' : '');
+    }
+    if (ocrSec) ocrSec.style.display = 'block';
+  }
+
+  const coc = findChainOfCustody(receipt);
+  const custEl = document.getElementById('receipt-custody');
+  if (custEl && coc) custEl.innerHTML = formatCustody(coc);
+
+  const unknowns = receipt.unknowns || { operational: [], epistemic: [] };
+  const opUnknowns = unknowns.operational || [];
+  const epUnknowns = unknowns.epistemic || [];
+
+  const opEl = document.getElementById('receipt-operational-unknowns');
+  if (opEl) {
+    opEl.innerHTML =
+      opUnknowns
+        .map(function (u) {
+          const text = u.text || u.description || u;
+          return (
+            '<div class="unknown-item operational"><span class="unknown-type">Technical limit</span> ' +
+            escHtml(String(text)) +
+            '</div>'
+          );
+        })
+        .join('') || '';
+  }
+
+  const epEl = document.getElementById('receipt-epistemic-unknowns');
+  if (epEl) {
+    epEl.innerHTML =
+      epUnknowns
+        .map(function (u) {
+          const text = u.text || u.description || u;
+          return (
+            '<div class="unknown-item epistemic"><span class="unknown-type">Fundamental limit</span> ' +
+            escHtml(String(text)) +
+            '</div>'
+          );
+        })
+        .join('') || '';
+  }
+
+  const evidence = receipt.sources || [];
+  const srcEl = document.getElementById('receipt-sources');
+  if (srcEl) {
+    srcEl.innerHTML =
+      evidence
+        .map(function (e) {
+          const adapter = e.adapter || 'Rabbit Hole analysis';
+          const when = e.retrievedAt || e.retrieved_at || e.timestamp;
+          return (
+            '<div class="source-item">' +
+            escHtml(adapter) +
+            ' — queried ' +
+            escHtml(formatMediaDate(when)) +
+            '</div>'
+          );
+        })
+        .join('') || '<div class="source-item">Rabbit Hole media analysis</div>';
+  }
+
+  const sigEl = document.getElementById('receipt-signature');
+  const pkEl = document.getElementById('receipt-pubkey');
+  const rawEl = document.getElementById('receipt-raw-json');
+  if (receipt.signing_error) {
+    if (sigEl) sigEl.textContent = 'Signing failed — see raw JSON';
+    if (pkEl) pkEl.textContent = '';
+  } else {
+    if (sigEl) sigEl.textContent = receipt.signature ? receipt.signature.substring(0, 64) + '...' : 'Not signed';
+    if (pkEl) pkEl.textContent = receipt.publicKey ? receipt.publicKey.substring(0, 64) + '...' : '';
+  }
+  if (rawEl) rawEl.textContent = JSON.stringify(receipt, null, 2);
+}
+
+function findHash(receipt) {
+  if (receipt.subject && receipt.subject.identifier && String(receipt.subject.identifier).startsWith('sha256:')) {
+    return String(receipt.subject.identifier).replace('sha256:', '');
+  }
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.sha256) return meta.sha256;
+    if (meta.fileHash) return meta.fileHash;
+    const u = sources[i].url;
+    if (u && String(u).startsWith('sha256:')) return String(u).replace('sha256:', '');
+  }
+  if (receipt.fileHash) return receipt.fileHash;
+  return null;
+}
+
+function findDetection(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.detection) return meta.detection;
+  }
+  if (receipt.detection) return receipt.detection;
+  return null;
+}
+
+function findOcr(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.ocr) return meta.ocr;
+  }
+  return null;
+}
+
+function findChainOfCustody(receipt) {
+  const sources = receipt.sources || [];
+  for (let i = 0; i < sources.length; i++) {
+    const meta = sources[i].metadata || {};
+    if (meta.chain_of_custody) return meta.chain_of_custody;
+  }
+  return null;
+}
+
+function formatCustody(coc) {
+  const lines = [
+    'Fetched via: ' + (coc.fetch_adapter_version || 'frame-fetch'),
+    'Retrieved: ' + formatMediaDate(coc.retrieval_timestamp),
+    'TLS verified: ' + (coc.tls_verified ? 'Yes' : 'No'),
+  ];
+  if (coc.server_ip) lines.push('Server IP: ' + coc.server_ip);
+  if (coc.http_status != null) lines.push('HTTP status: ' + coc.http_status);
+  return lines.map(function (l) {
+    return '<div class="custody-line">' + escHtml(l) + '</div>';
+  }).join('');
+}
+
+function formatMediaDate(iso) {
+  if (!iso) return 'unknown';
+  try {
+    return new Date(iso).toLocaleString();
+  } catch (e) {
+    return String(iso);
+  }
+}
+
+async function verifyMediaReceiptSignature() {
+  if (!mediaCurrentReceipt) return;
+  const btn = document.getElementById('media-verify-btn');
+  if (btn) {
+    btn.textContent = 'Verifying...';
+    btn.disabled = true;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/v1/verify-receipt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(stripReceiptUrl(mediaCurrentReceipt)),
+    });
+    const result = await res.json();
+    const el = document.getElementById('media-verify-result');
+    if (result.ok) {
+      if (el) el.innerHTML = '<span class="verify-pass">✓ Signature valid — receipt has not been modified</span>';
+    } else {
+      if (el) el.innerHTML = '<span class="verify-fail">✗ Signature invalid</span>';
+    }
+  } catch (err) {
+    const el = document.getElementById('media-verify-result');
+    if (el) el.textContent = 'Verification error: ' + (err && err.message ? err.message : String(err));
+  } finally {
+    if (btn) {
+      btn.textContent = 'Verify Signature';
+      btn.disabled = false;
+    }
+  }
+}
+
+function resetMediaPanel() {
+  mediaSelectedFile = null;
+  mediaCurrentReceipt = null;
+  const urlIn = document.getElementById('media-url-input');
+  if (urlIn) urlIn.value = '';
+  const fin = document.getElementById('media-tab-file-input');
+  if (fin) fin.value = '';
+  const sel = document.getElementById('media-file-selected');
+  if (sel) sel.style.display = 'none';
+  const btn = document.getElementById('media-analyze-btn');
+  if (btn) btn.disabled = true;
+  const hp = document.getElementById('media-hash-preview');
+  if (hp) hp.style.display = 'none';
+  const err = document.getElementById('media-error');
+  if (err) err.remove();
+  mediaShowPanel('media-receipt-panel', false);
+  mediaShowPanel('media-processing-panel', false);
+  mediaShowPanel('media-input-panel', true);
+}
+function formatTs(sec){
+  const s=Math.max(0,Math.floor(Number(sec)||0));
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return [h,m,ss].map(n=>String(n).padStart(2,'0')).join(':');
+}
+function handlePodcastDrop(e){
+  e.preventDefault();
+  document.getElementById('podcast-drop-zone').style.borderColor='var(--border)';
+  const f=e.dataTransfer.files[0];
+  if(f){
+    const input=document.getElementById('podcast-file-input');
+    try{const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;}catch(_){}
+    document.getElementById('podcast-file-label').textContent=f.name;
+  }
+}
+async function runPodcastVerify(){
+  const url=document.getElementById('podcast-url').value.trim();
+  const file=document.getElementById('podcast-file-input').files[0];
+  const stage=document.getElementById('podcast-stage');
+  const result=document.getElementById('podcast-result');
+  const btn=document.getElementById('podcast-submit-btn');
+  if(!url&&!file){alert('Enter a URL or choose an audio file.');return;}
+  btn.disabled=true;
+  result.style.display='none';
+  stage.style.display='block';
+  const stages=['Downloading audio…','Transcribing…','Extracting claims…'];
+  let si=0;
+  stage.textContent=stages[0];
+  const iv=setInterval(function(){si=(si+1)%3;stage.textContent=stages[si];},2800);
+  try{
+    let r;
+    if(file){
+      const fd=new FormData();
+      fd.append('file',file);
+      r=await fetch(`${API_BASE}/v1/analyze-and-verify-podcast`,{method:'POST',body:fd});
+    }else{
+      r=await fetch(`${API_BASE}/v1/analyze-and-verify-podcast`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    }
+    if(!r.ok){
+      const t=await r.text().catch(function(){return '';});
+      throw new Error(`HTTP ${r.status} ${t.slice(0,400)}`);
+    }
+    const signed=await r.json();
+    clearInterval(iv);
+    stage.style.display='none';
+    result.style.display='block';
+    result.innerHTML=buildPodcastResult(signed);
+    renderReceipt(signed);
+    document.getElementById('manual-payload').value=JSON.stringify(signed,null,2);
+    document.getElementById('receipt-output').scrollIntoView({behavior:'smooth',block:'start'});
+    autoVerify(stripReceiptUrl(signed));
+  }catch(err){
+    clearInterval(iv);
+    stage.style.display='none';
+    result.style.display='block';
+    result.innerHTML='<div style="padding:16px;background:rgba(122,58,58,0.1);border:1px solid var(--red);color:var(--red-bright);font-family:\'IBM Plex Mono\',monospace;font-size:11px;">'+escHtml(err.message)+'</div>';
+  }
+  btn.disabled=false;
+}
+function buildPodcastResult(signed){
+  const data=mediaAnalysisFromSigned(signed);
+  const claims=signed.extractedClaimObjects||[];
+  const tr=signed.transcript||{};
+  const segs=(tr.segments||[]).length;
+  const claimsHtml=claims.length>0?('<div style="margin-top:16px;"><div style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;">Extracted claims</div>'+claims.map(function(c){
+    const ts=typeof c.timestamp_start==='number'?'<span class="ts-badge">['+formatTs(c.timestamp_start)+']</span>':'';
+    const srcLinks=(c.primary_sources||[]).map(function(s){
+      const v=s.verification;
+      const verified=v&&v.verificationStatus==='verified';
+      const unverified=v&&v.verificationStatus==='unverified';
+      const statusText=v?(verified?'✓ '+v.httpStatus:unverified?'✗ '+(v.reason||'unverified'):''):'';
+      const color=verified?'var(--amber)':unverified?'var(--red-bright)':'var(--text-3)';
+      return '<div style="margin-top:6px;"><a href="'+escHtml(s.url)+'" target="_blank" rel="noopener" style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;letter-spacing:0.1em;color:'+color+';text-decoration:none;text-transform:uppercase;">→ '+escHtml(s.label||'')+'</a> <span style="font-size:8px;color:var(--text-3);">'+escHtml(statusText)+'</span></div>';
+    }).join('');
+    return '<div style="padding:12px 0;border-bottom:1px solid var(--border-light);">'+ts+'<div style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-style:italic;color:var(--text);margin-bottom:6px;">"'+escHtml(c.text||'')+'"</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:var(--text-3);margin-bottom:4px;letter-spacing:0.15em;text-transform:uppercase;">'+(c.type||'general')+(c.speaker?' · '+escHtml(c.speaker):'')+(c.entities&&c.entities.length?' · '+c.entities.map(escHtml).join(', '):'')+'</div><div style="display:flex;flex-wrap:wrap;">'+srcLinks+'</div></div>';
+  }).join('')+'</div>'):'';
+  const entityLinks=collectEntityLinks(signed);
+  const entityBlock=entityLinks&&entityLinks.length?('<div style="margin-top:14px;padding:14px 16px;border:1px solid var(--border);background:var(--surface-2);"><div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;letter-spacing:0.25em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Entity behavioral ledger</div><div style="display:flex;flex-wrap:wrap;gap:8px 16px;">'+entityLinks.map(function(e){return '<a href="'+API_BASE+'/entity/'+encodeURIComponent(e.slug)+'" target="_blank" rel="noopener" style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:var(--amber-bright);text-decoration:none;">View entity record → '+escHtml(e.name)+'</a>';}).join('')+'</div></div>'):'';
+  const mediaShare=shareUrlFor(signed);
+  const rid=signed.receiptId||'';
+  const sharePanel=mediaShare?('<div style="margin-top:16px;padding:16px;background:var(--surface-2);border:1px solid var(--amber-dim);border-radius:2px;"><div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;letter-spacing:0.25em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;">Shareable receipt</div><a href='+JSON.stringify(mediaShare)+' target="_blank" rel="noopener" style="display:block;font-family:\'IBM Plex Mono\',monospace;font-size:11px;color:var(--amber-bright);word-break:break-all;">'+escHtml(mediaShare)+'</a><div style="margin-top:12px;"><button type="button" class="btn" onclick="navigator.clipboard.writeText('+JSON.stringify(mediaShare)+')">Copy link</button></div></div>'):'';
+  return '<div style="background:var(--surface);border:1px solid var(--border);padding:24px;"><div style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;letter-spacing:0.3em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px;">Podcast / video receipt</div><div style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;color:var(--text-2);line-height:2;"><div>Acoustic fingerprint: <span style="color:var(--amber);word-break:break-all;">'+escHtml(data.fileHash)+'</span></div><div>Transcript: <span style="color:var(--text);">'+segs+' segments</span> · Whisper base</div><div>Source: '+escHtml((signed.sourceUrl||data.sourceUrl||data.fileName||'—').toString().slice(0,160))+'</div></div>'+claimsHtml+entityBlock+'<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light);"><div style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--green-bright);">✓ Signed · SHA-256: '+(signed.contentHash?escHtml(signed.contentHash.slice(0,16)):'—')+'...</div></div>'+sharePanel+'</div>';
+}
+function entitySlug(name){return String(name).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');}
+function collectEntityLinks(signed){
+  const list=signed.extractedClaimObjects;
+  if(!Array.isArray(list)||!list.length)return null;
+  const seen=new Set();
+  const out=[];
+  for(const c of list){
+    const ents=c.entities;
+    if(!Array.isArray(ents))continue;
+    for(const e of ents){
+      const s=String(e).trim();
+      if(!s)continue;
+      const slug=entitySlug(s);
+      if(seen.has(slug))continue;
+      seen.add(slug);
+      out.push({name:s,slug});
+    }
+  }
+  return out.length?out:null;
+}
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderAdSpendTableHtml(ads){
+  if(!ads||!ads.length)return '';
+  const rows=ads.slice(0,10).map(function(ad){
+    return '<tr><td>'+escHtml(String(ad.page_name||'—'))+'</td><td>'+escHtml(String(ad.funding_entity||'not disclosed'))+'</td><td>'+escHtml(String(ad.spend_display||'not disclosed'))+'</td><td>'+(ad.is_active?'<span class="active-dot">active</span>':'inactive')+'</td></tr>';
+  }).join('');
+  return '<div class="ad-spend-table-wrapper"><table class="ad-spend-table"><thead><tr><th>Page</th><th>Funding entity</th><th>Spend (est.)</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>'+(ads.length>10?'<div class="table-overflow-note">Showing 10 of '+ads.length+' ads</div>':'')+'</div>';
+}
+function buildAdLibrarySummaryHtml(receipt){
+  const payload=receipt.payload??receipt;
+  const meta=(payload.sources&&payload.sources[0]&&payload.sources[0].metadata)||{};
+  const result=meta.ad_library||{};
+  const status=result.status;
+  if(status==='no_results'){
+    return '<div class="ad-library-result no-results"><div class="result-headline">No political or issue ads found</div><div class="result-sub">Meta Ad Library returned no results for "'+escHtml(String(result.search_term||''))+'" in '+escHtml(String(result.country||''))+'.</div><div class="result-caveat">This does not mean no paid content exists — Meta only discloses political and issue ads.</div></div>';
+  }
+  if(status==='results_found'){
+    const entities=result.unique_funding_entities||[];
+    const entityHtml=entities.length>0?entities.map(function(e){return '<div class="funding-entity">'+escHtml(e)+'</div>';}).join(''):'<div class="no-entity">No funding entity disclosed</div>';
+    const activeAds=result.active_ads_count||0;
+    const totalAds=result.total_ads_returned||0;
+    return '<div class="ad-library-result has-results"><div class="result-headline">'+totalAds+' political/issue ad'+(totalAds!==1?'s':'')+' found'+(activeAds>0?' <span class="active-badge">'+activeAds+' active</span>':'')+'</div><div class="funding-section"><div class="funding-label">FUNDING ENTITIES ON RECORD</div>'+entityHtml+'</div>'+renderAdSpendTableHtml(result.ads||[])+'<div class="ad-library-caveat">Spend figures are estimated ranges from Meta\'s disclosure. Presence of paid advertising does not establish intent.</div></div>';
+  }
+  if(status==='unavailable'){
+    return '<div class="ad-library-result unavailable"><div class="result-headline">Meta Ad Library not configured</div><div class="result-sub">'+escHtml(result.note||'META_AD_LIBRARY_TOKEN required.')+'</div></div>';
+  }
+  return '<div class="ad-library-result error"><div class="result-headline">Query did not complete</div><div class="result-sub">'+escHtml(result.note||result.error||'Unknown error')+'</div></div>';
+}
+function shareUrlFor(signed){
+  if(!signed||typeof signed!=='object')return null;
+  if(signed.receiptUrl)return signed.receiptUrl;
+  const rid=signed.receiptId||(signed.payload&&signed.payload.receiptId);
+  return rid?`${API_BASE}/receipt/${rid}`:null;
+}
+/** Reconstruct analyze-style fields from a signed media receipt (output of /v1/analyze-and-verify). */
+function mediaAnalysisFromSigned(signed){
+  const sources=signed.sources||[];
+  const media=sources.find(s=>String(s.id||'').startsWith('media-'))||sources.find(s=>String(s.url||'').startsWith('sha256:'));
+  const meta=(media&&media.metadata)||{};
+  const fileHash=meta.fileHash||(media&&String(media.url||'').replace(/^sha256:/,''))||'';
+  return{
+    fileHash,
+    perceptualHash:meta.perceptualHash??null,
+    perceptualHashType:meta.perceptualHashType??null,
+    fileName:meta.fileName||'upload',
+    fileSize:Number(meta.fileSize)||0,
+    contentType:meta.contentType||'image/*',
+    timestamp:signed.createdAt,
+    detection:meta.detection,
+    ledgerMatch:meta.ledgerMatch,
+    extractedText:extractOcrFromNarrative(signed),
+    extractedClaimObjects:extractClaimsFromNarrative(signed),
+    extractedClaims:[]
+  };
+}
+function extractOcrFromNarrative(signed){
+  const nar=signed.narrative||[];
+  for(let i=0;i<nar.length;i++){
+    const t=(nar[i].text!=null)?String(nar[i].text):'';
+    const marker='OCR text extraction:';
+    const ix=t.indexOf(marker);
+    if(ix>=0){
+      let rest=t.slice(ix+marker.length).trim();
+      if(rest.charAt(0)==='"')rest=rest.slice(1);
+      const q=rest.indexOf('"');
+      return q>=0?rest.slice(0,q):rest.slice(0,500);
+    }
+  }
+  return'';
+}
+function extractClaimsFromNarrative(signed){
+  const out=[];
+  const nar=signed.narrative||[];
+  for(let i=0;i<nar.length;i++){
+    const t=(nar[i].text!=null)?String(nar[i].text):'';
+    const m=t.match(/^Extracted claim \(([^)]+)\): "([^"]*)"/);
+    if(m)out.push({type:m[1],text:m[2],primary_sources:[]});
+  }
+  return out;
+}
+let currentType='fec';
+const TYPE_DESCS={fec:'FEC candidate ID or name search. Returns campaign finance totals by election cycle.','990':'Nonprofit name or EIN. Returns IRS 990 financial data — assets, revenue, expenses.',wikidata:'Any public figure, journalist, executive, or religious leader. Returns biography and affiliations.',combined:'Senator + FEC ID + lobbying clients. Returns cross-referenced campaign finance and lobbying data.',ad_library:'Meta Ad Library — political and issue ads only. Spend is disclosed as ranges.'};
+function setType(type,btn){
+  currentType=type;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('type-desc').textContent=TYPE_DESCS[type]||TYPE_DESCS.fec;
+  ['fec','990','wikidata','combined'].forEach(t=>{
+    const el=document.getElementById(`extra-fields-${t}`);
+    if(el)el.classList.toggle('visible',t===type);
+  });
+  const si=document.getElementById('search-input');
+  const adi=document.getElementById('ad-library-inputs');
+  if(type==='ad_library'){
+    if(si)si.style.display='none';
+    if(adi)adi.style.display='flex';
+  }else{
+    if(si)si.style.display='block';
+    if(adi)adi.style.display='none';
+  }
+  const ph={fec:'Joe Manchin, Bernie Sanders, Ted Cruz...','990':'Gates Foundation, AIPAC, Daily Caller News Foundation...',wikidata:'Tucker Carlson, Sean Hannity, Pope Leo...',combined:'Joe Manchin (use FEC ID field below)',ad_library:'Ted Cruz, page name, or keyword'};
+  if(si)si.placeholder=ph[type]||ph.fec;
+}
+function domain(url){try{return new URL(url).hostname.replace('www.','');}catch{return url;}}
+function formatDate(iso){if(!iso)return'—';try{return new Date(iso).toLocaleString('en-US',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
+function setStatus(msg){document.getElementById('status-bar').classList.add('visible');document.getElementById('status-text').textContent=msg;}
+function clearStatus(){document.getElementById('status-bar').classList.remove('visible');}
+function showError(msg){const el=document.getElementById('error-box');el.textContent=msg;el.classList.add('visible');}
+function clearError(){document.getElementById('error-box').classList.remove('visible');}
+async function runSearch(){
+  if(currentType==='ad_library'){
+    const name=document.getElementById('ad-library-name').value.trim();
+    const country=document.getElementById('ad-library-country').value;
+    if(!name)return;
+    clearError();
+    document.getElementById('receipt-output').classList.remove('visible');
+    document.getElementById('search-btn').disabled=true;
+    setStatus('Querying Meta Ad Library...');
+    try{
+      const r=await fetch(`${API_BASE}/v1/generate-ad-library-receipt`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name,country}),
+      });
+      if(!r.ok){
+        let msg='Unknown error';
+        try{
+          const err=await r.json();
+          if(typeof err.detail==='string')msg=err.detail;
+          else if(err.detail)msg=typeof err.detail==='object'?JSON.stringify(err.detail):String(err.detail);
+          else msg=`HTTP ${r.status}`;
+        }catch(_){msg=`HTTP ${r.status}`;}
+        throw new Error(msg);
+      }
+      const signed=await r.json();
+      clearStatus();
+      renderReceipt(signed,{adLibrarySummaryHtml:buildAdLibrarySummaryHtml(signed)});
+      autoVerify(signed);
+    }catch(err){clearStatus();showError(`Error: ${err.message}`);}
+    document.getElementById('search-btn').disabled=false;
+    return;
+  }
+  const query=document.getElementById('search-input').value.trim();
+  if(!query)return;
+  clearError();
+  document.getElementById('receipt-output').classList.remove('visible');
+  document.getElementById('search-btn').disabled=true;
+  let body={},endpoint='';
+  if(currentType==='fec'){
+    let candidateId=document.getElementById('fec-candidate-id').value.trim();
+    if(!candidateId){
+      setStatus('Searching FEC for candidate...');
+      try{
+        const sr=await fetch(`${API_BASE}/v1/fec-search?name=${encodeURIComponent(query)}`);
+        if(sr.ok){
+          const sd=await sr.json();
+          if(sd.results?.length>0){
+            candidateId=sd.results[0].candidateId;
+            setStatus(`Found: ${sd.results[0].name} — pulling FEC data...`);
+          }
+        }
+      }catch(e){/* fall through */}
+    }
+    if(!candidateId){clearStatus();showError('Could not find FEC candidate for that name. Try adding a FEC Candidate ID in the field below.');document.getElementById('search-btn').disabled=false;return;}
+    body={candidateId};
+    endpoint='/v1/generate-receipt';
+    setStatus('Pulling live FEC contribution data...');
+  }else if(currentType==='990'){
+    const ein=document.getElementById('ein-input').value.trim();
+    body={orgName:query};
+    if(ein)body.ein=ein;
+    endpoint='/v1/generate-990-receipt';
+    setStatus('Querying IRS 990 records via ProPublica...');
+  }else if(currentType==='wikidata'){
+    const wikidataId=document.getElementById('wikidata-id-input').value.trim();
+    body={personName:query};
+    if(wikidataId)body.wikidataId=wikidataId;
+    endpoint='/v1/generate-wikidata-receipt';
+    setStatus('Searching Wikidata entity database...');
+  }else if(currentType==='combined'){
+    const candidateId=document.getElementById('combined-candidate-id').value.trim();
+    const clientsRaw=document.getElementById('combined-clients').value.trim();
+    const yearsRaw=document.getElementById('combined-years').value.trim();
+    const lobbyingClients=clientsRaw?clientsRaw.split(',').map(s=>s.trim()).filter(Boolean):['ExxonMobil','Chevron'];
+    const years=yearsRaw?yearsRaw.split(',').map(s=>parseInt(s.trim())).filter(Boolean):[2021,2022,2018,2024];
+    body={candidateId:candidateId||query,lobbyingClients,years};
+    endpoint='/v1/generate-combined-receipt';
+    setStatus('Pulling FEC + Senate LDA data in parallel...');
+  }
+  try{
+    const r=await fetch(`${API_BASE}${endpoint}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){const err=await r.json().catch(()=>({detail:'Unknown error'}));throw new Error(err.detail?.message||JSON.stringify(err.detail)||`HTTP ${r.status}`);}
+    const signed=await r.json();
+    clearStatus();
+    renderReceipt(signed,{});
+    autoVerify(signed);
+  }catch(err){clearStatus();showError(`Error: ${err.message}`);}
+  document.getElementById('search-btn').disabled=false;
+}
+function renderReceipt(signed,opts){
+  opts=opts||{};
+  const sumEl=document.getElementById('ad-library-summary');
+  if(sumEl){
+    if(opts.adLibrarySummaryHtml){
+      sumEl.innerHTML=opts.adLibrarySummaryHtml;
+      sumEl.style.display='block';
+    }else{
+      sumEl.innerHTML='';
+      sumEl.style.display='none';
+    }
+  }
+  const payload=signed.payload??signed;
+  const claim=payload.claims?.[0]?.statement??payload.subject?.claimText??'—';
+  const createdAt=payload.createdAt??payload.generatedAt??signed.createdAt;
+  const receiptId=payload.receiptId??payload.frameId??'—';
+  const sources=payload.sources??[];
+  const narrative=payload.narrative??payload.readout?.sentences??[];
+  document.getElementById('receipt-claim').textContent=claim;
+  document.getElementById('receipt-date').textContent=formatDate(createdAt);
+  document.getElementById('receipt-id').textContent=(receiptId?.slice(0,8)??'—')+'...';
+  const evidenceList=document.getElementById('evidence-list');
+  evidenceList.innerHTML='';
+  const sourceMap={};
+  sources.forEach(s=>{sourceMap[s.id]=s;});
+  narrative.forEach((item,i)=>{
+    const text=item.text??item;
+    const src=sourceMap[item.sourceId];
+    const li=document.createElement('li');
+    li.className='evidence-item';
+    li.style.transitionDelay=`${i*60}ms`;
+    li.innerHTML=`<div class="evidence-num">0${i+1}</div><div class="evidence-body"><div class="evidence-text">${text}</div>${src?`<a class="evidence-source" href="${src.url}" target="_blank" rel="noopener">${(src.title??domain(src.url)).slice(0,60)}</a>`:''}</div>`;
+    evidenceList.appendChild(li);
+    setTimeout(()=>li.classList.add('visible'),80+i*60);
+  });
+  const grid=document.getElementById('sources-grid');
+  grid.innerHTML='';
+  sources.forEach(s=>{
+    const a=document.createElement('a');
+    a.className='source-card';
+    a.href=s.url;a.target='_blank';a.rel='noopener';
+    a.innerHTML=`<div class="source-type">${s.adapter??'source'}</div><div class="source-title">${s.title}</div><div class="source-domain">${domain(s.url)}</div>`;
+    grid.appendChild(a);
+  });
+  document.getElementById('manual-payload').value=JSON.stringify(signed,null,2);
+  const sw=document.getElementById('receipt-share-wrap');
+  const sb=document.getElementById('receipt-share-btn');
+  const su=shareUrlFor(signed);
+  if(su){sw.style.display='block';sb.onclick=function(){window.open(su,'_blank','noopener');};}
+  else{sw.style.display='none';}
+  document.getElementById('receipt-output').classList.add('visible');
+  document.getElementById('receipt-output').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function autoVerify(signed){
+  const stamp=document.getElementById('verify-stamp');
+  const badge=document.getElementById('stamp-badge');
+  const detail=document.getElementById('stamp-detail');
+  const hashDisplay=document.getElementById('hash-display');
+  try{
+    const r=await fetch(`${API_BASE}/v1/verify-receipt`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(stripReceiptUrl(signed))});
+    const data=await r.json();
+    if(data.ok){badge.className='stamp-badge valid';badge.innerHTML='✓ Cryptographic signature valid';detail.innerHTML='Ed25519 · JCS (RFC 8785) · SHA-256<br>Hash matches. Signature valid. All sources intact.';}
+    else{badge.className='stamp-badge invalid';badge.innerHTML='✗ Verification failed';detail.innerHTML=data.reasons?.join('<br>')||'Unknown error';}
+    const payload=signed.payload??signed;
+    const contentHash=signed.contentHash??payload.contentHash;
+    if(contentHash){hashDisplay.textContent=`SHA-256: ${contentHash}`;hashDisplay.classList.add('visible');}
+    stamp.classList.add('visible');
+  }catch(err){badge.className='stamp-badge invalid';badge.innerHTML='✗ Verification error';detail.innerHTML=err.message;stamp.classList.add('visible');}
+}
+async function loadSampleReceipt(){
+  clearError();
+  document.getElementById('receipt-output').classList.remove('visible');
+  setStatus('Loading Manchin fossil fuel receipt...');
+  try{
+    const r=await fetch('demo-payload.json');
+    const payload=await r.json();
+    clearStatus();
+    renderReceipt(payload);
+    autoVerify(payload);
+  }catch(err){clearStatus();showError(`Could not load sample: ${err.message}`);}
+}
+async function manualVerify(){
+  const input=document.getElementById('manual-payload').value;
+  const result=document.getElementById('manual-result');
+  result.className='visible';result.textContent='Verifying...';
+  let payload;
+  try{payload=JSON.parse(input);}catch{result.textContent='Invalid JSON';return;}
+  payload=stripReceiptUrl(payload);
+  try{
+    const r=await fetch(`${API_BASE}/v1/verify-receipt`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await r.json();
+    result.textContent=JSON.stringify(data,null,2);
+  }catch(err){result.textContent=`Error: ${err.message}`;}
+}
+document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+const adLibName=document.getElementById('ad-library-name');
+if(adLibName)adLibName.addEventListener('keydown',e=>{if(e.key==='Enter')runSearch();});
+setType('fec',document.querySelector('.type-btn.active'));
+</script>
+</body>
+</html>

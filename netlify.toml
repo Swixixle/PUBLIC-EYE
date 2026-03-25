@@ -1,0 +1,6 @@
+# Rabbit Hole / Frame web (Vite). Set VITE_API_BASE_URL in Netlify UI if the API is not
+# https://frame-2yxu.onrender.com (see apps/web/src/apiBase.js).
+[build]
+  base = "apps/web"
+  command = "npm ci && npm run build"
+  publish = "dist"

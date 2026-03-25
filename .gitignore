@@ -11,6 +11,7 @@
 .env
 .env.*
 !.env.example
+signing-keys.json
 
 # Node
 node_modules/

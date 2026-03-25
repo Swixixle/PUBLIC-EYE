@@ -7,7 +7,7 @@ import {
   sha256HexOfJcs,
   signReceipt,
   verifyReceipt,
-} from "../index.js";
+} from "../src/index.ts";
 import { buildManchinFixture } from "./fixtures/manchin-payload.js";
 
 describe("Frame signing — Manchin fixture", () => {

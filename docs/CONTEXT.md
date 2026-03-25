@@ -40,6 +40,10 @@ They are signed into the receipt payload.
 The UI surfaces `implication_note` as a tooltip on high-risk claims.
 This is schema enforcement, not style guidance.
 
+## Adapter manifest (`adapters_queried`)
+
+Stage 2 enrichment records per-adapter outcomes in **`adapter_log`** (`enrichment/dispatch.py`) and flattens them into **`adapters_queried`** on the **signed receipt payload root** (`adapters_podcast.run_stage2_enrichment`). Each row: `source`, `entity`, `status` (`found` | `not_found` | `error`), `result_count`, `queried_at`, optional `note`. Same JCS hash as the rest of the receipt — not post-hoc. **`meta.adapters_dispatched`** remains a dedupe list of source ids for backward compatibility.
+
 ## Async Job System
 
 All receipt generation can be submitted as background jobs.
@@ -342,3 +346,33 @@ Parallel to `/v1/*` receipts: **`POST /frames`** creates a signed `Frame` (Ed255
 | recording | Music | LibrosaAnalysis, SimilarSongs | Specced |
 | corporation | Future | SEC EDGAR, PACER | Not started |
 | court_case | Future | PACER | Not started |
+
+## Rabbit Hole — Sister Product
+
+Rabbit Hole is a consumer-facing forensic genealogy tool. Same cryptographic spine as Frame. Different entry point: Frame is for journalists and institutions; Rabbit Hole is for anyone who fell down a rabbit hole at 2am and wanted a map.
+
+Tagline: *There is enough O2 even miles down the Rabbit Hole.*
+
+Architecture: six depth layers, each a self-contained information jurisdiction. They stack. They do not bleed into each other. The full spec lives in `docs/RABBIT_HOLE_CONTEXT.md`.
+
+### What's built (as of March 25, 2026)
+- `GET /v1/depth-map` — all six layers, sealed floor on Layer 6 (jurisdiction adapters not yet built)
+- `POST /v1/surface` — Layer 1, Anthropic-powered, graceful 503 when credits offline
+- `GET /v1/surface/slenderman` — inoculation baseline, no API key required
+- `POST /v1/pattern-match` — Layer 5, keyword + structural heuristics against signed pattern library
+- `GET /v1/pattern-lib` — full public pattern library with `unsigned_count` transparency field
+- `POST /v1/dispute` — real endpoint, public, append-only dispute log
+- `GET /v1/dispute/{pattern_id}` — public dispute list per pattern
+- `GET /v1/actor/{slug}` + events — append-only actor ledger, Eric Knudsen seeded
+- `POST /v1/verify-receipt` — shared verification endpoint for both Frame and Rabbit Hole receipts
+- `apps/web` depth map UI — six layers rendered, tier badges, sealed floor visual, dispute inline form, Layer X of 6 navigation header
+
+### What's next
+- Fix `apps/web` branding: "Frame · Depth map" → "Rabbit Hole" *(done March 25, 2026)*
+- Add tagline and opening disclaimer to page header *(done March 25, 2026 — copy in `docs/RABBIT_HOLE_CONTEXT.md` § Tone & Voice)*
+- Add Slenderman baseline as pre-populated example on page load
+- Build signing pipeline for actor ledger events (same HALO-ANCHORS pattern)
+- Seed pattern library with 5 historical patterns before any current-events patterns ship
+- Dispute endpoint needs status update endpoint (`PATCH /v1/dispute/{dispute_id}`)
+- Layers 2, 3, 4 adapters not yet built
+- Comparative jurisdiction layer (Layer 6) requires international source adapters
