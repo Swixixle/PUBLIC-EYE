@@ -1862,6 +1862,16 @@ body {
   font-size: 0.88rem;
 }
 
+.depth-origin-result {
+  margin-top: 4px;
+}
+
+.depth-origin-anchor {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .depth-match-list {
   list-style: none;
   margin: 0;

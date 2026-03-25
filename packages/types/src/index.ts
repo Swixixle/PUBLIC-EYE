@@ -228,6 +228,7 @@ export interface NarrativeViolation {
 export * from "./depth.js";
 export * from "./surface-result.js";
 export * from "./spread-result.js";
+export * from "./origin-result.js";
 export * from "./pattern-result.js";
 export * from "./actor.js";
 export * from "./dispute.js";

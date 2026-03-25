@@ -200,6 +200,62 @@ function SurfaceTraceFields({ trace, ledgerPresence }) {
   );
 }
 
+function OriginResultFields({ origin }) {
+  if (!origin || typeof origin !== "object") return null;
+  const indicators = origin.first_instance_indicators || [];
+  const actors = origin.seeding_actors || [];
+  const absent = origin.absent_fields || [];
+  return (
+    <div className="depth-origin-result">
+      <h3 className="depth-inline-title">Origin signals</h3>
+      <div className="depth-meta-row depth-spread-meta">
+        <TierBadge tier={origin.confidence_tier} />
+        <span className="depth-muted">
+          Anchor (heuristic): {origin.anchor_exists ? "yes" : "no"}
+        </span>
+      </div>
+      {origin.anchor_description ? (
+        <p className="depth-origin-anchor">{origin.anchor_description}</p>
+      ) : null}
+      {indicators.length > 0 ? (
+        <div className="depth-spread-block">
+          <strong>First-instance language</strong>
+          <ul className="depth-spread-list">
+            {indicators.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="depth-muted depth-spread-absent">
+          No first-instance phrases detected. Absent or underspecified:{" "}
+          {absent.length > 0 ? absent.join(", ") : "first_instance_indicators"}.
+        </p>
+      )}
+      {actors.length > 0 ? (
+        <div className="depth-spread-block">
+          <strong>Seeding actors (heuristic)</strong>
+          <ul className="depth-spread-list">
+            {actors.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      ) : indicators.length > 0 ? (
+        <p className="depth-muted depth-spread-absent">
+          No seeding actors or venues extracted.{" "}
+          {absent.includes("seeding_actors")
+            ? "Absent field: seeding_actors."
+            : "Check absent_fields below."}
+        </p>
+      ) : null}
+      {absent.length > 0 ? (
+        <p className="depth-muted depth-spread-gaps">Gaps: {absent.join(", ")}.</p>
+      ) : null}
+    </div>
+  );
+}
+
 function SpreadResultFields({ spread }) {
   if (!spread || typeof spread !== "object") return null;
   const platforms = spread.platforms_mentioned || [];
@@ -338,6 +394,8 @@ export default function DepthMap() {
   const [patternError, setPatternError] = useState(null);
   const [spreadResult, setSpreadResult] = useState(null);
   const [spreadError, setSpreadError] = useState(null);
+  const [originResult, setOriginResult] = useState(null);
+  const [originError, setOriginError] = useState(null);
   const [searchBusy, setSearchBusy] = useState(false);
   const [openDispute, setOpenDispute] = useState(null);
   const [exampleTrace, setExampleTrace] = useState(null);
@@ -451,14 +509,16 @@ export default function DepthMap() {
       setPatternError(null);
       setSpreadResult(null);
       setSpreadError(null);
+      setOriginResult(null);
+      setOriginError(null);
       setOpenDispute(null);
 
-      const spreadReq = {
+      const narrativeReq = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ narrative: text }),
       };
-      const [sRes, pRes, sprRes] = await Promise.all([
+      const [sRes, pRes, sprRes, oRes] = await Promise.all([
         fetch(`${API}/v1/surface`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -469,7 +529,8 @@ export default function DepthMap() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ narrative: text }),
         }),
-        fetch(`${API}/v1/spread`, spreadReq),
+        fetch(`${API}/v1/spread`, narrativeReq),
+        fetch(`${API}/v1/origin`, narrativeReq),
       ]);
 
       if (sRes.status === 503) {
@@ -504,6 +565,14 @@ export default function DepthMap() {
       } else {
         setSpreadResult(null);
         setSpreadError(`Spread analysis failed (${sprRes.status})`);
+      }
+
+      if (oRes.ok) {
+        setOriginResult(await oRes.json());
+        setOriginError(null);
+      } else {
+        setOriginResult(null);
+        setOriginError(`Origin analysis failed (${oRes.status})`);
       }
 
       setSearchBusy(false);
@@ -559,6 +628,7 @@ export default function DepthMap() {
 
           const isL1 = num === 1;
           const isL2 = num === 2;
+          const isL3 = num === 3;
           const isL5 = num === 5;
 
           return (
@@ -621,7 +691,20 @@ export default function DepthMap() {
                 </div>
               ) : null}
 
-              {num === 3 || num === 4 ? (
+              {isL3 ? (
+                <div className="depth-layer-inline">
+                  {searchBusy ? (
+                    <p className="depth-muted depth-trace-hint">Tracing origin…</p>
+                  ) : null}
+                  {!originResult && !originError && !searchBusy ? (
+                    <p className="depth-limited-msg">Limited sourcing available at this depth.</p>
+                  ) : null}
+                  {originError ? <p className="depth-banner-error">{originError}</p> : null}
+                  {originResult ? <OriginResultFields origin={originResult} /> : null}
+                </div>
+              ) : null}
+
+              {num === 4 ? (
                 <p className="depth-limited-msg">Limited sourcing available at this depth.</p>
               ) : null}
 
