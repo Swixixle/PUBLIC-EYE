@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from adapters.courtlistener import search_opinions
+from adapters.govinfo import search_congressional_record, search_statutes
 from adapters.scholarly import search_openalex, search_semantic_scholar
 from frame_crypto import sign_frame_digest_hex
 from report_api import _frame_public_key_spki_b64, _jcs_canonicalize
@@ -211,6 +212,32 @@ def _run_three_layer_ts(
     return json.loads(proc.stdout.strip())
 
 
+def _legislative_thread_entries(
+    congressional: list[dict[str, Any]],
+    statutes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for r in congressional + statutes:
+        if not isinstance(r, dict):
+            continue
+        url = str(r.get("url") or "").strip()
+        title = str(r.get("title") or "").strip()
+        if not url or not title:
+            continue
+        d = str(r.get("date") or "")
+        year = int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else 0
+        st = str(r.get("source_type") or "legislative_record")
+        out.append(
+            {
+                "year": year,
+                "event": title,
+                "source_url": url,
+                "source_type": st,
+            }
+        )
+    return out
+
+
 def _merge_layer_a_sources(payload: dict[str, Any], adapter_sources: list[dict[str, Any]] | None) -> None:
     if not adapter_sources:
         return
@@ -239,14 +266,18 @@ async def build_deep_receipt(query: str) -> dict[str, Any]:
             "No FEC candidate id in query. Include a candidate id such as S0WV00090 for live OpenFEC pulls."
         )
 
-    oa, ss, cl_opinions = await asyncio.gather(
+    oa, ss, cl_opinions, crec_rows, statute_rows = await asyncio.gather(
         search_openalex(q, 5),
         search_semantic_scholar(q, 5),
         search_opinions(q, 3),
+        search_congressional_record(q, 3),
+        search_statutes(q, 2),
     )
-    # Top-level judicial_opinions so the three-layer prompt highlights CourtListener first.
+    legislative_records = _legislative_thread_entries(crec_rows, statute_rows)
+    # Top-level judicial_opinions + legislative_records so Sonnet prioritizes primary records over DOIs.
     historical: dict[str, Any] = {
         "judicial_opinions": cl_opinions,
+        "legislative_records": legislative_records,
         "openalex": oa,
         "semantic_scholar": ss,
     }

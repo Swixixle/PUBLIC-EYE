@@ -201,6 +201,8 @@ export async function generateThreeLayerNarrative(
 
 If judicial_opinions are present in historicalSources, you MUST use their URLs as source_url values in layer_b ThreadEntries. Prefer judicial_opinion source_type over academic_paper when CourtListener URLs are available. Do not invent URLs — use exactly the URLs provided in the input data.
 
+If legislative_records are present in historicalSources (GovInfo Congressional Record + statute search), you MUST use their URLs as source_url values in layer_b ThreadEntries where the thread concerns legislative history, statutes, or floor debate. Prefer congressional_record and statute source_type values over academic_paper when those GovInfo URLs are available. Do not invent URLs — use exactly the URLs provided in the input data. judicial_opinions and legislative_records are co-equal primary categories for Layer B; both outrank scholarly DOIs when relevant.
+
 Required shape (all keys present; use [] for empty arrays; strings may be empty only where the instructions allow):
 {
   "layer_a": { "lede": string, "findings": string, "gaps": string, "sources": PrimarySource[] },
@@ -238,7 +240,7 @@ ${JSON.stringify(queryType)}
 Primary source bundle (Layer A — verified record inputs). Ground Layer A only in this material when it contains data; if sparse, state gaps explicitly:
 ${JSON.stringify(primarySources, null, 2)}
 
-Historical / scholarly bundle (Layer B inputs). judicial_opinions (when non-empty) are live CourtListener results — treat them as the primary legal record for Layer B; openalex and semantic_scholar are supplementary. If courtlistener_stub is true, you must set sourcing_completeness to partial or inferred and name what CourtListener or case law would supply:
+Historical / scholarly bundle (Layer B inputs). judicial_opinions (when non-empty) are live CourtListener results; legislative_records (when non-empty) are live GovInfo legislative hits — treat both as the primary legal and legislative record for Layer B. openalex and semantic_scholar are supplementary. If courtlistener_stub is true, you must set sourcing_completeness to partial or inferred and name what CourtListener or case law would supply:
 ${JSON.stringify(historicalSources, null, 2)}
 `;
 

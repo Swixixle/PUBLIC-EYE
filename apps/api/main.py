@@ -360,6 +360,16 @@ class CourtListenerRequest(BaseModel):
     include_text: bool = False
 
 
+_GOVINFO_COLLECTION_CODES = frozenset({"CREC", "FR", "STATUTE"})
+
+
+class GovInfoRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., min_length=1)
+    collections: list[str] = Field(default_factory=lambda: ["CREC", "FR", "STATUTE"])
+
+
 class AdLibraryRequest(BaseModel):
     name: str = Field(..., min_length=1)
     country: str = "US"
@@ -1294,6 +1304,32 @@ async def courtlistener_post(body: CourtListenerRequest) -> dict[str, Any]:
     if top_opinion_text:
         out["top_opinion_text"] = top_opinion_text
     return out
+
+
+@app.post("/v1/govinfo")
+async def govinfo_post(body: GovInfoRequest) -> dict[str, Any]:
+    """GovInfo search: Congressional Record, Federal Register, US Statutes at Large (by collection)."""
+    from adapters import govinfo as gi
+
+    q = body.query.strip()
+    selected = {c.strip().upper() for c in body.collections if str(c).strip()} & _GOVINFO_COLLECTION_CODES
+    if not selected:
+        selected = set(_GOVINFO_COLLECTION_CODES)
+
+    async def _empty() -> list[dict[str, Any]]:
+        return []
+
+    crec_coro = gi.search_congressional_record(q, 5) if "CREC" in selected else _empty()
+    fr_coro = gi.search_federal_register(q, 5) if "FR" in selected else _empty()
+    stat_coro = gi.search_statutes(q, 5) if "STATUTE" in selected else _empty()
+    crec, fr, stats = await asyncio.gather(crec_coro, fr_coro, stat_coro)
+    return {
+        "query": q,
+        "congressional_record": crec,
+        "federal_register": fr,
+        "statutes": stats,
+        "confidence_tier": "primary_legislative",
+    }
 
 
 def generate_receipt_id() -> str:
