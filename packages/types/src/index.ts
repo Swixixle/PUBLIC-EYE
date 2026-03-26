@@ -245,4 +245,5 @@ export * from "./pattern-result.js";
 export * from "./actor.js";
 export * from "./actor-layer-result.js";
 export * from "./dispute.js";
+export * from "./three-layer-receipt.js";
 export * from "./report.js";

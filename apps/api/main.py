@@ -96,6 +96,7 @@ from pattern_api import get_pattern_lib_payload, run_pattern_match
 from spread_api import run_spread
 from origin_api import run_origin
 from actor_layer_api import run_actor_layer
+from deep_receipt_api import build_deep_receipt
 from report_api import build_extended_report_async
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
 from dispute_api import pattern_ids_in_library, run_dispute_append, run_dispute_get
@@ -298,6 +299,10 @@ class GenerateReceiptRequest(BaseModel):
     candidateId: str = Field(..., min_length=1, max_length=64)
 
 
+class DeepReceiptBody(BaseModel):
+    query: str = Field(..., min_length=1, max_length=20000)
+
+
 class LobbyingRequest(BaseModel):
     name: str
     candidateId: str | None = None
@@ -346,6 +351,13 @@ class ScholarlyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(..., min_length=1)
+
+
+class CourtListenerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., min_length=1)
+    include_text: bool = False
 
 
 class AdLibraryRequest(BaseModel):
@@ -1028,6 +1040,23 @@ def generate_receipt(body: GenerateReceiptRequest) -> dict[str, Any]:
     return _generate_fec_receipt_sync(body.candidateId)
 
 
+@app.post("/v1/deep-receipt")
+async def deep_receipt_post(body: DeepReceiptBody) -> dict[str, Any]:
+    """
+    Universal three-layer receipt: Layer A (verified), B (historical thread), C (pattern inference).
+    Query type selects adapters; structure is always the same. Signed via JCS + Ed25519 when keys are set.
+    """
+    try:
+        return await build_deep_receipt(body.query.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc)[:4000],
+        ) from exc
+
+
 def _generate_lobbying_receipt_sync(name: str, candidate_id: str | None) -> dict[str, Any]:
     root = _repo_root()
     script = root / "scripts" / "generate-lobbying-receipt.ts"
@@ -1217,6 +1246,36 @@ async def scholarly_post(body: ScholarlyRequest) -> dict[str, Any]:
     from adapters.scholarly import scholarly_aggregate
 
     return await scholarly_aggregate(body.query.strip(), per_source_limit=5)
+
+
+@app.post("/v1/courtlistener")
+async def courtlistener_post(body: CourtListenerRequest) -> dict[str, Any]:
+    """CourtListener: opinion search + docket search; optional full text for top opinion hit."""
+    from adapters import courtlistener as cl
+
+    q = body.query.strip()
+    opinions, dockets = await asyncio.gather(
+        cl.search_opinions(q, 5),
+        cl.search_dockets(q, 5),
+    )
+    top_opinion_text: str | None = None
+    if body.include_text and opinions:
+        oid = opinions[0].get("opinion_id")
+        if oid is not None:
+            top_opinion_text = await cl.get_opinion_text(oid)
+            if not (top_opinion_text or "").strip():
+                top_opinion_text = None
+    out: dict[str, Any] = {
+        "query": q,
+        "opinions": opinions,
+        "dockets": dockets,
+        "source_type": "judicial_opinion",
+        "confidence_tier": "primary_legal",
+        "sourcing_completeness": cl.sourcing_completeness_status(),
+    }
+    if top_opinion_text:
+        out["top_opinion_text"] = top_opinion_text
+    return out
 
 
 def generate_receipt_id() -> str:

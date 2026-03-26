@@ -14,6 +14,13 @@ import {
   generateFecReceiptNarrative,
 } from "./receipt-narrative.js";
 
+export {
+  generateThreeLayerNarrative,
+  LAYER_C_DISCLAIMER_TEXT,
+  THREE_LAYER_MODEL,
+  THREE_LAYER_SYSTEM_PROMPT,
+} from "./three-layer-narrative.js";
+
 function nowIso(): string {
   return new Date().toISOString();
 }
