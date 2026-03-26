@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from adapters.courtlistener import search_opinions
+from adapters.courtlistener import get_opinion_by_citation, search_opinions
 from adapters.govinfo import search_congressional_record, search_statutes
 from adapters.scholarly import search_openalex, search_semantic_scholar
 from frame_crypto import sign_frame_digest_hex
@@ -24,6 +24,31 @@ from report_api import _frame_public_key_spki_b64, _jcs_canonicalize
 _LOG = logging.getLogger(__name__)
 
 FEC_CANDIDATE_ID_RE = re.compile(r"^[HSP][0-9][A-Z0-9]{6,}$", re.IGNORECASE)
+
+LANDMARK_CITATIONS: dict[str, list[str]] = {
+    "citizens united": [
+        "558 U.S. 310",  # Citizens United v. FEC 2010
+        "424 U.S. 1",  # Buckley v. Valeo 1976
+        "494 U.S. 652",  # Austin v. Michigan Chamber 1990
+        "540 U.S. 93",  # McConnell v. FEC 2003
+    ],
+    "first amendment": [
+        "376 U.S. 254",  # New York Times v. Sullivan 1964
+        "395 U.S. 444",  # Brandenburg v. Ohio 1969
+    ],
+    "campaign finance": [
+        "558 U.S. 310",  # Citizens United v. FEC 2010
+        "424 U.S. 1",  # Buckley v. Valeo 1976
+    ],
+    "voting rights": [
+        "383 U.S. 301",  # South Carolina v. Katzenbach 1966
+        "570 U.S. 529",  # Shelby County v. Holder 2013
+    ],
+    "fourth amendment": [
+        "389 U.S. 347",  # Katz v. United States 1967
+        "565 U.S. 400",  # United States v. Jones 2012
+    ],
+}
 
 
 def _repo_root() -> Path:
@@ -67,6 +92,24 @@ def classify_query_type(query: str) -> str:
     if any(k in ql for k in ("wikidata", "entity", "ein ")):
         return "entity"
     return "narrative"
+
+
+def _landmark_citations_for_query(query: str) -> list[str]:
+    """Up to 3 unique citations when any LANDMARK_CITATIONS topic substring matches."""
+    ql = query.lower()
+    out: list[str] = []
+    seen: set[str] = set()
+    for topic, cites in LANDMARK_CITATIONS.items():
+        if topic not in ql:
+            continue
+        for c in cites:
+            c = str(c).strip()
+            if c and c not in seen:
+                seen.add(c)
+                out.append(c)
+                if len(out) >= 3:
+                    return out
+    return out
 
 
 def _govinfo_query(query: str, query_type: str) -> str:
@@ -281,16 +324,26 @@ async def build_deep_receipt(query: str) -> dict[str, Any]:
         )
 
     gov_q = _govinfo_query(q, qtype)
-    oa, ss, cl_opinions, crec_rows, statute_rows = await asyncio.gather(
+    cite_list = _landmark_citations_for_query(q)
+
+    async def _landmark_opinions() -> list[dict[str, Any]]:
+        if not cite_list:
+            return []
+        fetched = await asyncio.gather(*[get_opinion_by_citation(c) for c in cite_list])
+        return [x for x in fetched if isinstance(x, dict)]
+
+    oa, ss, cl_opinions, crec_rows, statute_rows, landmark_opinions = await asyncio.gather(
         search_openalex(q, 5),
         search_semantic_scholar(q, 5),
         search_opinions(q, 3),
         search_congressional_record(gov_q, 3),
         search_statutes(gov_q, 2),
+        _landmark_opinions(),
     )
     legislative_records = _legislative_thread_entries(crec_rows, statute_rows)
-    # Top-level judicial_opinions + legislative_records so Sonnet prioritizes primary records over DOIs.
+    # landmark_opinions — highest-priority Layer B anchors (exact citation pulls).
     historical: dict[str, Any] = {
+        "landmark_opinions": landmark_opinions,
         "judicial_opinions": cl_opinions,
         "legislative_records": legislative_records,
         "openalex": oa,
