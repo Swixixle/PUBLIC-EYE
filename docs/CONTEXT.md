@@ -200,6 +200,7 @@ POST /v1/sec-edgar                 — SEC EDGAR probe
 POST /v1/scholarly                 — Academic source search
 POST /v1/courtlistener             — Judicial opinion search
 POST /v1/verify-receipt            — Verify any signed receipt
+GET  /v1/status                   — Which env keys are set (values never exposed)
 GET  /v1/receipts/report/{id}      — Report receipt stub (PostgreSQL pending)
 ```
 
@@ -326,12 +327,16 @@ POST /v1/verify-receipt              — shared with Frame
 - Congressional voting record cross-reference with FEC not built
 - SEC and LDA receipt narrative not yet upgraded to four-section Sonnet prompt (FEC is done, others pending)
 
+### Research adapters — CourtListener (shipped)
+| Adapter | Source | Status |
+|---------|--------|--------|
+| `courtlistener.py` | CourtListener REST API | **Live in production** — judicial opinions flowing into Layer B (`POST /v1/deep-receipt` supplies top-level `judicial_opinions`; `POST /v1/courtlistener` for direct search). |
+
 ### Research Adapters Not Yet Built
 | Adapter | Source | Value |
 |---------|--------|-------|
-| CourtListener full-text wire | Already in Layer B stub | Makes Layer B real |
+| **GovInfo (next priority)** | Federal Register, Congressional Record, US Code | Legislative history for Layer B alongside the judicial thread; Congressional Record for floor debate and statutory context |
 | Caselaw Access Project | 6.7M digitized cases | Deep legal history |
-| GovInfo | Federal Register, Congressional Record | Legislative history |
 | USASpending.gov | Federal contracts and grants | Follow the money |
 | OpenStates | State legislature APIs | Sub-federal accountability |
 | OFAC sanctions list | Treasury | Sanctions verification |
@@ -344,9 +349,11 @@ POST /v1/verify-receipt              — shared with Frame
 
 A Frame deep receipt on "Citizens United" should eventually contain:
 
+**Where it is today:** A query like `Citizens United` already returns **real CourtListener URLs** in Layer B — e.g. multiple **`judicial_opinion`** thread entries in `mutations` (and related URLs in `sources`) anchored to live opinions (Schneiderman, End Citizens United PAC v. FEC, etc.), plus academic DOIs where the model cites scholarship. `sourcing_completeness: "partial"` is correct: the adapter and prompt prioritize judicial URLs when present, but topical search still surfaces recent litigation first; landmark precedents (*Citizens United* 2010, *Buckley*, *Austin*) are targets for tighter retrieval or GovInfo-backed legislative context, not assumed present.
+
 **Layer A:** FEC data showing who gave what to which PACs after 2010, with exact figures, exact dates, exact committee names. Gaps naming the specific Form 3 filings that would show individual contributor details.
 
-**Layer B:** The actual text of *Citizens United v. FEC* (558 U.S. 310) from CourtListener. *Buckley v. Valeo* (1976). *First National Bank of Boston v. Bellotti* (1978). The actual Congressional Record entries where legislators responded. Scholarly papers on campaign finance effects post-2010 with citation counts.
+**Layer B (north star):** The actual text of *Citizens United v. FEC* (558 U.S. 310) from CourtListener. *Buckley v. Valeo* (1976). *First National Bank of Boston v. Bellotti* (1978). The actual Congressional Record entries where legislators responded (GovInfo). Scholarly papers on campaign finance effects post-2010 with citation counts.
 
 **Layer C:** Documented analogues — the 1886 Santa Clara County case that established corporate personhood (documented, not speculated). Named techniques from the propaganda research literature. Disclaimer inside the hash. Confidence level: documented or probable, with sources listed.
 
