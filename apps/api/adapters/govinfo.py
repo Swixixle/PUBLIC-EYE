@@ -75,6 +75,16 @@ def _granule_class(raw: dict[str, Any]) -> str:
     return ""
 
 
+def _snippet_from_raw(raw: dict[str, Any]) -> str:
+    """First 200 chars of GovInfo content or description when present."""
+    for key in ("content", "description"):
+        v = raw.get(key)
+        if isinstance(v, str) and v.strip():
+            s = re.sub(r"\s+", " ", v.strip())
+            return s[:200]
+    return ""
+
+
 def _filter_search_results(
     results: list[Any],
     *,
@@ -148,6 +158,7 @@ async def search_congressional_record(query: str, limit: int = 5) -> list[dict[s
                     "package_id": str(raw.get("packageId") or "").strip(),
                     "url": _details_url(raw),
                     "granule_class": _granule_class(raw),
+                    "snippet": _snippet_from_raw(raw),
                     "source_type": "congressional_record",
                 }
             )
@@ -168,6 +179,7 @@ async def search_federal_register(query: str, limit: int = 5) -> list[dict[str, 
                     "date": _date_only(raw.get("dateIssued")),
                     "agency": _agency(raw),
                     "url": _details_url(raw),
+                    "snippet": _snippet_from_raw(raw),
                     "source_type": "federal_register",
                 }
             )
@@ -188,6 +200,7 @@ async def search_statutes(query: str, limit: int = 5) -> list[dict[str, Any]]:
                     "date": _date_only(raw.get("dateIssued")),
                     "congress": _congress_from_statute(raw),
                     "url": _details_url(raw),
+                    "snippet": _snippet_from_raw(raw),
                     "source_type": "statute",
                 }
             )

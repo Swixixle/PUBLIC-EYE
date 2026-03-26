@@ -69,6 +69,18 @@ def classify_query_type(query: str) -> str:
     return "narrative"
 
 
+def _govinfo_query(query: str, query_type: str) -> str:
+    """Build a more specific GovInfo query based on query type."""
+    if query_type == "campaign_finance":
+        return f"{query} campaign finance election"
+    if query_type == "judicial":
+        return f"{query} Supreme Court ruling congress response"
+    if query_type == "legislation":
+        return f"{query} act bill congress vote"
+    # default — add "congress debate" to surface floor debate and committee records
+    return f"{query} congress senate debate"
+
+
 def _fec_key() -> str:
     import os
 
@@ -227,10 +239,12 @@ def _legislative_thread_entries(
         d = str(r.get("date") or "")
         year = int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else 0
         st = str(r.get("source_type") or "legislative_record")
+        snip = str(r.get("snippet") or "").strip()
+        event = f"{title} — {snip}" if snip else title
         out.append(
             {
                 "year": year,
-                "event": title,
+                "event": event,
                 "source_url": url,
                 "source_type": st,
             }
@@ -266,12 +280,13 @@ async def build_deep_receipt(query: str) -> dict[str, Any]:
             "No FEC candidate id in query. Include a candidate id such as S0WV00090 for live OpenFEC pulls."
         )
 
+    gov_q = _govinfo_query(q, qtype)
     oa, ss, cl_opinions, crec_rows, statute_rows = await asyncio.gather(
         search_openalex(q, 5),
         search_semantic_scholar(q, 5),
         search_opinions(q, 3),
-        search_congressional_record(q, 3),
-        search_statutes(q, 2),
+        search_congressional_record(gov_q, 3),
+        search_statutes(gov_q, 2),
     )
     legislative_records = _legislative_thread_entries(crec_rows, statute_rows)
     # Top-level judicial_opinions + legislative_records so Sonnet prioritizes primary records over DOIs.
