@@ -375,3 +375,13 @@ Consumer-facing **depth map**: same verification spine as Frame (`POST /v1/verif
 **Layer 6:** Sealed in metadata until jurisdiction adapters exist.
 
 **Next priorities:** See **Known Gaps** (Layer 6, dispute PATCH, optional Slenderman prefill, actor ledger signing polish).
+
+---
+
+## Three-layer receipts and Layer B
+
+Deep receipts (`POST /v1/deep-receipt`) structure output into **Layer A** (verified primary record), **Layer B** (historical thread), and **Layer C** (explicitly labeled inference). Layer A can be strong when live adapters return data (e.g. OpenFEC, CourtListener as the stack ingests them). **Layer B** depends on threaded legal and historical material—court opinions, dockets, legislation, GovInfo, and scholarly/caselaw hops—not on rhetoric. When that substrate is thin or unmapped into the bundle, the historical thread stays empty regardless of Layer A quality.
+
+## Handoff
+
+The most important thing to build next is always the thing that makes Layer B less empty.
