@@ -11,6 +11,10 @@ Rabbit Hole is Frame's sister product. Where Frame starts from a claim or a publ
 
 Both products share the same cryptographic spine. Both are built to be read by a West Virginia voter, parsed by an AI summarizer in Singapore, and cited by a policy analyst in Brussels. The writing discipline required to serve all three simultaneously is the same: short sentences, no idioms, every number explained, every claim sourced in the same breath.
 
+### For journalists and funders (non-technical)
+
+Frame is a machine that reads public records and produces a document you can verify. Ask it about Citizens United and it doesn't give you a summary — it pulls the actual court opinions, traces the legal thread from Buckley v. Valeo in 1976 through the 2010 decision, shows you what Congress said, and tells you exactly what it couldn't find and where you'd look for it. Every document it produces is cryptographically signed. The gaps it named, the caveats it flagged, the disclaimer that says "this is inference, not fact" — all of it is sealed inside the signature. You can't strip it out. A news organization, a foreign government, an AI summarizer downstream — none of them can quietly remove the parts that complicate the story. The record is the record.
+
 ---
 
 ## THE CORE INSIGHT
@@ -108,7 +112,8 @@ Every Frame receipt and Rabbit Hole report is signed using Ed25519. The process:
 | `FRAME_KEY_FORMAT` | Key encoding format | `base64` |
 | `FEC_API_KEY` | OpenFEC API | Set (DEMO_KEY fallback) |
 | `CONGRESS_API_KEY` | Congress.gov | Set |
-| `COURTLISTENER_API_KEY` | CourtListener judicial opinions | Set |
+| `COURTLISTENER_API_KEY` | CourtListener judicial opinions + citation lookup | Set |
+| `GOVINFO_API_KEY` | GovInfo search (Congressional Record, FR, statutes) | Set |
 | `ASSEMBLYAI_API_KEY` | Podcast/audio transcription | Needs verification |
 | `SEC_EDGAR_USER_AGENT` | SEC policy requires contact email | Needs setting |
 | `HIVE_API_KEY` | AI content detection | Not set, feature disabled |
@@ -199,6 +204,7 @@ POST /v1/deep-receipt              — Three-layer receipt, any query
 POST /v1/sec-edgar                 — SEC EDGAR probe
 POST /v1/scholarly                 — Academic source search
 POST /v1/courtlistener             — Judicial opinion search
+POST /v1/govinfo                   — GovInfo legislative search (CREC / FR / STATUTE)
 POST /v1/verify-receipt            — Verify any signed receipt
 GET  /v1/status                   — Which env keys are set (values never exposed)
 GET  /v1/receipts/report/{id}      — Report receipt stub (PostgreSQL pending)
@@ -211,7 +217,8 @@ GET  /v1/receipts/report/{id}      — Report receipt stub (PostgreSQL pending)
 | `fec.py` | OpenFEC API | Candidate profiles, fundraising totals by cycle |
 | `sec_edgar.py` | SEC EDGAR EFTS + data.sec.gov | Entity search, Form 4 filings, company facts |
 | `scholarly.py` | OpenAlex, Semantic Scholar, CrossRef | Open access academic papers, citation counts |
-| `courtlistener.py` | CourtListener API | Judicial opinions full text, dockets |
+| `courtlistener.py` | CourtListener API v3 + v4 | Opinion search, dockets, **citation-lookup** for U.S. Reports cites, landmark pulls in deep-receipt |
+| `govinfo.py` | GovInfo API | Congressional Record, Federal Register, statutes (Layer B) |
 
 **SEC EDGAR known limitation:** Name search for politicians resolves poorly — EDGAR is company-centric. Fallback searches Form 4 filings to find entities a person filed as reporting owner. For politicians, FEC is the primary source; EDGAR is supplementary.
 
@@ -327,15 +334,15 @@ POST /v1/verify-receipt              — shared with Frame
 - Congressional voting record cross-reference with FEC not built
 - SEC and LDA receipt narrative not yet upgraded to four-section Sonnet prompt (FEC is done, others pending)
 
-### Research adapters — CourtListener (shipped)
+### Research adapters — shipped (deep-receipt Layer B)
 | Adapter | Source | Status |
 |---------|--------|--------|
-| `courtlistener.py` | CourtListener REST API | **Live in production** — judicial opinions flowing into Layer B (`POST /v1/deep-receipt` supplies top-level `judicial_opinions`; `POST /v1/courtlistener` for direct search). |
+| `courtlistener.py` | CourtListener REST v3/v4 | **Live** — `judicial_opinions` (search), **`landmark_opinions`** (registry + **citation-lookup** for e.g. 558 U.S. 310, 424 U.S. 1), full opinion text cap; `POST /v1/courtlistener`. |
+| `govinfo.py` | GovInfo search API | **Live** — targeted queries → `legislative_records` + `POST /v1/govinfo`; CREC results filtered client-side. |
 
 ### Research Adapters Not Yet Built
 | Adapter | Source | Value |
 |---------|--------|-------|
-| **GovInfo (next priority)** | Federal Register, Congressional Record, US Code | Legislative history for Layer B alongside the judicial thread; Congressional Record for floor debate and statutory context |
 | Caselaw Access Project | 6.7M digitized cases | Deep legal history |
 | USASpending.gov | Federal contracts and grants | Follow the money |
 | OpenStates | State legislature APIs | Sub-federal accountability |
@@ -349,7 +356,7 @@ POST /v1/verify-receipt              — shared with Frame
 
 A Frame deep receipt on "Citizens United" should eventually contain:
 
-**Where it is today:** A query like `Citizens United` already returns **real CourtListener URLs** in Layer B — e.g. multiple **`judicial_opinion`** thread entries in `mutations` (and related URLs in `sources`) anchored to live opinions (Schneiderman, End Citizens United PAC v. FEC, etc.), plus academic DOIs where the model cites scholarship. `sourcing_completeness: "partial"` is correct: the adapter and prompt prioritize judicial URLs when present, but topical search still surfaces recent litigation first; landmark precedents (*Citizens United* 2010, *Buckley*, *Austin*) are targets for tighter retrieval or GovInfo-backed legislative context, not assumed present.
+**Where it is today:** `POST /v1/deep-receipt` combines **landmark citation resolution** (CourtListener **v4 citation-lookup** for reporter cites such as **558 U.S. 310**, **424 U.S. 1**) with **search hits**, **GovInfo** legislative rows, and **scholarship**. On matching queries, Layer B can place **Buckley**, **Austin**, and **Citizens United** in chronological thread with **real opinion URLs** and **`source_type: "landmark_opinion"`**; `sourcing_completeness` may read **`"full"`** when the model and sources align. Stochastic ordering still varies by run; **GovInfo** CREC relevance is query-tuned, not perfect.
 
 **Layer A:** FEC data showing who gave what to which PACs after 2010, with exact figures, exact dates, exact committee names. Gaps naming the specific Form 3 filings that would show individual contributor details.
 
@@ -377,4 +384,4 @@ That is the product. Everything being built is in service of that output being p
 
 ---
 
-*This document should be updated at the end of every significant session. If you found this in a bottle, start with the health check, read Rabbit Hole context, then look at the known gaps list. The most important thing to build next is always the thing that makes Layer B less empty.*
+*This document should be updated at the end of every significant session. If you found this in a bottle, start with the health check, read Rabbit Hole context, then look at the known gaps list. Layer B is no longer empty for flagship legal-finance queries; next wins are voting records, lobbying depth, and cross-source linking named in known gaps.*
