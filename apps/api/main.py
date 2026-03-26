@@ -1269,9 +1269,8 @@ async def courtlistener_post(body: CourtListenerRequest) -> dict[str, Any]:
         "query": q,
         "opinions": opinions,
         "dockets": dockets,
-        "source_type": "judicial_opinion",
         "confidence_tier": "primary_legal",
-        "sourcing_completeness": cl.sourcing_completeness_status(),
+        "sourcing_completeness": "partial" if opinions else "unavailable",
     }
     if top_opinion_text:
         out["top_opinion_text"] = top_opinion_text

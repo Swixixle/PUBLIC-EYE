@@ -123,69 +123,71 @@ async def search_opinions(query: str, limit: int = 5) -> list[dict[str, Any]]:
             "docket_number": dnum,
             "citation": cit,
             "summary": summary,
-            "absolute_url": _abs_url(abs_p if isinstance(abs_p, str) else None),
+            "url": _abs_url(abs_p if isinstance(abs_p, str) else None),
+            "opinion_id": oid,
             "source_type": "judicial_opinion",
         }
-        if oid is not None:
-            row["opinion_id"] = oid
         out.append(row)
     return out
 
 
 async def get_opinion_text(opinion_id: int | str) -> str:
-    """Fetch opinion plain text or stripped HTML, capped at 8000 chars."""
-    _warn_no_key()
-    if _token() is None:
-        return ""
-    oid = str(opinion_id).strip()
-    if not oid:
-        return ""
+    """Fetch opinion plain text or stripped HTML, capped at 8000 chars. On failure returns ""."""
+    try:
+        _warn_no_key()
+        if _token() is None:
+            return ""
+        oid = str(opinion_id).strip()
+        if not oid:
+            return ""
 
-    async def _fetch_opinion_detail(pk: str) -> dict[str, Any] | None:
+        async def _fetch_opinion_detail(pk: str) -> dict[str, Any] | None:
+            try:
+                async with httpx.AsyncClient(timeout=45.0, headers=_headers()) as client:
+                    resp = await client.get(f"{API}/opinions/{pk}/", params={"format": "json"})
+                    if resp.status_code == 404:
+                        return None
+                    resp.raise_for_status()
+                    return resp.json()
+            except Exception as exc:  # noqa: BLE001
+                _LOG.warning("CourtListener get_opinion_text failed for %s: %s", pk, exc)
+                return None
+
+        data = await _fetch_opinion_detail(oid)
+        if isinstance(data, dict):
+            plain = data.get("plain_text")
+            if isinstance(plain, str) and plain.strip():
+                return plain.strip()[:8000]
+            html = data.get("html") or data.get("html_with_citations")
+            if isinstance(html, str) and html.strip():
+                return _strip_html(html)[:8000]
+
         try:
             async with httpx.AsyncClient(timeout=45.0, headers=_headers()) as client:
-                resp = await client.get(f"{API}/opinions/{pk}/", params={"format": "json"})
-                if resp.status_code == 404:
-                    return None
-                resp.raise_for_status()
-                return resp.json()
+                r = await client.get(
+                    f"{API}/opinions/",
+                    params={"cluster": oid, "format": "json", "page_size": 5},
+                )
+                if r.status_code == 200:
+                    lst = (r.json() or {}).get("results") or []
+                    if isinstance(lst, list) and lst:
+                        first = lst[0]
+                        if isinstance(first, dict) and first.get("id") is not None:
+                            child = await _fetch_opinion_detail(str(first["id"]))
+                            if isinstance(child, dict):
+                                plain = child.get("plain_text")
+                                if isinstance(plain, str) and plain.strip():
+                                    return plain.strip()[:8000]
+                                html = child.get("html") or child.get("html_with_citations")
+                                if isinstance(html, str) and html.strip():
+                                    return _strip_html(html)[:8000]
         except Exception as exc:  # noqa: BLE001
-            _LOG.warning("CourtListener get_opinion_text failed for %s: %s", pk, exc)
-            return None
+            _LOG.warning("CourtListener cluster opinion fallback failed: %s", exc)
 
-    data = await _fetch_opinion_detail(oid)
-    if isinstance(data, dict):
-        plain = data.get("plain_text")
-        if isinstance(plain, str) and plain.strip():
-            return plain.strip()[:8000]
-        html = data.get("html") or data.get("html_with_citations")
-        if isinstance(html, str) and html.strip():
-            return _strip_html(html)[:8000]
-
-    # Search hits often use cluster id; list child opinions for the cluster.
-    try:
-        async with httpx.AsyncClient(timeout=45.0, headers=_headers()) as client:
-            r = await client.get(
-                f"{API}/opinions/",
-                params={"cluster": oid, "format": "json", "page_size": 5},
-            )
-            if r.status_code == 200:
-                lst = (r.json() or {}).get("results") or []
-                if isinstance(lst, list) and lst:
-                    first = lst[0]
-                    if isinstance(first, dict) and first.get("id") is not None:
-                        child = await _fetch_opinion_detail(str(first["id"]))
-                        if isinstance(child, dict):
-                            plain = child.get("plain_text")
-                            if isinstance(plain, str) and plain.strip():
-                                return plain.strip()[:8000]
-                            html = child.get("html") or child.get("html_with_citations")
-                            if isinstance(html, str) and html.strip():
-                                return _strip_html(html)[:8000]
+        return ""
     except Exception as exc:  # noqa: BLE001
-        _LOG.warning("CourtListener cluster opinion fallback failed: %s", exc)
-
-    return ""
+        _LOG.warning("CourtListener get_opinion_text failed: %s", exc)
+        return ""
 
 
 async def search_dockets(query: str, limit: int = 5) -> list[dict[str, Any]]:
@@ -232,7 +234,6 @@ async def search_dockets(query: str, limit: int = 5) -> list[dict[str, Any]]:
         filed = _date_only(raw.get("dateFiled") or raw.get("date_filed"))
         dr = raw.get("docket_number") or raw.get("docketNumber")
         dnum = str(dr).strip() if dr is not None else ""
-        pacer = raw.get("pacer_case_id") or raw.get("pacerCaseId")
         abs_p = raw.get("absolute_url") or raw.get("absoluteUrl")
         out.append(
             {
@@ -240,14 +241,8 @@ async def search_dockets(query: str, limit: int = 5) -> list[dict[str, Any]]:
                 "court": court,
                 "date_filed": filed,
                 "docket_number": dnum,
-                "pacer_case_id": pacer if pacer is not None else None,
-                "absolute_url": _abs_url(abs_p if isinstance(abs_p, str) else None),
+                "url": _abs_url(abs_p if isinstance(abs_p, str) else None),
                 "source_type": "court_docket",
             }
         )
     return out
-
-
-def sourcing_completeness_status() -> str:
-    """For API responses when the key is missing."""
-    return "unavailable" if _token() is None else "partial"

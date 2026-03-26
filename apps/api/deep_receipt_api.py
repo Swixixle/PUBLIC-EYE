@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from adapters.courtlistener import search_opinions
 from adapters.scholarly import search_openalex, search_semantic_scholar
 from frame_crypto import sign_frame_digest_hex
 from report_api import _frame_public_key_spki_b64, _jcs_canonicalize
@@ -238,15 +239,39 @@ async def build_deep_receipt(query: str) -> dict[str, Any]:
             "No FEC candidate id in query. Include a candidate id such as S0WV00090 for live OpenFEC pulls."
         )
 
-    oa, ss = await asyncio.gather(search_openalex(q, 5), search_semantic_scholar(q, 5))
+    oa, ss, cl_opinions = await asyncio.gather(
+        search_openalex(q, 5),
+        search_semantic_scholar(q, 5),
+        search_opinions(q, 3),
+    )
+    layer_b_candidates: list[dict[str, Any]] = []
+    for op in cl_opinions:
+        if not isinstance(op, dict):
+            continue
+        df = str(op.get("date_filed") or "")
+        year = int(df[:4]) if len(df) >= 4 and df[:4].isdigit() else 0
+        case = str(op.get("case_name") or "").strip()
+        summ = str(op.get("summary") or "")
+        url = str(op.get("url") or "").strip()
+        event = f"{case} — {summ[:200]}"
+        if not event.strip() or not url:
+            continue
+        layer_b_candidates.append(
+            {
+                "year": year,
+                "event": event,
+                "source_url": url,
+                "source_type": "judicial_opinion",
+            }
+        )
     historical: dict[str, Any] = {
         "openalex": oa,
         "semantic_scholar": ss,
         "courtlistener": {
-            "cases": [],
-            "note": "CourtListener adapter stub — no live case search in this path yet.",
+            "opinions": cl_opinions,
+            "layer_b_candidates": layer_b_candidates,
+            "sourcing_completeness": "partial" if cl_opinions else "unavailable",
         },
-        "courtlistener_stub": True,
     }
 
     payload = _run_three_layer_ts(q, qtype, primary, historical)

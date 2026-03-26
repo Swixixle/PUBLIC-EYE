@@ -50,6 +50,8 @@ services:
         sync: false
       - key: FEC_API_KEY
         sync: false
+      - key: COURTLISTENER_API_KEY
+        sync: false
       - key: FRAME_REPO_ROOT
         value: /opt/render/project/src
         sync: false
