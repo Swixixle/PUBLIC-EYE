@@ -15,7 +15,16 @@ Changes from v3:
 
 from __future__ import annotations
 import html
+from collections import defaultdict
 from typing import Any
+
+
+_OUTLET_TYPE_ORDER = ("state", "public_broadcaster", "private")
+_OUTLET_TYPE_LABEL = {
+    "state": "State-affiliated media",
+    "public_broadcaster": "Public broadcasters",
+    "private": "Private / independent",
+}
 
 
 def _e(s: Any) -> str:
@@ -71,32 +80,106 @@ def _chain_preview(chain: list) -> str:
     return f"Backed by {len(chain)} outlet{'s' if len(chain)!=1 else ''} in {countries} countr{'ies' if countries!=1 else 'y'}"
 
 
-def _chain_items_html(chain: list, side_id: str) -> str:
+def _one_outlet_row(item: dict) -> str:
+    conf = item.get("alignment_confidence", "medium")
+    dot = {"high": "#3ecf8e", "medium": "#e8a020", "low": "#5a5752"}.get(conf, "#5a5752")
+    note = item.get("alignment_note", "")
+    return (
+        f'<div style="display:flex;gap:10px;align-items:flex-start;'
+        f'padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,0.04)">'
+        f'<div style="flex:1;min-width:0">'
+        f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">'
+        f'<span style="font-size:13px;font-weight:500;color:#f0ede8">'
+        f'{_e(item.get("outlet",""))}</span>'
+        f'{_outlet_badge(item.get("outlet_type",""))}</div>'
+        f'<div style="font-size:12px;color:#9e9a93;line-height:1.5">{_e(note)}</div>'
+        f'</div>'
+        f'<div style="width:6px;height:6px;border-radius:50%;background:{dot};'
+        f'flex-shrink:0;margin-top:6px"></div>'
+        f'</div>'
+    )
+
+
+def _chain_items_html(chain: list, side_prefix: str) -> str:
+    """Group outlets by country (click to expand), then by media type on this story."""
     if not chain:
         return '<div style="font-size:12px;color:#5a5752;padding:12px 0">No outlets mapped yet.</div>'
-    rows = []
+
+    by_country: dict[str, list] = defaultdict(list)
     for item in chain:
-        conf = item.get("alignment_confidence", "medium")
-        dot = {"high": "#3ecf8e", "medium": "#e8a020", "low": "#5a5752"}.get(conf, "#5a5752")
-        note = item.get("alignment_note", "")
-        rows.append(
-            f'<div style="display:flex;gap:10px;align-items:flex-start;'
-            f'padding:10px 0;border-bottom:0.5px solid rgba(255,255,255,0.05)">'
-            f'<span style="font-size:15px;flex-shrink:0;line-height:1;margin-top:2px">'
-            f'{item.get("flag","")}</span>'
-            f'<div style="flex:1;min-width:0">'
-            f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">'
-            f'<span style="font-size:13px;font-weight:500;color:#f0ede8">'
-            f'{_e(item.get("outlet",""))}</span>'
-            f'<span style="font-size:10px;color:#5a5752">{_e(item.get("country",""))}</span>'
-            f'{_outlet_badge(item.get("outlet_type",""))}</div>'
-            f'<div style="font-size:12px;color:#9e9a93;line-height:1.5">{_e(note)}</div>'
-            f'</div>'
-            f'<div style="width:6px;height:6px;border-radius:50%;background:{dot};'
-            f'flex-shrink:0;margin-top:6px"></div>'
-            f'</div>'
+        if not isinstance(item, dict):
+            continue
+        c = str(item.get("country") or "").strip() or "Unknown region"
+        by_country[c].append(item)
+
+    blocks: list[str] = []
+    for cidx, (country, items) in enumerate(sorted(by_country.items(), key=lambda x: x[0].lower())):
+        flag = ""
+        for it in items:
+            if isinstance(it, dict) and it.get("flag"):
+                flag = str(it.get("flag", ""))
+                break
+        by_type: dict[str, list] = defaultdict(list)
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            ot = str(it.get("outlet_type") or "private").strip()
+            if ot not in _OUTLET_TYPE_LABEL:
+                ot = "private"
+            by_type[ot].append(it)
+
+        type_sections: list[str] = []
+        for otype in _OUTLET_TYPE_ORDER:
+            typed = by_type.get(otype)
+            if not typed:
+                continue
+            label = _OUTLET_TYPE_LABEL[otype]
+            inner = "".join(_one_outlet_row(x) for x in typed)
+            type_sections.append(
+                f'<div style="margin-bottom:14px">'
+                f'<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;'
+                f'color:#5a5752;margin-bottom:6px">{_e(label)}</div>'
+                f'<div style="padding-left:2px">{inner}</div>'
+                f"</div>"
+            )
+        for otype, typed in sorted(by_type.items()):
+            if otype in _OUTLET_TYPE_ORDER:
+                continue
+            inner = "".join(_one_outlet_row(x) for x in typed)
+            type_sections.append(
+                f'<div style="margin-bottom:14px">'
+                f'<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;'
+                f'color:#5a5752;margin-bottom:6px">{_e(otype)}</div>'
+                f'<div style="padding-left:2px">{inner}</div>'
+                f"</div>"
+            )
+
+        nid = f"side-{side_prefix}-country-{cidx}"
+        n_out = len(items)
+        blocks.append(
+            f'<details class="country-acc" id="{nid}" style="border:0.5px solid rgba(255,255,255,0.06);'
+            f'border-radius:10px;background:rgba(0,0,0,0.25);margin-bottom:10px;overflow:hidden">'
+            f'<summary style="list-style:none;cursor:pointer;padding:12px 14px;display:flex;'
+            f'align-items:center;gap:8px;flex-wrap:wrap;user-select:none">'
+            f'<span style="font-size:16px;line-height:1">{flag}</span>'
+            f'<span style="font-size:13px;font-weight:600;color:#f0ede8">{_e(country)}</span>'
+            f'<span class="country-chev" style="font-size:11px;color:#e8a020">▾</span>'
+            f'<span style="font-size:11px;color:#5a5752;margin-left:auto">'
+            f'{n_out} outlet{"s" if n_out != 1 else ""} · {_e(str(len(by_type)))} type{"s" if len(by_type) != 1 else ""}'
+            f"</span>"
+            f"</summary>"
+            f'<div style="padding:4px 14px 14px 14px;border-top:0.5px solid rgba(255,255,255,0.05)">'
+            f'{"".join(type_sections)}'
+            f"</div>"
+            f"</details>"
         )
-    return "".join(rows)
+
+    hint = (
+        '<p style="font-size:11px;color:#5a5752;line-height:1.5;margin:0 0 10px 0">'
+        "Tap a country to see how outlets there break down by kind of organization "
+        "on this story.</p>"
+    )
+    return hint + "".join(blocks)
 
 
 def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
@@ -401,6 +484,15 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   a{{color:#00c8b4;text-decoration:none}}
   a:hover{{opacity:.8}}
   button:hover{{opacity:.85}}
+  details.country-acc > summary::-webkit-details-marker {{ display: none; }}
+  details.country-acc > summary {{ list-style: none; }}
+  details.country-acc .country-chev {{
+    transition: transform 0.2s ease;
+    display: inline-block;
+  }}
+  details.country-acc[open] > summary .country-chev {{
+    transform: rotate(180deg);
+  }}
 </style>
 </head>
 <body>
