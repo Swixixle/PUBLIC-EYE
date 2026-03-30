@@ -107,6 +107,9 @@ from deep_receipt_api import build_deep_receipt
 from lens_api import process_audio, process_document_image, process_media_url, process_place_image
 from receipt_store import (
     ensure_coalition_maps_table,
+    ensure_media_axis_table,
+    ensure_outlet_dossiers_table,
+    ensure_reporter_dossiers_table,
     ensure_table,
     get_coalition_map,
     get_receipt as load_stored_receipt,
@@ -521,10 +524,12 @@ app.add_middleware(
 from api.dossier_route import router as dossier_http_router  # noqa: E402
 from api.frames import router as frames_http_router  # noqa: E402
 from coalition_api import router as coalition_http_router  # noqa: E402
+from media_axis_api import router as media_axis_http_router  # noqa: E402
 
 app.include_router(frames_http_router)
 app.include_router(dossier_http_router)
 app.include_router(coalition_http_router, prefix="/v1")
+app.include_router(media_axis_http_router, prefix="/v1")
 
 _web_dir = _repo_root() / "apps" / "web"
 if _web_dir.is_dir():
@@ -586,6 +591,17 @@ async def capture_schema_baselines() -> None:
         import logging
 
         logging.warning("Coalition maps table creation failed: %s", exc)
+    for label, fn in (
+        ("media_axis", ensure_media_axis_table),
+        ("outlet_dossiers", ensure_outlet_dossiers_table),
+        ("reporter_dossiers", ensure_reporter_dossiers_table),
+    ):
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.warning("Table %s creation failed: %s", label, exc)
     asyncio.create_task(_run_schema_baseline_capture())
     asyncio.create_task(_verify_signing_pipeline())
 

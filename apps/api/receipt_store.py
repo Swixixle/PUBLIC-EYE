@@ -232,6 +232,219 @@ def get_receipt(receipt_id: str) -> dict[str, Any] | None:
         conn.close()
 
 
+def ensure_media_axis_table() -> None:
+    """Per-receipt accuracy axis (verifiable-record–anchored, not political)."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS media_axis (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    receipt_id TEXT NOT NULL UNIQUE
+                        REFERENCES frame_receipts(id) ON DELETE CASCADE,
+                    axis_id TEXT NOT NULL UNIQUE,
+                    payload JSONB NOT NULL,
+                    signed BOOLEAN DEFAULT FALSE,
+                    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_media_axis_receipt "
+                "ON media_axis (receipt_id)"
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_outlet_dossiers_table() -> None:
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS outlet_dossiers (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    slug TEXT NOT NULL UNIQUE,
+                    outlet_name TEXT NOT NULL,
+                    payload JSONB NOT NULL,
+                    signed BOOLEAN DEFAULT FALSE,
+                    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_outlet_dossiers_slug "
+                "ON outlet_dossiers (slug)"
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def ensure_reporter_dossiers_table() -> None:
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reporter_dossiers (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    slug TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    payload JSONB NOT NULL,
+                    signed BOOLEAN DEFAULT FALSE,
+                    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reporter_dossiers_slug "
+                "ON reporter_dossiers (slug)"
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_media_axis(receipt_id: str) -> dict[str, Any] | None:
+    conn = _get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT payload FROM media_axis WHERE receipt_id = %s",
+                (receipt_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            p = row["payload"]
+            if isinstance(p, dict):
+                return p
+            if isinstance(p, str):
+                return json.loads(p)
+            return dict(p) if p is not None else None
+    finally:
+        conn.close()
+
+
+def save_media_axis(payload: dict[str, Any]) -> None:
+    rid = str(payload.get("receipt_id", "")).strip()
+    aid = str(payload.get("axis_id", "")).strip()
+    if not rid or not aid:
+        raise ValueError("receipt_id and axis_id required")
+    signed = bool(payload.get("signed"))
+    gen = payload.get("generated_at")
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO media_axis (receipt_id, axis_id, payload, signed, generated_at)
+                VALUES (%s, %s, %s, %s, COALESCE(%s::timestamptz, NOW()))
+                ON CONFLICT (receipt_id) DO UPDATE SET
+                    axis_id = EXCLUDED.axis_id,
+                    payload = EXCLUDED.payload,
+                    signed = EXCLUDED.signed,
+                    generated_at = EXCLUDED.generated_at
+                """,
+                (rid, aid, psycopg2.extras.Json(payload), signed, gen),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_stored_outlet_dossier(slug: str) -> dict[str, Any] | None:
+    conn = _get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT payload FROM outlet_dossiers WHERE slug = %s",
+                (slug,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            p = row["payload"]
+            if isinstance(p, dict):
+                return p
+            if isinstance(p, str):
+                return json.loads(p)
+            return dict(p) if p is not None else None
+    finally:
+        conn.close()
+
+
+def upsert_outlet_dossier(slug: str, outlet_name: str, payload: dict[str, Any]) -> None:
+    signed = bool(payload.get("signed"))
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO outlet_dossiers (slug, outlet_name, payload, signed, last_updated)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (slug) DO UPDATE SET
+                    outlet_name = EXCLUDED.outlet_name,
+                    payload = EXCLUDED.payload,
+                    signed = EXCLUDED.signed,
+                    last_updated = NOW()
+                """,
+                (slug, outlet_name, psycopg2.extras.Json(payload), signed),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_stored_reporter_dossier(slug: str) -> dict[str, Any] | None:
+    conn = _get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT payload FROM reporter_dossiers WHERE slug = %s",
+                (slug,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            p = row["payload"]
+            if isinstance(p, dict):
+                return p
+            if isinstance(p, str):
+                return json.loads(p)
+            return dict(p) if p is not None else None
+    finally:
+        conn.close()
+
+
+def upsert_reporter_dossier(slug: str, name: str, payload: dict[str, Any]) -> None:
+    signed = bool(payload.get("signed"))
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO reporter_dossiers (slug, name, payload, signed, last_updated)
+                VALUES (%s, %s, %s, %s, NOW())
+                ON CONFLICT (slug) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    payload = EXCLUDED.payload,
+                    signed = EXCLUDED.signed,
+                    last_updated = NOW()
+                """,
+                (slug, name, psycopg2.extras.Json(payload), signed),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_recent_receipts(limit: int = 20) -> list[dict[str, Any]]:
     """List recent receipts for a feed/history view (metadata only)."""
     conn = _get_conn()
