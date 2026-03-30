@@ -2999,8 +2999,10 @@ body {
 
 .actor-events-compact {
   margin: 8px 0 0;
-  padding-left: 1.1rem;
+  padding-left: 0;
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
 }
 
 .actor-no-events-note {
@@ -3264,10 +3266,92 @@ body {
 }
 
 .depth-query-supported {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
   font-size: 11px;
   color: var(--muted, #888);
+  margin-top: 4px;
+}
+
+.depth-date-stamp {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.depth-date-unknown {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.depth-query-source-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 2px;
+}
+
+.depth-query-supported-outlet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 4px;
+  font-size: 11px;
+}
+
+.depth-actor-event {
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--border, #334155);
+}
+
+.depth-actor-event:last-child {
+  border-bottom: none;
+}
+
+.depth-actor-event-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.depth-actor-event-type {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.depth-actor-event-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted, #cbd5e1);
+  margin: 0 0 4px;
+}
+
+.depth-actor-event-source {
+  font-size: 11px;
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.depth-actor-event-source:hover {
+  text-decoration: underline;
+}
+
+.depth-actor-event-source-text {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.depth-signed-badge {
+  color: #1abc9c;
+  font-size: 11px;
 }
 
 .depth-query-contested {
@@ -3291,8 +3375,12 @@ body {
 }
 
 .depth-query-outlet-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
   font-weight: 500;
-  color: var(--fg, #e0e0e0);
+  color: var(--text, #f1f5f9);
   margin-right: 4px;
 }
 
@@ -3353,8 +3441,7 @@ body {
 
 .depth-query-source-outlet {
   font-size: 11px;
-  color: var(--muted, #888);
-  margin-left: 6px;
+  color: var(--text-muted, #94a3b8);
 }
 
 .depth-query-fetch-fail {

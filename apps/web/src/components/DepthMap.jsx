@@ -12,6 +12,32 @@ async function fetchActorInLedger(slug) {
   return res.ok;
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return null;
+  try {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return null;
+  }
+}
+
+function DateStamp({ date, className = "" }) {
+  const formatted = formatDate(date);
+  const raw =
+    !formatted && date != null && String(date).trim() !== "" ? String(date).trim() : null;
+  const display = formatted || raw;
+  if (!display) return null;
+  return (
+    <span className={`depth-date-stamp${className ? ` ${className}` : ""}`}>{display}</span>
+  );
+}
+
 /** Verbatim opening copy under ## Tone & Voice in `docs/RABBIT_HOLE_CONTEXT.md`. */
 const OPENING_DISCLAIMER =
   "Rabbit Hole shows what the cited record states and what it does not state. It does not issue verdicts, moral judgments, or recommendations about what you should do or believe. Every surfaced line ties to a source id or to an explicit unknown; if something is missing from the record, the interface says so. This is a navigational map of public material at retrieval time, not legal advice, medical advice, personal advice, or proof of anyone's intent.";
@@ -186,10 +212,11 @@ function GlobalPerspectivesPanel({ result }) {
       <h3 className="depth-inline-title">Global perspectives</h3>
       {result.error ? <p className="depth-banner-error">{result.error}</p> : null}
       {result.claim ? <p className="depth-gp-claim">&quot;{result.claim}&quot;</p> : null}
-      {(result.confidence_note || !result.error) ? (
+      {result.confidence_note || !result.error ? (
         <p className="depth-muted depth-gp-note" style={{ fontSize: "11px", marginBottom: "14px" }}>
           {result.confidence_note ||
-            "Framing analysis is model-informed; verify against live sources before citing."}
+            "Framing analysis is model-informed; verify against live sources before citing."}{" "}
+          <DateStamp date={new Date().toISOString()} />
         </p>
       ) : null}
 
@@ -424,7 +451,9 @@ function TimelineSynthesisPanel({ synthesis, timelineGroups, dateRangeLabel }) {
           <ul className="depth-query-timeline">
             {synthesis.key_moments.map((m, i) => (
               <li key={i}>
-                <span className="depth-query-timeline-when">{m.when}</span>
+                <span className="depth-query-timeline-when">
+                  {m.when != null && String(m.when).trim() !== "" ? m.when : "—"}
+                </span>
                 <span className="depth-query-timeline-event">{m.what}</span>
                 {(m.outlets || []).length > 0 ? (
                   <span className="depth-query-timeline-source">{m.outlets.join(", ")}</span>
@@ -494,7 +523,16 @@ function TimelineSynthesisPanel({ synthesis, timelineGroups, dateRangeLabel }) {
                     >
                       {a.title || a.url}
                     </a>
-                    <span className="depth-query-source-outlet">{a.outlet}</span>
+                    <div className="depth-query-source-meta">
+                      <span className="depth-query-source-outlet">{a.outlet}</span>
+                      {a.published ? <DateStamp date={a.published} /> : null}
+                      {a.source === "gdelt" ? (
+                        <span className="depth-query-gdelt-badge">GDELT</span>
+                      ) : null}
+                      {!a.fetch_success ? (
+                        <span className="depth-query-fetch-fail">(summary only)</span>
+                      ) : null}
+                    </div>
                   </li>
                 ))}
                 {g.count > 3 ? (
@@ -519,6 +557,12 @@ function QuerySynthesisPanel({ result }) {
   const gp = result.global_perspectives || {};
   const classification = result.classification || {};
   const dateRangeLabel = classification.date_range?.label || "";
+  const outletDateMap = {};
+  articles.forEach((a) => {
+    if (a.outlet && a.published) {
+      outletDateMap[a.outlet] = a.published;
+    }
+  });
 
   return (
     <div className="depth-query-synthesis">
@@ -526,8 +570,8 @@ function QuerySynthesisPanel({ result }) {
         {isTimeline ? "Coverage timeline" : "Query synthesis"}
       </h2>
       <p className="depth-muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
-        <code>{result.receipt_id}</code> · {result.generated_at} ·{" "}
-        {result.signed ? "signed" : "unsigned"} ·{" "}
+        <code>{result.receipt_id}</code> · <DateStamp date={result.generated_at} /> ·{" "}
+        {result.signed ? <span className="depth-signed-badge">signed</span> : "unsigned"} ·{" "}
         {typeof result.sources_searched === "number"
           ? `${result.sources_searched} sources searched`
           : result.sources_searched}{" "}
@@ -561,7 +605,16 @@ function QuerySynthesisPanel({ result }) {
                 {synthesis.key_facts.map((f, i) => (
                   <li key={i}>
                     <span>{f.fact}</span>
-                    <span className="depth-query-supported">{(f.supported_by || []).join(", ")}</span>
+                    <div className="depth-query-supported">
+                      {(f.supported_by || []).map((outlet, j) => (
+                        <span key={j} className="depth-query-supported-outlet">
+                          {outlet}
+                          {outletDateMap[outlet] ? (
+                            <DateStamp date={outletDateMap[outlet]} />
+                          ) : null}
+                        </span>
+                      ))}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -576,11 +629,29 @@ function QuerySynthesisPanel({ result }) {
                   <div className="depth-query-contested-fact">{c.fact}</div>
                   <div className="depth-query-contested-sides">
                     <div>
-                      <span className="depth-query-outlet-list">{(c.outlets_a || []).join(", ")}</span>
+                      <span className="depth-query-outlet-list">
+                        {(c.outlets_a || []).map((outlet, k) => (
+                          <span key={k} className="depth-query-supported-outlet">
+                            {outlet}
+                            {outletDateMap[outlet] ? (
+                              <DateStamp date={outletDateMap[outlet]} />
+                            ) : null}
+                          </span>
+                        ))}
+                      </span>
                       <span>: {c.version_a}</span>
                     </div>
                     <div>
-                      <span className="depth-query-outlet-list">{(c.outlets_b || []).join(", ")}</span>
+                      <span className="depth-query-outlet-list">
+                        {(c.outlets_b || []).map((outlet, k) => (
+                          <span key={k} className="depth-query-supported-outlet">
+                            {outlet}
+                            {outletDateMap[outlet] ? (
+                              <DateStamp date={outletDateMap[outlet]} />
+                            ) : null}
+                          </span>
+                        ))}
+                      </span>
                       <span>: {c.version_b}</span>
                     </div>
                   </div>
@@ -606,7 +677,9 @@ function QuerySynthesisPanel({ result }) {
               <ul className="depth-query-timeline">
                 {synthesis.timeline.map((t, i) => (
                   <li key={i}>
-                    <span className="depth-query-timeline-when">{t.when}</span>
+                    <span className="depth-query-timeline-when">
+                      {t.when != null && String(t.when).trim() !== "" ? t.when : "—"}
+                    </span>
                     <span className="depth-query-timeline-event">{t.event}</span>
                     {t.source ? (
                       <span className="depth-query-timeline-source">{t.source}</span>
@@ -633,13 +706,16 @@ function QuerySynthesisPanel({ result }) {
                 >
                   {a.title || a.url}
                 </a>
-                <span className="depth-query-source-outlet">{a.outlet}</span>
-                {a.source === "gdelt" ? (
-                  <span className="depth-query-gdelt-badge">GDELT</span>
-                ) : null}
-                {!a.fetch_success ? (
-                  <span className="depth-query-fetch-fail">(summary only)</span>
-                ) : null}
+                <div className="depth-query-source-meta">
+                  <span className="depth-query-source-outlet">{a.outlet}</span>
+                  {a.published ? <DateStamp date={a.published} /> : null}
+                  {a.source === "gdelt" ? (
+                    <span className="depth-query-gdelt-badge">GDELT</span>
+                  ) : null}
+                  {!a.fetch_success ? (
+                    <span className="depth-query-fetch-fail">(summary only)</span>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -878,7 +954,7 @@ function SurfaceTraceFields({
             <strong>When</strong>
             <div className="depth-when-primary">{trace.when.earliest_appearance}</div>
             {trace.when.source ? (
-              <div className="depth-when-source">{trace.when.source}</div>
+              <div className="depth-when-source">Source: {trace.when.source}</div>
             ) : null}
             {trace.when.confidence_tier ? (
               <TierBadge tier={trace.when.confidence_tier} />
@@ -1045,31 +1121,45 @@ function ActorDepthResultBody({ data }) {
                 </div>
               ) : null}
               {(actor.events || []).length > 0 ? (
-                <ul className="actor-events-compact">
+                <div className="actor-events-compact">
                   {(actor.events || []).map((ev, j) => {
                     const src = String(ev.source || "").trim();
                     const srcIsUrl = /^https?:\/\//i.test(src);
+                    const dateRaw = ev.date != null ? String(ev.date).trim() : "";
                     return (
-                      <li key={`${ev.date}-${j}`}>
-                        <span className="depth-actor-ev-date">{ev.date}</span>{" "}
-                        <span className="depth-muted">{ev.type}</span>
-                        {ev.confidence_tier ? <TierBadge tier={ev.confidence_tier} /> : null}
-                        <p className="depth-actor-ev-desc">{ev.description}</p>
-                        {src ? (
-                          <p className="depth-muted depth-actor-ev-src">
-                            {srcIsUrl ? (
-                              <a href={src} target="_blank" rel="noopener noreferrer" className="actor-link">
-                                Source link →
-                              </a>
+                      <div key={`${ev.date}-${j}`} className="depth-actor-event">
+                        <div className="depth-actor-event-header">
+                          {dateRaw && dateRaw.toLowerCase() !== "unknown" ? (
+                            formatDate(ev.date) ? (
+                              <DateStamp date={ev.date} />
                             ) : (
-                              src
-                            )}
-                          </p>
+                              <span className="depth-date-stamp">{dateRaw}</span>
+                            )
+                          ) : (
+                            <span className="depth-date-stamp depth-date-unknown">date unknown</span>
+                          )}
+                          <span className="depth-actor-event-type">
+                            {String(ev.type || "").replace(/_/g, " ")}
+                          </span>
+                          {ev.confidence_tier ? <TierBadge tier={ev.confidence_tier} /> : null}
+                        </div>
+                        <p className="depth-actor-event-desc">{ev.description}</p>
+                        {srcIsUrl ? (
+                          <a
+                            href={src}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="depth-actor-event-source"
+                          >
+                            Source →
+                          </a>
+                        ) : src ? (
+                          <span className="depth-actor-event-source-text">{src}</span>
                         ) : null}
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               ) : (
                 <p className="depth-muted actor-no-events-note">No timeline events in this row.</p>
               )}
@@ -1545,7 +1635,15 @@ function MediaClaimsList({
           return (
             <li key={`${c.timestamp_start ?? i}-${i}`} className="depth-media-claim-item">
               <div className="depth-media-claim-meta">
-                <span className="depth-media-ts">{c.timestamp_label || "—"}</span>
+                <span className="depth-media-ts">
+                  {c.timestamp_label || "—"}
+                  {c.timestamp_start ? (
+                    <>
+                      {" "}
+                      <DateStamp date={c.timestamp_start} />
+                    </>
+                  ) : null}
+                </span>
                 {sp ? (
                   <span className="depth-media-speaker depth-media-speaker-block">
                     <span className="depth-media-speaker-name">{sp}</span>
@@ -1642,8 +1740,11 @@ function FiveRingReportPanel({ report, loading, error }) {
       <section className="depth-five-ring-report depth-article-analysis-report">
         <h2 className="depth-inline-title depth-five-ring-heading">Article analysis</h2>
         <p className="depth-muted depth-report-meta">
-          <code>{report.report_id}</code> · {report.generated_at} ·{" "}
-          {report.signed ? "signed" : "unsigned"}
+          <code>{report.report_id}</code>
+          {" · "}
+          <DateStamp date={report.generated_at} />
+          {" · "}
+          {report.signed ? <span className="depth-signed-badge">signed</span> : "unsigned"}
         </p>
         <div className="article-meta">
           <div className="article-pub">{report.article?.publication}</div>
@@ -1721,8 +1822,11 @@ function FiveRingReportPanel({ report, loading, error }) {
     <section className="depth-five-ring-report">
       <h2 className="depth-inline-title depth-five-ring-heading">Five-ring report</h2>
       <p className="depth-muted depth-report-meta">
-        <code>{report.report_id}</code> · {report.generated_at} ·{" "}
-        {report.signed ? "signed" : "unsigned"}
+        <code>{report.report_id}</code>
+        {" · "}
+        <DateStamp date={report.generated_at} />
+        {" · "}
+        {report.signed ? <span className="depth-signed-badge">signed</span> : "unsigned"}
       </p>
       <SourcesCheckedManifest entries={report.sources_checked} />
       <div className="depth-ring-list">
