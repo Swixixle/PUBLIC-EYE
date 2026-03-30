@@ -108,13 +108,15 @@ from lens_api import process_audio, process_document_image, process_media_url, p
 from receipt_store import (
     ensure_coalition_maps_table,
     ensure_table,
+    get_coalition_map,
     get_receipt as load_stored_receipt,
     list_recent_receipts,
     store_receipt,
 )
+from investigation_page import render_investigation_page
 from report_api import (
     attach_article_analysis_signing,
-    
+    build_article_analysis_signing_body,
     build_extended_report_async,
 )
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
@@ -790,6 +792,17 @@ async def pitch_page() -> FileResponse:
         str(_repo_root() / "apps" / "web" / "pitch.html"),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
+
+
+@app.get("/i/{receipt_id}", response_class=HTMLResponse)
+async def investigation_html_page(receipt_id: str) -> HTMLResponse:
+    """PUBLIC EYE investigation — server-rendered (fight-first layout)."""
+    rid = receipt_id.strip()
+    receipt = await asyncio.to_thread(load_stored_receipt, rid)
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Investigation not found")
+    coalition = await asyncio.to_thread(get_coalition_map, rid)
+    return HTMLResponse(render_investigation_page(receipt, coalition))
 
 
 @app.get("/verify")
