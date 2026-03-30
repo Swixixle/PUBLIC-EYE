@@ -120,7 +120,7 @@ from receipt_store import (
 from investigation_page import render_investigation_page
 from report_api import (
     attach_article_analysis_signing,
-
+    build_article_analysis_signing_body,
     build_extended_report_async,
 )
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
@@ -5059,7 +5059,15 @@ async def verify_receipt(request: Request) -> dict[str, Any]:
     sig_b64 = data.get("signature", "")
 
     if data.get("receipt_type") and ch and sig_b64 and pub_key_b64:
-        narrow = {k: v for k, v in data.items() if k not in ("signature", "public_key", "receipt_url")}
+        receipt_type = data.get("receipt_type", "")
+        if receipt_type == "article_analysis":
+            narrow = build_article_analysis_signing_body(data)
+        else:
+            narrow = {
+                k: v
+                for k, v in data.items()
+                if k not in ("signature", "public_key", "receipt_url")
+            }
         try:
             canon_n = jcs_canonicalize(narrow)
         except Exception as exc:
