@@ -114,7 +114,7 @@ from receipt_store import (
 )
 from report_api import (
     attach_article_analysis_signing,
-    build_article_analysis_signing_body,
+    
     build_extended_report_async,
 )
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
