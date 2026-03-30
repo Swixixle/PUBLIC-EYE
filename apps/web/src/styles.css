@@ -2413,10 +2413,10 @@ body {
 }
 
 .input-mode-hint {
-  font-size: 12px;
-  color: var(--color-muted, var(--text-muted));
-  margin-top: 4px;
   display: block;
+  font-size: 11px;
+  color: var(--muted, var(--color-muted, var(--text-muted)));
+  margin-top: 4px;
   transition: color 0.2s;
 }
 
@@ -2867,4 +2867,153 @@ body {
 
 .depth-gp-primary {
   margin-top: 4px;
+}
+
+/* Query synthesis (natural-language /v1/query) */
+.depth-query-synthesis {
+  margin-top: 16px;
+}
+
+.depth-query-what {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.depth-query-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 0.5px solid var(--border, #333);
+}
+
+.depth-query-section-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.depth-query-list {
+  margin: 0 0 0 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg-secondary, #ccc);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.depth-query-list-absent li::marker {
+  color: #e05252;
+}
+
+.depth-query-supported {
+  display: block;
+  font-size: 11px;
+  color: var(--muted, #888);
+  margin-top: 2px;
+}
+
+.depth-query-contested {
+  padding: 10px 12px;
+  background: rgba(224, 82, 82, 0.06);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.depth-query-contested-fact {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.depth-query-contested-sides {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--fg-secondary, #ccc);
+}
+
+.depth-query-outlet-list {
+  font-weight: 500;
+  color: var(--fg, #e0e0e0);
+  margin-right: 4px;
+}
+
+.depth-query-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.depth-query-timeline li {
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.depth-query-timeline-when {
+  color: var(--muted, #888);
+  font-size: 11px;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.depth-query-timeline-event {
+  color: var(--fg-secondary, #ccc);
+  flex: 1;
+}
+
+.depth-query-timeline-source {
+  color: var(--muted, #888);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.depth-query-sources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.depth-query-source-link {
+  display: block;
+  font-size: 13px;
+  color: var(--accent, #4a9eff);
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.depth-query-source-link:hover {
+  text-decoration: underline;
+}
+
+.depth-query-source-outlet {
+  font-size: 11px;
+  color: var(--muted, #888);
+  margin-left: 6px;
+}
+
+.depth-query-fetch-fail {
+  font-size: 11px;
+  color: var(--muted, #888);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.depth-query-loading {
+  margin-top: 16px;
 }

@@ -122,6 +122,31 @@ function entityWorthLookup(name, _confidenceTier) {
   return true;
 }
 
+/** Natural-language question / request (not a URL, not a short claim-only trace). */
+function isNaturalLanguageQuery(text) {
+  const t = (text || "").trim();
+  if (!t || t.startsWith("http")) return false;
+  const words = t.split(/\s+/);
+  if (words.length < 3) return false;
+  const queryWords = [
+    "tell",
+    "what",
+    "how",
+    "why",
+    "who",
+    "where",
+    "when",
+    "explain",
+    "show",
+    "find",
+    "search",
+    "happening",
+    "latest",
+  ];
+  const low = t.toLowerCase();
+  return queryWords.some((w) => low.includes(w));
+}
+
 const ECOSYSTEM_ACCENT = {
   western_anglophone: "#4a9eff",
   russian_state: "#e05252",
@@ -273,6 +298,127 @@ function TierBadge({ tier }) {
     >
       {String(tier).replace(/_/g, " ")}
     </span>
+  );
+}
+
+function QuerySynthesisPanel({ result }) {
+  if (!result) return null;
+  const synthesis = result.synthesis || {};
+  const articles = result.articles || [];
+  const gp = result.global_perspectives || {};
+
+  return (
+    <div className="depth-query-synthesis">
+      <h2 className="depth-inline-title">Query synthesis</h2>
+      <p className="depth-muted" style={{ fontSize: "12px", marginBottom: "12px" }}>
+        <code>{result.receipt_id}</code> · {result.generated_at} ·{" "}
+        {result.signed ? "signed" : "unsigned"} · {result.sources_searched} sources searched ·{" "}
+        {result.articles_found} articles found
+      </p>
+
+      {result.error ? <p className="depth-banner-error">{result.error}</p> : null}
+      {synthesis.error ? <p className="depth-banner-error">{synthesis.error}</p> : null}
+
+      {synthesis.what_is_happening ? (
+        <div className="depth-query-what">
+          <p>{synthesis.what_is_happening}</p>
+          {synthesis.confidence_tier ? <TierBadge tier={synthesis.confidence_tier} /> : null}
+        </div>
+      ) : null}
+
+      {(synthesis.key_facts || []).length > 0 ? (
+        <div className="depth-query-section">
+          <strong className="depth-query-section-title">Confirmed across sources</strong>
+          <ul className="depth-query-list">
+            {synthesis.key_facts.map((f, i) => (
+              <li key={i}>
+                <span>{f.fact}</span>
+                <span className="depth-query-supported">{(f.supported_by || []).join(", ")}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {(synthesis.contested_facts || []).length > 0 ? (
+        <div className="depth-query-section">
+          <strong className="depth-query-section-title">Contested between sources</strong>
+          {synthesis.contested_facts.map((c, i) => (
+            <div key={i} className="depth-query-contested">
+              <div className="depth-query-contested-fact">{c.fact}</div>
+              <div className="depth-query-contested-sides">
+                <div>
+                  <span className="depth-query-outlet-list">{(c.outlets_a || []).join(", ")}</span>
+                  <span>: {c.version_a}</span>
+                </div>
+                <div>
+                  <span className="depth-query-outlet-list">{(c.outlets_b || []).join(", ")}</span>
+                  <span>: {c.version_b}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {(synthesis.what_nobody_is_saying || []).length > 0 ? (
+        <div className="depth-query-section">
+          <strong className="depth-query-section-title">What nobody is covering</strong>
+          <ul className="depth-query-list depth-query-list-absent">
+            {synthesis.what_nobody_is_saying.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {(synthesis.timeline || []).length > 0 ? (
+        <div className="depth-query-section">
+          <strong className="depth-query-section-title">Timeline</strong>
+          <ul className="depth-query-timeline">
+            {synthesis.timeline.map((t, i) => (
+              <li key={i}>
+                <span className="depth-query-timeline-when">{t.when}</span>
+                <span className="depth-query-timeline-event">{t.event}</span>
+                {t.source ? (
+                  <span className="depth-query-timeline-source">{t.source}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {articles.length > 0 ? (
+        <div className="depth-query-section">
+          <strong className="depth-query-section-title">Sources</strong>
+          <ul className="depth-query-sources">
+            {articles.map((a, i) => (
+              <li key={i}>
+                <a
+                  href={a.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="depth-query-source-link"
+                >
+                  {a.title || a.url}
+                </a>
+                <span className="depth-query-source-outlet">{a.outlet}</span>
+                {!a.fetch_success ? (
+                  <span className="depth-query-fetch-fail">(summary only)</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {gp && (gp.ecosystems || []).length > 0 ? (
+        <div className="depth-query-section">
+          <GlobalPerspectivesPanel result={gp} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1363,6 +1509,9 @@ export default function DepthMap() {
   const [publicNarrativeResult, setPublicNarrativeResult] = useState(null);
   const [publicNarrativeLoading, setPublicNarrativeLoading] = useState(false);
   const [publicNarrativeError, setPublicNarrativeError] = useState(null);
+  const [queryResult, setQueryResult] = useState(null);
+  const [queryLoading, setQueryLoading] = useState(false);
+  const [queryError, setQueryError] = useState(null);
   const actorDepthInflight = useRef(new Set());
   const [actorDepthByEntity, setActorDepthByEntity] = useState({});
   const [actorDepthLoading, setActorDepthLoading] = useState({});
@@ -1441,6 +1590,41 @@ export default function DepthMap() {
     }
   }, []);
 
+  const fetchQuery = useCallback(async (text) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    setQueryLoading(true);
+    setQueryResult(null);
+    setQueryError(null);
+    try {
+      const res = await fetch(`${API}/v1/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: t,
+          max_sources: 8,
+          include_global_perspectives: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setQueryError(
+          typeof data?.detail === "string"
+            ? data.detail
+            : data?.detail != null
+              ? JSON.stringify(data.detail)
+              : `HTTP ${res.status}`,
+        );
+      } else {
+        setQueryResult(data);
+      }
+    } catch (e) {
+      setQueryError(e.message || "Query failed");
+    } finally {
+      setQueryLoading(false);
+    }
+  }, []);
+
   const traceComplete = useMemo(
     () =>
       !searchBusy &&
@@ -1466,6 +1650,9 @@ export default function DepthMap() {
   const onGenerateReport = useCallback(async () => {
     const text = narrative.trim();
     if (!text) return;
+    setQueryResult(null);
+    setQueryLoading(false);
+    setQueryError(null);
     setActorDepthByEntity({});
     setActorDepthLoading({});
     actorDepthInflight.current.clear();
@@ -1625,6 +1812,15 @@ export default function DepthMap() {
       setPublicNarrativeResult(null);
       setPublicNarrativeLoading(false);
       setPublicNarrativeError(null);
+      setQueryResult(null);
+      setQueryError(null);
+      setQueryLoading(false);
+
+      if (isNaturalLanguageQuery(text)) {
+        setSearchBusy(false);
+        await fetchQuery(text);
+        return;
+      }
 
       const narrativeReq = {
         method: "POST",
@@ -1699,7 +1895,7 @@ export default function DepthMap() {
 
       setSearchBusy(false);
     },
-    [narrative],
+    [narrative, fetchQuery],
   );
 
   const layerByNum = (n) => layers.find((l) => l.layer_number === n);
@@ -1728,18 +1924,34 @@ export default function DepthMap() {
             value={narrative}
             onChange={(e) => setNarrative(e.target.value)}
           />
-          <button type="submit" className="depth-btn depth-btn-primary" disabled={searchBusy}>
-            {searchBusy ? "Tracing…" : "Trace at depth"}
+          <button
+            type="submit"
+            className="depth-btn depth-btn-primary"
+            disabled={searchBusy || queryLoading}
+          >
+            {queryLoading ? "Searching…" : searchBusy ? "Tracing…" : "Trace at depth"}
           </button>
         </div>
         {narrative.trim().startsWith("http") ? (
           <span className="input-mode-hint">
-            Article URL detected — Generate Report will extract and route claims
+            URL — will extract and verify claims (Generate Report)
           </span>
-        ) : (
-          <span className="input-mode-hint">Enter a claim, name, or narrative to investigate</span>
-        )}
+        ) : isNaturalLanguageQuery(narrative) ? (
+          <span className="input-mode-hint">
+            Query detected — will search global sources and synthesize
+          </span>
+        ) : narrative.trim() ? (
+          <span className="input-mode-hint">Narrative — will trace depth layers</span>
+        ) : null}
       </form>
+
+      {queryLoading ? (
+        <div className="depth-query-loading">
+          <p className="depth-muted">Searching curated global RSS feeds…</p>
+        </div>
+      ) : null}
+      {queryError ? <p className="depth-banner-error">{queryError}</p> : null}
+      {queryResult ? <QuerySynthesisPanel result={queryResult} /> : null}
 
       {mapError ? <p className="depth-banner depth-banner-error">{mapError}</p> : null}
 

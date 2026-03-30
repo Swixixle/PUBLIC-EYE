@@ -94,6 +94,8 @@ from actor_ledger_api import (
 )
 from pattern_api import get_pattern_lib_payload, run_pattern_match
 from public_narrative_api import run_global_perspectives
+from query_engine import run_query
+from query_synthesizer import synthesize_articles
 from spread_api import run_spread
 from origin_api import run_origin
 from actor_layer_api import run_actor_layer
@@ -277,6 +279,16 @@ class PublicNarrativePostBody(BaseModel):
 
     narrative: str | None = Field(None, max_length=20000)
     query: str | None = Field(None, max_length=20000)
+
+
+class QueryBody(BaseModel):
+    """Natural-language query: RSS discover → fetch → synthesis + optional global perspectives."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(..., min_length=1, max_length=20000)
+    max_sources: int = Field(8, ge=1, le=20)
+    include_global_perspectives: bool = True
 
 
 class ActorEventBody(BaseModel):
@@ -1077,6 +1089,62 @@ async def global_perspectives_post(body: PublicNarrativePostBody) -> dict[str, A
 async def public_narrative_post(body: PublicNarrativePostBody) -> dict[str, Any]:
     """Backward-compatible alias for global perspectives."""
     return await global_perspectives_post(body)
+
+
+@app.post("/v1/query")
+async def query_endpoint(body: QueryBody) -> dict[str, Any]:
+    """
+    Natural language query → multi-source RSS match → article fetch → synthesis + global perspectives.
+    """
+    q = body.query.strip()
+    if not q:
+        raise HTTPException(status_code=400, detail="query is required")
+    if len(q) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail="query too short — describe what you want to know",
+        )
+    try:
+        query_result = await asyncio.to_thread(run_query, q, body.max_sources)
+        articles = query_result.get("articles") or []
+
+        synthesis: dict[str, Any] = {}
+        if articles:
+            synthesis = await asyncio.to_thread(synthesize_articles, q, articles)
+
+        global_perspectives: dict[str, Any] = {}
+        if body.include_global_perspectives and q:
+            global_perspectives = await asyncio.to_thread(run_global_perspectives, q)
+
+        now = datetime.now(timezone.utc).isoformat()
+        receipt: dict[str, Any] = {
+            "receipt_id": str(uuid.uuid4()),
+            "receipt_type": "query_synthesis",
+            "query": q,
+            "keywords": query_result.get("keywords", []),
+            "generated_at": now,
+            "sources_searched": query_result.get("sources_searched", 0),
+            "ecosystems_covered": query_result.get("ecosystems_covered", []),
+            "articles_found": len(articles),
+            "articles": [
+                {
+                    "url": a["url"],
+                    "title": a["title"],
+                    "outlet": a["outlet"],
+                    "ecosystem": a["ecosystem"],
+                    "published": a.get("published"),
+                    "relevance_score": a.get("relevance_score"),
+                    "fetch_success": a.get("fetch_success"),
+                }
+                for a in articles
+            ],
+            "synthesis": synthesis,
+            "global_perspectives": global_perspectives,
+            "error": query_result.get("error"),
+        }
+        return attach_article_analysis_signing(receipt)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/v1/pattern-lib")
