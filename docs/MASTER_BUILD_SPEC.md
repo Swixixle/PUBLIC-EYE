@@ -18,6 +18,8 @@ Everything remaining **in build order**, seven sprints, with a test at the end o
 - A **“20–50 local outlets crawler”** at scale — **later sprint**. When local echo ships, start with a **small curated list** + light checks (RSS/sitemap/keyword), not a broad crawler milestone.
 - **Blocking signing** on ungrounded or weakly grounded claims — **too aggressive for now**. **Flag** them in UI and in metadata; keep the signature as “this payload wasn’t altered,” separate from epistemic confidence.
 
+**Architectural lesson from Sprint 1A:** coalition maps draw **structure** from `global_perspectives`, but alignment notes can only cite text that exists on the receipt. Today the **primary URL is usually the only article actually fetched**; other outlets are **inferred** from framing data. Honest “BBC said X” requires **BBC’s article** (or a snippet) in the receipt’s source catalog — that is **Sprint 1B.0** below, not more prompt tinkering alone.
+
 **Do today:** **Sprint 1A** (kill “likely” / speculative coalition language) — smallest change, highest leverage; everything else builds on honest chain text.
 
 **Sprint 2** (critic agent) is the capability external evaluators tend to care about: an adversarial pass that makes “receipts not verdicts” **technical**, not only philosophical.
@@ -133,7 +135,29 @@ else:
 
 ---
 
-### 1B. Claim-level verification
+### 1B.0 Multi-source ingestion (`analyze-article`)
+
+**Problem:** `global_perspectives` describes how ecosystems *frame* a topic; it is not a substitute for **retrieved article text** from each outlet. After Sprint 1A, many chain rows correctly say *Not found in sources searched for this receipt* because only the user-pasted article was ever loaded.
+
+**Goal:** After extracting **article_topic**, **named_entities**, and claims from the primary article, **discover and fetch 3–5 additional URLs** (different domains / known outlets where possible), normalize them into a **`sources`** (or `supporting_articles`) array on the receipt, then run **global_perspectives** / coalition generation as today. Coalition `_sources_catalog_text` (and claim verification in 1B.1) can then ground *“Outlet Y reported Z”* in real excerpts.
+
+**Where:** `apps/api/main.py` — `POST /v1/analyze-article` pipeline, after successful extract + before or after first signing pass (design choice: fetch **before** final signed payload so the stored receipt lists fetched URLs). Prefer a small dedicated module, e.g. `apps/api/source_expansion.py`, callable from `analyze-article`.
+
+**Behavior (v1):**
+
+1. **Query construction** — from `article_topic` + top `named_entities` (and optional geography hints), build 1–3 short search queries (no bloated keyword dumps).
+2. **Discovery** — use an existing allowed mechanism (e.g. web search API, curated RSS/sitemap for major outlets, or site-restricted patterns). Must be **explicitly rate-limited** and **optional**: if keys missing or discovery fails, receipt still completes with primary article only (degraded mode).
+3. **Fetch** — reuse `ArticleFetcher` / `fetch_article` (same as primary). **Dedupe by canonical URL**; exclude the primary URL; cap **3–5** additional articles; cap total extra **chars** or **tokens** to control latency and cost.
+4. **Persist** — each item: `{ "publication"|"outlet", "title", "url", "fetched_summary"|excerpt, optional "published_date" }`. Merge into receipt field **`sources`** (list of dicts) so `_sources_catalog_text` in `coalition_service.py` picks them up without further prompt hacks.
+5. **Honesty** — if a candidate URL fails fetch, **omit** it or store `{ "url", "error": "fetch_failed" }` (do not invent body text). Coalition model continues to use “not found” when no usable text.
+
+**Non-goals (v1):** crawling 20–50 locals; paywall bypass; guaranteeing one article per coalition chain member.
+
+**Acceptance:** For a typical geopolitical story, stored receipt has **`len(sources) >= 3`** including primary representation in catalog lines; coalition regen shows **at least one** additional outlet row with a non–not-found **alignment_note** + **story_url** when discovery returns a matching domain (exact count is data-dependent).
+
+---
+
+### 1B.1 Claim-level verification
 
 **Problem:** The receipt summarizes “what we know,” but individual claims are not checked against the actual source documents.
 
@@ -232,13 +256,14 @@ Stub endpoints exist. Priority sources: CourtListener, FEC, SEC EDGAR where rele
 **Do in this sequence. Do not bundle unrelated sprints.**
 
 1. **Sprint 1A** — coalition “likely” fix + sources in prompt + DELETE coalition map + investigation row UX  
-2. **Sprint 1B** — claims table + verifier + badges (**flag only**, no signing block)  
-3. **Sprint 2** — critic agent + storage + UI badge states  
-4. **Sprint 3** — front page polish (tokens, motion, gaps vs this doc)  
-5. **Sprint 4** — volatility guardrail in `investigation_page.py`  
-6. **Sprint 5** — local echo **phase 1** (curated + light checks)  
-7. **Sprint 6** — dossier real data  
-8. **Sprint 7** — search improvements  
+2. **Sprint 1B.0** — multi-source ingestion on `analyze-article` (3–5 fetched URLs → `sources` for coalition + downstream)  
+3. **Sprint 1B.1** — claims table + verifier + badges (**flag only**, no signing block)  
+4. **Sprint 2** — critic agent + storage + UI badge states  
+5. **Sprint 3** — front page polish (tokens, motion, gaps vs this doc)  
+6. **Sprint 4** — volatility guardrail in `investigation_page.py`  
+7. **Sprint 5** — local echo **phase 1** (curated + light checks)  
+8. **Sprint 6** — dossier real data  
+9. **Sprint 7** — search improvements  
 
 **Between sprints:** deploy, run the sprint test, confirm, then start the next.
 
@@ -274,7 +299,23 @@ print('BAD NOTES:', bad if bad else 'None — PASS')
 "
 ```
 
-### Sprint 1B
+### Sprint 1B.0
+
+```bash
+# After analyze-article on a fresh URL, receipt JSON should list multiple sources
+curl -s ".../r/{receipt_id}" | python3 -c "
+import sys,json
+r=json.load(sys.stdin)
+src=r.get('sources') or []
+print('sources_count:', len(src))
+for s in src[:8]:
+  if isinstance(s, dict):
+    print(' -', (s.get('publication') or s.get('outlet') or '?'), (s.get('url') or '')[:72])
+"
+# Expect sources_count >= 3 when expansion is enabled and discovery succeeds
+```
+
+### Sprint 1B.1
 
 ```bash
 curl ".../v1/claims/{receipt_id}" | python3 -m json.tool | head -40
