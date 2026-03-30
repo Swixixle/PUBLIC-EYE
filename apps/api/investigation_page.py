@@ -64,7 +64,7 @@ def _pills(items: list, color: str) -> str:
     bg, fg, border = palette.get(color, palette["gray"])
     return "".join(
         f'<span style="display:inline-block;padding:3px 10px;border-radius:20px;'
-        f'font-size:11px;font-weight:500;background:{bg};color:{fg};'
+        f'font-size:12px;font-weight:500;background:{bg};color:{fg};'
         f'border:0.5px solid {border};margin:2px 3px 2px 0">{_e(item)}</span>'
         for item in items
     )
@@ -77,7 +77,7 @@ def _outlet_badge(otype: str) -> str:
         "private":            ("#0a1a2e", "#5b9fff", "PRIVATE"),
     }
     bg, fg, label = m.get(otype, ("#1a1a1a", "#9e9a93", "—"))
-    return (f'<span style="font-size:9px;letter-spacing:0.07em;padding:1px 5px;'
+    return (f'<span style="font-size:12px;letter-spacing:0.07em;padding:1px 5px;'
             f'border-radius:3px;background:{bg};color:{fg};font-weight:600">{label}</span>')
 
 
@@ -98,10 +98,10 @@ def _one_outlet_row(item: dict) -> str:
         f'padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,0.04)">'
         f'<div style="flex:1;min-width:0">'
         f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">'
-        f'<span style="font-size:13px;font-weight:500;color:#f0ede8">'
+        f'<span style="font-size:16px;font-weight:500;color:#f0ede8">'
         f'{_e(item.get("outlet",""))}</span>'
         f'{_outlet_badge(item.get("outlet_type",""))}</div>'
-        f'<div style="font-size:12px;color:#9e9a93;line-height:1.5">{_e(note)}</div>'
+        f'<div style="font-size:15px;color:#9e9a93;line-height:1.5">{_e(note)}</div>'
         f'</div>'
         f'<div style="width:6px;height:6px;border-radius:50%;background:{dot};'
         f'flex-shrink:0;margin-top:6px"></div>'
@@ -112,7 +112,7 @@ def _one_outlet_row(item: dict) -> str:
 def _chain_items_html(chain: list, side_prefix: str) -> str:
     """Group outlets by country (click to expand), then by media type on this story."""
     if not chain:
-        return '<div style="font-size:12px;color:#5a5752;padding:12px 0">No outlets mapped yet.</div>'
+        return '<div style="font-size:16px;color:#5a5752;padding:12px 0">No outlets mapped yet.</div>'
 
     by_country: dict[str, list] = defaultdict(list)
     for item in chain:
@@ -146,7 +146,7 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
             inner = "".join(_one_outlet_row(x) for x in typed)
             type_sections.append(
                 f'<div style="margin-bottom:14px">'
-                f'<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;'
+                f'<div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;'
                 f'color:#5a5752;margin-bottom:6px">{_e(label)}</div>'
                 f'<div style="padding-left:2px">{inner}</div>'
                 f"</div>"
@@ -157,7 +157,7 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
             inner = "".join(_one_outlet_row(x) for x in typed)
             type_sections.append(
                 f'<div style="margin-bottom:14px">'
-                f'<div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;'
+                f'<div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;'
                 f'color:#5a5752;margin-bottom:6px">{_e(otype)}</div>'
                 f'<div style="padding-left:2px">{inner}</div>'
                 f"</div>"
@@ -171,9 +171,9 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
             f'<summary style="list-style:none;cursor:pointer;padding:12px 14px;display:flex;'
             f'align-items:center;gap:8px;flex-wrap:wrap;user-select:none">'
             f'<span style="font-size:16px;line-height:1">{flag}</span>'
-            f'<span style="font-size:13px;font-weight:600;color:#f0ede8">{_e(country)}</span>'
-            f'<span class="country-chev" style="font-size:11px;color:#e8a020">▾</span>'
-            f'<span style="font-size:11px;color:#5a5752;margin-left:auto">'
+            f'<span style="font-size:15px;font-weight:600;color:#f0ede8">{_e(country)}</span>'
+            f'<span class="country-chev" style="font-size:13px;color:#e8a020">▾</span>'
+            f'<span style="font-size:13px;color:#5a5752;margin-left:auto">'
             f'{n_out} outlet{"s" if n_out != 1 else ""} · {_e(str(len(by_type)))} type{"s" if len(by_type) != 1 else ""}'
             f"</span>"
             f"</summary>"
@@ -184,7 +184,7 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
         )
 
     hint = (
-        '<p style="font-size:11px;color:#5a5752;line-height:1.5;margin:0 0 10px 0">'
+        '<p style="font-size:16px;color:#5a5752;line-height:1.5;margin:0 0 10px 0">'
         "Tap a country to see how outlets there break down by kind of organization "
         "on this story.</p>"
     )
@@ -226,11 +226,11 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
     signed_badge = (
         '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
-        'border-radius:20px;font-size:11px;font-weight:600;'
+        'border-radius:20px;font-size:13px;font-weight:600;'
         'background:#E8F5E9;color:#2e7d32;border:1px solid #a5d6a7">✓ Signed</span>'
         if signed else
         '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
-        'border-radius:20px;font-size:11px;font-weight:600;'
+        'border-radius:20px;font-size:13px;font-weight:600;'
         'background:#ffebee;color:#B71C1C;border:1px solid #ffcdd2">✗ Unsigned</span>'
     )
 
@@ -252,7 +252,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         f'background:rgba(230,81,0,0.07);margin-bottom:8px;'
         f'border:1px solid rgba(230,81,0,0.18)">'
         f'<span style="color:#E65100;flex-shrink:0;margin-top:1px">◈</span>'
-        f'<span style="font-size:14px;color:#5d4037;line-height:1.5">{_e(w)}</span></div>'
+        f'<span style="font-size:18px;color:#5d4037;line-height:1.5">{_e(w)}</span></div>'
         for w in what_nobody[:6]
     )
 
@@ -261,16 +261,16 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         f'border-bottom:1px solid rgba(26,26,26,0.08)">'
         f'<div style="width:5px;height:5px;border-radius:50%;background:#00695c;'
         f'flex-shrink:0;margin-top:8px"></div>'
-        f'<div><div style="font-size:15px;color:#1a1a1a;line-height:1.45">'
+        f'<div><div style="font-size:18px;color:#1a1a1a;line-height:1.45">'
         f'{_e(c.get("title","") if isinstance(c,dict) else str(c))}</div>'
-        f'<div style="font-size:12px;color:#666;margin-top:2px">'
+        f'<div style="font-size:15px;color:#666;margin-top:2px">'
         f'{_e(c.get("outlet","") if isinstance(c,dict) else "")} · '
         f'{_e(c.get("date","")   if isinstance(c,dict) else "")}</div></div></div>'
         for c in confirmed[:5]
     ) if confirmed else ""
 
     both_html = "".join(
-        f'<div style="font-size:15px;color:#333;padding:8px 0;'
+        f'<div style="font-size:18px;color:#333;padding:8px 0;'
         f'border-bottom:1px solid rgba(26,26,26,0.08)">'
         f'<span style="color:#888;margin-right:10px">—</span>{_e(w)}</div>'
         for w in what_both
@@ -279,9 +279,9 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     receipt_rows = "".join(
         f'<div style="display:grid;grid-template-columns:140px 1fr;gap:12px;'
         f'padding:9px 0;border-bottom:1px solid rgba(26,26,26,0.1)">'
-        f'<div style="font-size:10px;letter-spacing:0.07em;text-transform:uppercase;'
+        f'<div style="font-size:13px;letter-spacing:0.07em;text-transform:uppercase;'
         f'color:#666">{k}</div>'
-        f'<div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:12px;color:{c};'
+        f'<div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:13px;color:{c};'
         f'word-break:break-all;line-height:1.5">{_e(v)}</div></div>'
         for k, v, c in [
             ("Receipt ID",     rid,   "#444"),
@@ -299,10 +299,10 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     # ── No-coalition empty state (on paper) ─────────────────────
     no_coalition_html = """
 <div class="inv-paper-card" style="padding:28px 24px;text-align:center;margin-bottom:32px">
-  <div style="font-size:15px;color:#444;line-height:1.7">
+  <div style="font-size:18px;color:#444;line-height:1.7">
     We don't see enough disagreement here to map a split story yet.
   </div>
-  <div style="font-size:13px;color:#888;margin-top:8px">
+  <div style="font-size:16px;color:#888;margin-top:8px">
     Coalition analysis runs in the background — check back in a minute.
   </div>
 </div>"""
@@ -324,15 +324,15 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   <div style="display:inline-flex;align-items:center;gap:12px;
               padding:10px 20px;border-radius:28px;
               background:{pill_bg};border:0.5px solid {pill_border}">
-    <span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+    <span style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
                  color:{accent};font-weight:600">VOLATILITY</span>
     <span style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;
                  color:{vnum};line-height:1;letter-spacing:-0.02em">{vol}</span>
     <span style="font-size:14px;color:{accent};opacity:0.75">/ 100</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-left:2px">
-    <span style="font-size:13px;color:#9e9a93">{_e(vol_copy)}</span>
-    <button onclick="toggleWhyNumber()" style="font-size:11px;color:#5a5752;
+    <span style="font-size:16px;color:#9e9a93">{_e(vol_copy)}</span>
+    <button onclick="toggleWhyNumber()" style="font-size:13px;color:#5a5752;
             background:none;border:none;cursor:pointer;padding:0;
             text-decoration:underline;text-underline-offset:3px">
       Why this number?
@@ -340,7 +340,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   </div>
   <div id="why-number" style="display:none;margin-top:10px;padding:12px 16px;
        border-radius:8px;background:rgba(0,0,0,0.35);border:0.5px solid rgba(255,255,255,0.08);
-       font-size:12px;color:#c8c4bc;line-height:1.6;max-width:520px">
+       font-size:16px;color:#c8c4bc;line-height:1.6;max-width:520px">
     The volatility score measures how far apart the two most opposed outlet clusters
     are on this story — based on what each side emphasizes vs. minimizes, and how
     confidently they hold those positions. It's not a vibe: it's calculated from the
@@ -353,9 +353,9 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 <div style="margin-bottom:32px;padding:18px 22px;
             border-left:3px solid {accent};
             background:{pill_bg};border-radius:0 10px 10px 0">
-  <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+  <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
               color:{accent};margin-bottom:8px;font-weight:600">Where the story splits</div>
-  <div style="font-size:16px;color:#F7F4EF;line-height:1.7">{_e(irreconcilable_gap)}</div>
+  <div style="font-size:16px;color:#F7F4EF;line-height:1.65">{_e(irreconcilable_gap)}</div>
 </div>
 
 <!-- TWO ANCHOR CARDS -->
@@ -364,19 +364,19 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
   <!-- SIDE A -->
   <div style="flex:1;background:#141414;padding:24px 22px">
-    <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+    <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                 color:#7eb8ff;margin-bottom:8px">{_e(a_anchor)}</div>
     <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
                 color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(a_label)}</div>
-    <div style="font-size:13px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
+    <div style="font-size:18px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
       {_e(a_summary)}</div>
     <div style="margin-bottom:10px">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+      <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                   color:#5a5752;margin-bottom:5px">Emphasizes</div>
       {_pills(a_em, "green")}
     </div>
     <div>
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+      <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                   color:#5a5752;margin-bottom:5px">Minimizes</div>
       {_pills(a_mn, "red")}
     </div>
@@ -387,24 +387,24 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
               background:#141414;padding:0 4px;min-width:36px">
     <span style="background:#111;border:0.5px solid rgba(255,255,255,0.1);
                  border-radius:20px;padding:5px 8px;
-                 font-size:10px;font-weight:700;color:#5a5752">VS</span>
+                 font-size:12px;font-weight:700;color:#5a5752">VS</span>
   </div>
 
   <!-- SIDE B -->
   <div style="flex:1;background:#141414;padding:24px 22px">
-    <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+    <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                 color:#ff8a80;margin-bottom:8px">{_e(b_anchor)}</div>
     <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
                 color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(b_label)}</div>
-    <div style="font-size:13px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
+    <div style="font-size:18px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
       {_e(b_summary)}</div>
     <div style="margin-bottom:10px">
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+      <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                   color:#5a5752;margin-bottom:5px">Emphasizes</div>
       {_pills(b_em, "green")}
     </div>
     <div>
-      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;
+      <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                   color:#5a5752;margin-bottom:5px">Minimizes</div>
       {_pills(b_mn, "red")}
     </div>
@@ -422,11 +422,11 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
               style="width:100%;padding:14px 18px;background:none;border:none;
                      cursor:pointer;text-align:left;
                      border-bottom:0.5px solid rgba(255,255,255,0.06)">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+        <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                     color:#5b9fff;margin-bottom:3px">Who's on this side</div>
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:13px;font-weight:600;color:#f0ede8">{_e(a_label)}</div>
-          <div style="font-size:12px;color:#5a5752;display:flex;align-items:center;gap:6px">
+          <div style="font-size:15px;font-weight:600;color:#f0ede8">{_e(a_label)}</div>
+          <div style="font-size:15px;color:#5a5752;display:flex;align-items:center;gap:6px">
             <span>{_e(a_preview)}</span>
             <span id="chain-a-arrow" style="transition:transform 0.2s">▾</span>
           </div>
@@ -444,11 +444,11 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
               style="width:100%;padding:14px 18px;background:none;border:none;
                      cursor:pointer;text-align:left;
                      border-bottom:0.5px solid rgba(255,255,255,0.06)">
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+        <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                     color:#e05050;margin-bottom:3px">Who's on this side</div>
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:13px;font-weight:600;color:#f0ede8">{_e(b_label)}</div>
-          <div style="font-size:12px;color:#5a5752;display:flex;align-items:center;gap:6px">
+          <div style="font-size:15px;font-weight:600;color:#f0ede8">{_e(b_label)}</div>
+          <div style="font-size:15px;color:#5a5752;display:flex;align-items:center;gap:6px">
             <span>{_e(b_preview)}</span>
             <span id="chain-b-arrow" style="transition:transform 0.2s">▾</span>
           </div>
@@ -465,7 +465,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         coalition_tail_html = (
             (
                 "<div class=\"inv-paper-block\" style='margin-bottom:32px'>"
-                "<div style='font-size:11px;letter-spacing:0.12em;text-transform:uppercase;"
+                "<div style='font-size:13px;letter-spacing:0.12em;text-transform:uppercase;"
                 "color:#555;margin-bottom:10px'>What everyone agrees on</div>"
                 "<div class='inv-paper-card' style='padding:4px 18px'>" + both_html + "</div></div>"
             )
@@ -474,10 +474,10 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         )
         coalition_tail_html += f"""
 <div class="inv-paper-block" style="margin-bottom:32px">
-  <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
               color:#555;margin-bottom:10px">The specific claim in dispute</div>
   <div class="inv-paper-card" style="padding:14px 18px;border-left:3px solid rgba(26,26,26,0.2);
-              font-size:14px;color:#555;line-height:1.7;font-style:italic">
+              font-size:18px;color:#555;line-height:1.7;font-style:italic">
     {_e(contested_claim)}
   </div>
 </div>
@@ -518,6 +518,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   html{{scroll-behavior:smooth}}
   body.inv-body{{
     font-family:"IBM Plex Sans",-apple-system,sans-serif;
+    font-size:18px;
     background:#F7F4EF;color:#1a1a1a;min-height:100vh;
   }}
   a{{color:#0d47a1;text-decoration:underline;text-underline-offset:3px}}
@@ -533,15 +534,15 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   body.inv-reporter-mode .inv-reader-soft{{display:none !important;}}
   .inv-mode{{display:inline-flex;gap:4px;margin-left:12px;}}
   .inv-mode button{{
-    font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
+    font-family:"IBM Plex Sans",sans-serif;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
     padding:6px 12px;border:1px solid rgba(26,26,26,0.2);background:#fff;cursor:pointer;border-radius:2px;
   }}
   .inv-mode button.active{{background:#1a1a1a;color:#F7F4EF;border-color:#1a1a1a;}}
   .inv-reporter-tools{{margin:24px 0;padding:18px;background:#F5F5F5;border:1px solid rgba(26,26,26,0.12);border-radius:4px;}}
-  .inv-rt-hed{{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;}}
-  .inv-mono{{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.65;color:#333;}}
-  .inv-mono-sub{{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#555;margin-top:8px;}}
-  .inv-btn{{display:inline-block;margin-left:6px;padding:3px 8px;font-size:10px;border:1px solid #999;background:#fff;border-radius:2px;cursor:pointer;text-decoration:none;color:#1a1a1a;}}
+  .inv-rt-hed{{font-size:13px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;}}
+  .inv-mono{{font-family:"IBM Plex Mono",monospace;font-size:14px;line-height:1.65;color:#333;}}
+  .inv-mono-sub{{font-family:"IBM Plex Mono",monospace;font-size:13px;color:#555;margin-top:8px;}}
+  .inv-btn{{display:inline-block;margin-left:6px;padding:3px 8px;font-size:12px;border:1px solid #999;background:#fff;border-radius:2px;cursor:pointer;text-decoration:none;color:#1a1a1a;}}
   .inv-btn-ghost{{opacity:0.55;cursor:default;}}
   details.country-acc > summary::-webkit-details-marker {{ display: none; }}
   details.country-acc > summary {{ list-style: none; }}
@@ -568,18 +569,18 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <form action="/search" method="get" style="display:inline-flex;gap:6px;align-items:center;margin-right:4px">
       <input type="search" name="q" placeholder="Conflicts…" autocomplete="off" aria-label="Search conflicts"
-        style="width:min(140px,32vw);padding:5px 8px;font-size:11px;border:1px solid rgba(26,26,26,0.2);font-family:inherit" />
-      <button type="submit" style="padding:5px 10px;font-size:9px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;border:1px solid #1a1a1a;background:#1a1a1a;color:#F7F4EF;cursor:pointer">Go</button>
+        style="width:min(140px,32vw);padding:5px 8px;font-size:12px;border:1px solid rgba(26,26,26,0.2);font-family:inherit" />
+      <button type="submit" style="padding:5px 10px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;border:1px solid #1a1a1a;background:#1a1a1a;color:#F7F4EF;cursor:pointer">Go</button>
     </form>
     <span class="inv-reader-soft">{signed_badge}</span>
     <div class="inv-mode">
       <button type="button" id="inv-mode-reader" class="active">Reader</button>
       <button type="button" id="inv-mode-reporter">Reporter</button>
     </div>
-    <a href="#verification-full" style="font-size:11px;color:#555;letter-spacing:0.04em;text-decoration:none" class="reporter-only">
+    <a href="#verification-full" style="font-size:13px;color:#555;letter-spacing:0.04em;text-decoration:none" class="reporter-only">
       Receipt ↓
     </a>
-    <a href="#verification" style="font-size:11px;color:#555;letter-spacing:0.04em;text-decoration:none" class="inv-reader-soft inv-receipt-jump">
+    <a href="#verification" style="font-size:13px;color:#555;letter-spacing:0.04em;text-decoration:none" class="inv-reader-soft inv-receipt-jump">
       Receipt ↓
     </a>
   </div>
@@ -589,7 +590,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 <!-- HOOK -->
 <div style="padding:40px 0 24px">
-  {f'<div style="margin-bottom:10px"><a href="{_e(a_url)}" target="_blank" rel="noopener" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#666">{_e(a_pub)} ↗</a></div>' if a_url else ""}
+  {f'<div style="margin-bottom:10px"><a href="{_e(a_url)}" target="_blank" rel="noopener" style="font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:#666">{_e(a_pub)} ↗</a></div>' if a_url else ""}
   <h1 style="font-family:'Playfair Display',serif;font-size:clamp(26px,4vw,38px);
               font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#1a1a1a;
               margin-bottom:0;max-width:720px">
@@ -602,13 +603,13 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 {coalition_section}
 
 <!-- SUMMARY (after the fight) -->
-{f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:15px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
+{f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:18px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
 
 <!-- WHAT NO ONE IS REALLY TALKING ABOUT -->
-{f'<div class="inv-reader-soft" style="margin-bottom:32px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
+{f'<div class="inv-reader-soft" style="margin-bottom:32px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
 
 <!-- CROSS-CORROBORATED -->
-{f'<div class="reporter-only" style="margin-bottom:32px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">Cross-corroborated</div><div class="inv-paper-card" style="padding:4px 18px">{confirmed_html}</div></div>' if confirmed_html else ""}
+{f'<div class="reporter-only" style="margin-bottom:32px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">Cross-corroborated</div><div class="inv-paper-card" style="padding:4px 18px">{confirmed_html}</div></div>' if confirmed_html else ""}
 
 <div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:32px"></div>
 
@@ -616,7 +617,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 <!-- VERIFICATION (reader: one-line access) -->
 <div id="verification" class="inv-reader-soft" style="margin-bottom:28px;padding:16px 18px;background:#fff;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
-  <p style="font-size:15px;line-height:1.65;color:#333">
+  <p style="font-size:18px;line-height:1.65;color:#333">
     {signed_badge}
     <span style="margin-left:6px">This investigation is backed by a signed, verifiable receipt.</span>
     <a href="/verify?id={_e(rid)}" style="font-weight:600;margin-left:4px">Verify independently ↗</a>
@@ -626,7 +627,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 <!-- VERIFICATION (reporter: full chain) -->
 <div id="verification-full" class="reporter-only" style="margin-bottom:48px">
-  <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+  <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
               color:#555;margin-bottom:12px">Verification</div>
   <div style="border:1px solid rgba(26,26,26,0.15);border-radius:8px;
               background:#fff;overflow:hidden">
@@ -634,26 +635,26 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
                 display:flex;align-items:center;justify-content:space-between;
                 flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:3px">
+        <div style="font-size:18px;font-weight:600;color:#1a1a1a;margin-bottom:3px">
           Cryptographically signed
         </div>
-        <div style="font-size:13px;color:#666">
+        <div style="font-size:16px;color:#666">
           Ed25519 · JCS canonical payload · independently verifiable
         </div>
       </div>
       {signed_badge}
     </div>
     <div style="padding:8px 20px">{receipt_rows}</div>
-    {f'<div style="padding:12px 20px;border-top:1px solid rgba(26,26,26,0.08);background:#fafafa"><div style="font-size:10px;letter-spacing:0.07em;text-transform:uppercase;color:#666;margin-bottom:5px">Ed25519 Signature</div><div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:11px;color:#555;word-break:break-all;line-height:1.6">{_e(signature)}</div></div>' if signature else ""}
+    {f'<div style="padding:12px 20px;border-top:1px solid rgba(26,26,26,0.08);background:#fafafa"><div style="font-size:13px;letter-spacing:0.07em;text-transform:uppercase;color:#666;margin-bottom:5px">Ed25519 Signature</div><div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:13px;color:#555;word-break:break-all;line-height:1.6">{_e(signature)}</div></div>' if signature else ""}
     <div style="padding:14px 20px;border-top:1px solid rgba(26,26,26,0.08);
                 display:flex;gap:8px;flex-wrap:wrap">
       <a href="/verify?id={_e(rid)}"
-         style="font-size:11px;padding:8px 14px;border-radius:4px;
+         style="font-size:13px;padding:8px 14px;border-radius:4px;
                 border:1px solid rgba(26,26,26,0.2);color:#333;text-decoration:none">
         Verify independently ↗
       </a>
       <a href="/r/{_e(rid)}" target="_blank"
-         style="font-size:11px;padding:8px 14px;border-radius:4px;
+         style="font-size:13px;padding:8px 14px;border-radius:4px;
                 border:1px solid rgba(26,26,26,0.2);color:#333;text-decoration:none">
         Raw JSON ↗
       </a>
@@ -664,8 +665,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 <div style="padding-bottom:40px;display:flex;align-items:center;
             justify-content:space-between;flex-wrap:wrap;gap:12px;
             border-top:1px solid rgba(26,26,26,0.2);padding-top:20px">
-  <div style="font-size:12px;color:#666">PUBLIC EYE · Receipts, not verdicts.</div>
-  <a href="/verify?id={_e(rid)}" class="reporter-only" style="font-size:12px;color:#666;text-decoration:none">Independent verification ↗</a>
+  <div style="font-size:13px;color:#666">PUBLIC EYE · Receipts, not verdicts.</div>
+  <a href="/verify?id={_e(rid)}" class="reporter-only" style="font-size:13px;color:#666;text-decoration:none">Independent verification ↗</a>
 </div>
 
 </div>

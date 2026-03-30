@@ -63,7 +63,7 @@ body.sp-body {
   letter-spacing: -0.02em;
 }
 .sp-hero p.meta {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #555;
@@ -143,7 +143,7 @@ body.sp-body {
 }
 .sp-filter-bar select {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   padding: 6px 8px;
   border: 1px solid var(--rule);
   background: var(--card);
@@ -171,13 +171,13 @@ body.sp-body {
 }
 .sp-vol-num {
   font-family: "Playfair Display", serif;
-  font-size: 44px;
+  font-size: 32px;
   font-weight: 900;
   line-height: 1;
 }
-.sp-vol-slash { font-size: 18px; color: #666; margin: 0 4px; }
+.sp-vol-slash { font-size: 15px; color: #666; margin: 0 4px; }
 .sp-vol-copy {
-  font-size: 14px;
+  font-size: 15px;
   font-style: italic;
   color: #444;
   max-width: 260px;
@@ -185,13 +185,13 @@ body.sp-body {
 
 .sp-hed {
   font-family: "Playfair Display", serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
   margin: 6px 0 4px;
 }
 .sp-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #555;
   margin-bottom: 14px;
 }
@@ -205,19 +205,19 @@ body.sp-body {
   color: var(--fight-text);
   padding: 14px 16px;
   margin: 12px 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 @media (max-width: 640px) {
   .sp-fight { grid-template-columns: 1fr; text-align: center; }
 }
-.sp-pos-label { font-weight: 700; }
-.sp-pos-sum { font-size: 12px; letter-spacing: 0.02em; text-transform: none; font-weight: 400; margin-top: 6px; line-height: 1.45; }
-.sp-vs { opacity: 0.5; font-size: 10px; text-align: center; }
+.sp-pos-label { font-weight: 700; font-size: 16px; letter-spacing: 0.02em; text-transform: none; }
+.sp-pos-sum { font-size: 14px; letter-spacing: 0.02em; text-transform: none; font-weight: 400; margin-top: 6px; line-height: 1.45; }
+.sp-vs { opacity: 0.5; font-size: 12px; text-align: center; }
 
 .sp-gap {
-  font-size: 13px;
+  font-size: 14px;
   color: #333;
   margin: 12px 0;
   line-height: 1.55;
@@ -225,7 +225,7 @@ body.sp-body {
 .sp-gap strong { font-weight: 600; }
 
 .sp-coal {
-  font-size: 12px;
+  font-size: 13px;
   color: #555;
   margin-bottom: 12px;
 }
@@ -248,7 +248,7 @@ body.sp-body {
   background: var(--card);
 }
 .sp-actions a.primary { background: var(--ink); color: var(--paper); }
-.sp-signed { font-size: 11px; color: #2e7d32; font-weight: 600; }
+.sp-signed { font-size: 12px; color: #2e7d32; font-weight: 600; }
 
 .sp-empty {
   max-width: 560px;
@@ -258,7 +258,7 @@ body.sp-body {
   background: var(--card);
 }
 .sp-empty h2 { font-family: "Playfair Display", serif; font-size: 20px; margin-bottom: 12px; }
-.sp-empty ul { margin: 12px 0 0 18px; font-size: 14px; color: #444; }
+.sp-empty ul { margin: 12px 0 0 18px; font-size: 16px; color: #444; }
 .sp-empty a { color: #0d47a1; }
 
 .sp-side {
@@ -270,7 +270,7 @@ body.sp-body {
   top: 20px;
 }
 .sp-side h3 {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   margin: 14px 0 8px;
@@ -308,7 +308,7 @@ body.sp-body {
 }
 .sp-mini-search button {
   padding: 6px 12px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -338,7 +338,7 @@ body.sp-body {
 }
 .sp-url-row button {
   padding: 10px 18px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -398,7 +398,7 @@ def _result_card(r: dict[str, Any]) -> str:
     signed_b = (
         '<span class="sp-signed">Signed</span>'
         if r.get("signed")
-        else '<span style="font-size:11px;color:#888">Unsigned</span>'
+        else '<span style="font-size:12px;color:#888">Unsigned</span>'
     )
     coal_line = (
         f'Coalition: {int(r.get("coalition_a_count") or 0)} outlets in '
@@ -411,7 +411,7 @@ def _result_card(r: dict[str, Any]) -> str:
     return f"""
 <div class="sp-card">
   <div class="sp-vol-row">
-    <div><span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#666">Volatility</span>
+    <div><span style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#666">Volatility</span>
       <div><span class="sp-vol-num" style="color:{_e(vc)}">{vol}</span><span class="sp-vol-slash">/100</span></div>
     </div>
     <div class="sp-vol-copy">{_e(r.get("vol_copy") or "")}</div>
@@ -469,10 +469,10 @@ def render_search_page(
       <option value="date" {"selected" if sort=="date" else ""}>Date</option>
     </select></label>
     <label>Vol min <input type="number" name="volatility_min" min="0" max="100" step="1"
-      value="{_e(volatility_min)}" style="width:52px;font-size:11px;padding:4px 6px;border:1px solid rgba(26,26,26,0.2)" /></label>
+      value="{_e(volatility_min)}" style="width:52px;font-size:12px;padding:4px 6px;border:1px solid rgba(26,26,26,0.2)" /></label>
     <label>Vol max <input type="number" name="volatility_max" min="0" max="100" step="1"
-      value="{_e(volatility_max)}" style="width:52px;font-size:11px;padding:4px 6px;border:1px solid rgba(26,26,26,0.2)" /></label>
-    <button type="submit" class="sp-go" style="padding:6px 14px;font-size:10px">Apply</button>
+      value="{_e(volatility_max)}" style="width:52px;font-size:12px;padding:4px 6px;border:1px solid rgba(26,26,26,0.2)" /></label>
+    <button type="submit" class="sp-go" style="padding:6px 14px;font-size:12px">Apply</button>
   </form>
 </div>
 """
@@ -482,17 +482,17 @@ def render_search_page(
         body_main = f"""
 <div class="sp-empty">
   <h2>No conflicts found for &ldquo;{_e(q)}&rdquo;</h2>
-  <p style="font-size:14px;color:#444;margin-bottom:8px">This could mean:</p>
+  <p style="font-size:16px;color:#444;margin-bottom:8px">This could mean:</p>
   <ul>
     <li>No articles on this topic have been analyzed yet</li>
     <li>The story exists but outlets mostly agree (low volatility)</li>
     <li>Try broader terms</li>
   </ul>
-  <p style="margin-top:18px;font-size:14px">
+  <p style="margin-top:18px;font-size:16px">
     <a href="#analyze-url">Analyze a specific article on this topic →</a><br><br>
     <a href="/">Search recent investigations on the front page →</a>
   </p>
-  <p style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(26,26,26,0.12);font-size:13px;color:#555">
+  <p style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(26,26,26,0.12);font-size:14px;color:#555">
     We haven&rsquo;t analyzed this yet.
     <a href="/">Run a broader search from the front page</a> or paste a URL below.
   </p>
@@ -504,7 +504,7 @@ def render_search_page(
 {filter_bar}
 <div class="sp-layout">
   <div class="sp-main">
-    <p style="font-size:13px;color:#666;margin-bottom:12px">{int(total)} conflict bundle(s) · query: <strong>{_e(q)}</strong></p>
+    <p style="font-size:14px;color:#666;margin-bottom:12px">{int(total)} conflict bundle(s) · query: <strong>{_e(q)}</strong></p>
     {cards}
   </div>
   {_facet_sidebar(facets)}
