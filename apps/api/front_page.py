@@ -369,7 +369,18 @@ def render_front_page(data: dict[str, Any]) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PUBLIC EYE — A front page for contested facts</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PUBLIC EYE">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<script>
+  if ('serviceWorker' in navigator) {{
+    navigator.serviceWorker.register('/sw.js');
+  }}
+</script>
 <style>
 :root {{
   --paper: #F7F4EF;
@@ -726,7 +737,7 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
 
   <section class="fp-analyze">
     <label for="fp-analyze-url">Analyze</label>
-    <form id="fp-analyze-form" class="fp-analyze-row">
+    <form id="fp-analyze-form" class="fp-analyze-row" action="/analyze" method="get">
       <input type="url" id="fp-analyze-url" name="url" placeholder="Paste any article URL…" required autocomplete="off" />
       <button type="submit">Analyze →</button>
     </form>
@@ -752,32 +763,13 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
   document.getElementById('fp-mode-reader').onclick = function() {{ setMode(false); }};
   document.getElementById('fp-mode-reporter').onclick = function() {{ setMode(true); }};
 
-  document.getElementById('fp-analyze-form').onsubmit = function(ev) {{
-    ev.preventDefault();
-    var inp = document.getElementById('fp-analyze-url');
-    var err = document.getElementById('fp-analyze-err');
-    err.style.display = 'none';
-    var url = (inp.value || '').trim();
-    fetch('/v1/analyze-article', {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{ url: url }})
-    }}).then(function(r) {{
-      return r.json().then(function(j) {{ return {{ ok: r.ok, j: j }}; }});
-    }}).then(function(x) {{
-      if (!x.ok) {{
-        err.textContent = (x.j && x.j.detail) ? String(x.j.detail) : 'Request failed';
-        err.style.display = 'block';
-        return;
-      }}
-      var id = x.j.receipt_id || x.j.report_id;
-      if (id) window.location.href = '/i/' + id;
-    }}).catch(function() {{
-      err.textContent = 'Network error';
-      err.style.display = 'block';
-    }});
-    return false;
-  }};
+}})();
+</script>
+<script>
+(function keepWarm() {{
+  setInterval(function() {{
+    fetch('/health').catch(function() {{}});
+  }}, 10 * 60 * 1000);
 }})();
 </script>
 </body>

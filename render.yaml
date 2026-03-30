@@ -1,4 +1,18 @@
+# =============================================================================
+# UPGRADE NOTE (Postgres + Redis, dashboard wiring)
+# When the Postgres or Redis *instance type* changes, Render may issue a new
+# DATABASE_URL or REDIS_URL. If the database/redis is *linked* to each service
+# in the Render dashboard, env vars auto-update — no code change. If URLs are
+# pasted manually anywhere, update them after upgrade. Confirm links before
+# bumping instance types in ~7 days.
+# Free Postgres expires after 30 days — do not wait longer than necessary.
+# =============================================================================
+
 services:
+  # --- WEB SERVICE (frame-api) ---
+  # UPGRADE IN ~7 DAYS: bump plan to standard ($25/mo) if still on a
+  # spin-down tier — Standard = always-on, 2 GB RAM, 1 CPU. No env var change
+  # when upgrading the same service in dashboard.
   - type: web
     name: frame-api
     runtime: python
@@ -13,7 +27,7 @@ services:
       pip install -r apps/api/requirements.txt
     startCommand: cd apps/api && uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    plan: starter
+    plan: starter  # → standard (always-on, 2 GB) when ready
     numInstances: 1
     envVars:
       - key: FRAME_REPO_ROOT
@@ -41,6 +55,12 @@ services:
         sync: false
       - key: NEWSAPI_KEY
         sync: false
+
+  # --- WORKER (frame-worker) ---
+  # UPGRADE IN ~7 DAYS: set plan to starter ($7/mo) — always-on worker, 512 MB.
+  # WIRING NOTE: REDIS_URL must come from Render env (linked Redis), not a
+  # hardcoded string in repo. Same host/port usually persist when Redis plan
+  # bumps; if not, dashboard link updates REDIS_URL automatically.
   - type: worker
     name: frame-worker
     runtime: python
@@ -67,3 +87,13 @@ services:
         sync: false
       - key: FRAME_PUBLIC_KEY
         sync: false
+
+  # --- POSTGRES (add in Render dashboard if not in this file) ---
+  # UPGRADE IN ~7 DAYS: basic-1gb or pro-4gb ($19–$55/mo) for HA + PITR.
+  # WIRING NOTE: New DATABASE_URL when instance type changes. Link DB to
+  # frame-api (+ worker if used) so the dashboard injects the new URL.
+
+  # --- REDIS / KEY-VALUE (add in Render dashboard if not in this file) ---
+  # UPGRADE IN ~7 DAYS: starter ($10/mo). Free tier ~25 MB is tight for job
+  # queues — flush old jobs or reduce retention if issues before upgrade.
+  # WIRING NOTE: REDIS_URL from linked instance; confirm link, avoid hardcoding.

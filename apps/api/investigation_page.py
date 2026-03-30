@@ -608,7 +608,18 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(a_title or "Investigation")} — PUBLIC EYE</title>
 <meta name="description" content="{_e((irreconcilable_gap or narrative)[:160])}">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PUBLIC EYE">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<script>
+  if ('serviceWorker' in navigator) {{
+    navigator.serviceWorker.register('/sw.js');
+  }}
+</script>
 <style>
   *{{box-sizing:border-box;margin:0;padding:0}}
   html{{scroll-behavior:smooth}}

@@ -45,7 +45,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -543,6 +543,10 @@ _web_dir = _repo_root() / "apps" / "web"
 if _web_dir.is_dir():
     app.mount("/web", StaticFiles(directory=str(_web_dir), html=True), name="web")
 
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="api_static")
+
 
 async def _run_schema_baseline_capture() -> None:
     """
@@ -824,6 +828,26 @@ async def pitch_page() -> FileResponse:
     )
 
 
+@app.get("/sw.js")
+async def service_worker_js() -> FileResponse:
+    path = _STATIC_DIR / "sw.js"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="sw.js not found")
+    return FileResponse(
+        str(path),
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/"},
+    )
+
+
+@app.get("/manifest.json")
+async def pwa_manifest() -> FileResponse:
+    path = _STATIC_DIR / "manifest.json"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="manifest not found")
+    return FileResponse(str(path), media_type="application/manifest+json")
+
+
 @app.get("/i/{receipt_id}", response_class=HTMLResponse)
 async def investigation_html_page(receipt_id: str) -> HTMLResponse:
     """PUBLIC EYE investigation — server-rendered (fight-first layout)."""
@@ -939,6 +963,120 @@ async def root(
             "empty": True,
         }
     return HTMLResponse(render_front_page(data))
+
+
+@app.get("/analyze", response_class=HTMLResponse)
+async def analyze_loading_page(url: str = Query("")):
+    """Full-page loading UX for article analysis (60–120s); keeps user informed."""
+    u = (url or "").strip()
+    if not u:
+        return RedirectResponse(url="/", status_code=302)
+    url_json = json.dumps(u)
+    return HTMLResponse(
+        f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analyzing — PUBLIC EYE</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#111827">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PUBLIC EYE">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:"IBM Plex Sans",sans-serif;background:#F5F2EC;
+        color:#111827;min-height:100vh;display:flex;align-items:center;
+        justify-content:center;padding:40px}}
+  .card{{max-width:480px;width:100%}}
+  .logo{{font-family:"Playfair Display",serif;font-size:18px;font-weight:900;
+         margin-bottom:48px;opacity:0.4}}
+  .headline{{font-family:"Playfair Display",serif;font-size:28px;
+             font-weight:900;line-height:1.1;margin-bottom:16px}}
+  .sub{{font-size:15px;color:#6B7280;line-height:1.6;margin-bottom:32px}}
+  .bar-track{{height:3px;background:rgba(0,0,0,0.1);border-radius:2px;
+              overflow:hidden;margin-bottom:12px}}
+  .bar-fill{{height:100%;background:#111827;border-radius:2px;width:0%;
+             transition:width 0.8s ease}}
+  .stage{{font-size:12px;color:#9CA3AF;letter-spacing:0.06em;
+          text-transform:uppercase}}
+  .error{{margin-top:24px;font-size:14px;color:#EF4444;display:none}}
+</style>
+<script>
+  if ('serviceWorker' in navigator) {{
+    navigator.serviceWorker.register('/sw.js');
+  }}
+</script>
+</head>
+<body>
+<div class="card">
+  <div class="logo">PUBLIC EYE</div>
+  <div class="headline">Building the investigation.</div>
+  <div class="sub">
+    Fetching sources, mapping positions, computing divergence.
+    This takes 60–120 seconds.
+  </div>
+  <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+  <div class="stage" id="stage">Starting up…</div>
+  <div class="error" id="err"></div>
+</div>
+<script>
+const stages = [
+  [0,   "Starting up…"],
+  [8,   "Fetching article…"],
+  [20,  "Extracting claims…"],
+  [38,  "Gathering sources…"],
+  [55,  "Mapping positions…"],
+  [70,  "Computing coalition…"],
+  [82,  "Building receipt…"],
+  [92,  "Signing…"],
+  [97,  "Almost done…"],
+];
+const bar   = document.getElementById('bar');
+const stage = document.getElementById('stage');
+const err   = document.getElementById('err');
+
+let pct = 0;
+let si  = 0;
+const iv = setInterval(() => {{
+  if (pct < 97) pct = Math.min(pct + 0.4, 97);
+  bar.style.width = pct + '%';
+  while (si < stages.length - 1 && pct >= stages[si + 1][0]) si++;
+  stage.textContent = stages[si][1];
+}}, 500);
+
+(async function run() {{
+  try {{
+    const resp = await fetch('/v1/analyze-article', {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/json'}},
+      body: JSON.stringify({{url: {url_json}}})
+    }});
+    const d = await resp.json();
+    const id = d.receipt_id || d.report_id;
+    if (id) {{
+      clearInterval(iv);
+      bar.style.width = '100%';
+      stage.textContent = 'Done.';
+      setTimeout(() => window.location = '/i/' + id, 300);
+    }} else {{
+      clearInterval(iv);
+      err.style.display = 'block';
+      err.textContent = 'Analysis failed: ' + (d.detail || d.error || JSON.stringify(d));
+    }}
+  }} catch(e) {{
+    clearInterval(iv);
+    err.style.display = 'block';
+    err.textContent = 'Network error: ' + e.message;
+  }}
+}})();
+</script>
+</body>
+</html>"""
+    )
 
 
 @app.get("/health")
