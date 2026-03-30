@@ -92,7 +92,25 @@ def _chain_preview(chain: list) -> str:
 def _one_outlet_row(item: dict) -> str:
     conf = item.get("alignment_confidence", "medium")
     dot = {"high": "#3ecf8e", "medium": "#e8a020", "low": "#5a5752"}.get(conf, "#5a5752")
-    note = item.get("alignment_note", "")
+    note = str(item.get("alignment_note", "") or "")
+    story_url = str(item.get("story_url") or "").strip()
+    not_found = "not found in sources" in note.lower()
+    if not_found:
+        note_color = "#5a5752"
+        note_style = "font-style:italic"
+        link_html = ""
+    elif story_url:
+        note_color = "#9e9a93"
+        note_style = ""
+        link_html = (
+            f'<a href="{_e(story_url)}" target="_blank" rel="noopener" '
+            f'style="font-size:13px;color:#5eead4;margin-top:4px;display:block;'
+            f'text-decoration:underline;text-underline-offset:3px">Read coverage ↗</a>'
+        )
+    else:
+        note_color = "#9e9a93"
+        note_style = ""
+        link_html = ""
     return (
         f'<div style="display:flex;gap:10px;align-items:flex-start;'
         f'padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,0.04)">'
@@ -101,7 +119,8 @@ def _one_outlet_row(item: dict) -> str:
         f'<span style="font-size:16px;font-weight:500;color:#f0ede8">'
         f'{_e(item.get("outlet",""))}</span>'
         f'{_outlet_badge(item.get("outlet_type",""))}</div>'
-        f'<div style="font-size:15px;color:#9e9a93;line-height:1.5">{_e(note)}</div>'
+        f'<div style="font-size:15px;color:{note_color};line-height:1.5;{note_style}">'
+        f'{_e(note)}</div>{link_html}'
         f'</div>'
         f'<div style="width:6px;height:6px;border-radius:50%;background:{dot};'
         f'flex-shrink:0;margin-top:6px"></div>'

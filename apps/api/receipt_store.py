@@ -200,6 +200,22 @@ def save_coalition_map(payload: dict[str, Any]) -> None:
         conn.close()
 
 
+def delete_coalition_map(receipt_id: str) -> bool:
+    """Remove stored coalition map for a receipt (e.g. to regenerate after prompt changes)."""
+    rid = str(receipt_id).strip()
+    if not rid:
+        return False
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM coalition_maps WHERE receipt_id = %s", (rid,))
+            deleted = cur.rowcount > 0
+        conn.commit()
+        return deleted
+    finally:
+        conn.close()
+
+
 def store_receipt(receipt: dict[str, Any]) -> str:
     """
     Store a receipt. Returns the canonical receipt_id.

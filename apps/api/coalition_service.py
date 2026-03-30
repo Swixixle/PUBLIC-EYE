@@ -14,7 +14,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-import anthropic
+from llm_client import LLMMessage, llm_complete
 
 from models.coalition_map import position_from_dict
 from receipt_store import get_receipt as load_stored_receipt, save_coalition_map
@@ -24,7 +24,8 @@ _LOG = logging.getLogger(__name__)
 
 COALITION_SYSTEM = """You are a coalition analysis engine for PUBLIC EYE.
 You receive a signed news receipt containing a narrative summary and global
-perspectives from multiple outlet clusters.
+perspectives from multiple outlet clusters. You will ALSO receive a catalog of
+sources actually attached to this receipt (URLs, primary article, citations).
 
 Your job:
 1. Identify the single most contested factual or interpretive claim in the narrative.
@@ -33,17 +34,34 @@ Your job:
    ordered from strongest alignment to weakest.
 4. For each outlet in the chain: name it, give its country (ISO 3166-1 alpha-2),
    flag emoji, outlet type (state / private / public_broadcaster),
-   alignment confidence (high/medium/low), and a one-sentence alignment note
-   explaining WHY it aligns with that position.
+   alignment confidence (high/medium/low), story_url, and alignment_note (see below).
 5. Produce the irreconcilable_gap: one short paragraph naming what cannot be
    simultaneously true about both positions.
 6. List 3-5 facts both sides acknowledge as true.
 
+### alignment_note and story_url (mandatory grounding)
+
+For EACH outlet row in each chain, alignment_note must be exactly ONE of:
+
+A) If this outlet appears in the receipt source catalog (matching name or URL):
+   Write ONE sentence summarizing what that source actually said or reported.
+   Set story_url to the article URL from the catalog for that outlet (or the
+   matching line's URL). Set alignment_confidence to high or medium based on how
+   directly the coverage supports the position.
+
+B) If the outlet did NOT appear in the receipt source catalog:
+   Set alignment_note to exactly: "Not found in sources searched for this receipt."
+   Set story_url to "".
+   Set alignment_confidence to "low".
+
+Banned in alignment_note: speculative or editorial guessing. Do NOT use:
+"likely", "probably", "would", "tends to", "typically", "generally",
+"expected to", "consistent with their editorial line", or similar.
+If you lack evidence in the catalog, use (B).
+
 Rules:
 - Outlet type must be one of: state, private, public_broadcaster
 - Alignment confidence must be one of: high, medium, low
-- Low confidence = outlet aligns by omission, ambiguity, or proximity —
-  not explicit endorsement
 - Never assign an outlet to both chains
 - The contested_claim must be a single declarative sentence that one side would
   affirm and the other would deny
@@ -66,7 +84,8 @@ Output JSON shape:
         "flag": "emoji",
         "outlet_type": "state|private|public_broadcaster",
         "alignment_confidence": "high|medium|low",
-        "alignment_note": "string"
+        "alignment_note": "string",
+        "story_url": "string"
       }
     ]
   },
@@ -85,6 +104,73 @@ estimating irreconcilability (used only as fallback).
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _sources_catalog_text(receipt: dict[str, Any]) -> str:
+    """Human-readable list of sources the receipt actually carries (for coalition grounding)."""
+    lines: list[str] = []
+    seen: set[str] = set()
+
+    def add_line(s: str) -> None:
+        s = s.strip()
+        if not s or s in seen:
+            return
+        seen.add(s)
+        lines.append(s)
+
+    art = receipt.get("article") if isinstance(receipt.get("article"), dict) else {}
+    if art:
+        pub = str(art.get("publication") or "").strip()
+        title = str(art.get("title") or "").strip()
+        url = str(art.get("url") or "").strip()
+        if url or title:
+            add_line(f"- Primary article ({pub or 'publication unknown'}): '{title}' {url}".strip())
+
+    for s in receipt.get("sources") or []:
+        if not isinstance(s, dict):
+            continue
+        outlet = str(s.get("outlet") or s.get("publication") or "").strip()
+        title = str(s.get("title") or "").strip()
+        url = str(s.get("url") or s.get("link") or "").strip()
+        date = str(s.get("date") or s.get("published_at") or "").strip()
+        if outlet or title or url:
+            add_line(f"- {outlet}: '{title}' ({date}) {url}".strip())
+
+    for c in receipt.get("claims_verified") or []:
+        if not isinstance(c, dict):
+            continue
+        cs = c.get("cited_source")
+        if cs:
+            add_line(f"- Cited in primary article: {cs}")
+
+        for v in c.get("verifications") or []:
+            if not isinstance(v, dict):
+                continue
+            for key in ("url", "link", "source_url"):
+                u = v.get(key)
+                if isinstance(u, str) and u.startswith("http"):
+                    add_line(f"- Adapter / verification link: {u}")
+            res = v.get("result")
+            if isinstance(res, dict):
+                for key in ("url", "link", "source_url", "permalink"):
+                    u = res.get(key)
+                    if isinstance(u, str) and u.startswith("http"):
+                        add_line(f"- Record URL: {u}")
+
+    adapters = receipt.get("sources_checked") or []
+    if isinstance(adapters, list) and adapters:
+        add_line(
+            "- Adapters checked for this receipt (public-record tools, not necessarily URLs): "
+            + ", ".join(str(a) for a in adapters[:40])
+        )
+
+    if not lines:
+        return (
+            "Sources actually present in this receipt:\n"
+            "(No explicit source URLs beyond what appears in global perspectives; "
+            "use primary article only if listed above.)"
+        )
+    return "Sources actually present in this receipt:\n" + "\n".join(lines)
 
 
 def receipt_narrative(receipt: dict[str, Any]) -> str:
@@ -271,18 +357,13 @@ def _strip_json_fence(text: str) -> str:
 
 
 def _call_claude(user_prompt: str) -> dict[str, Any]:
-    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(
-        model=os.environ.get("CLAUDE_SONNET_MODEL", "claude-sonnet-4-20250514"),
-        max_tokens=8000,
+    resp = llm_complete(
         system=COALITION_SYSTEM,
-        messages=[{"role": "user", "content": user_prompt}],
+        messages=[LLMMessage(role="user", content=user_prompt)],
+        max_tokens=8000,
+        temperature=0.2,
     )
-    raw_text = msg.content[0].text
-    raw = _strip_json_fence(raw_text)
+    raw = _strip_json_fence(resp.text)
     return json.loads(raw)
 
 
@@ -302,11 +383,15 @@ def build_coalition_map_payload(receipt_id: str) -> dict[str, Any]:
         raise ValueError("Could not resolve two anchor regions from global perspectives")
 
     narrative = receipt_narrative(receipt)
+    sources_text = _sources_catalog_text(receipt)
     user_prompt = (
         f"Receipt narrative:\n{narrative}\n\n"
         f"Most irreconcilable pair (ecosystem ids): [{ra}, {rb}]\n\n"
         "Global perspectives data:\n"
         f"{json.dumps(gp, ensure_ascii=False, indent=2)}\n\n"
+        f"{sources_text}\n\n"
+        "Every chain entry's alignment_note must be grounded in the source catalog "
+        "above or state exactly: Not found in sources searched for this receipt.\n"
         "position_a.anchor_region must be "
         f'"{ra}"; position_b.anchor_region must be "{rb}".\n'
         "Return the coalition map JSON."

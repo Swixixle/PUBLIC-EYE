@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 
 from coalition_service import run_coalition_generation
 from models.coalition_map import CoalitionMapPostBody
+from receipt_store import delete_coalition_map
 from receipt_store import get_coalition_map as load_coalition_payload
 from receipt_store import get_receipt
 
@@ -78,3 +80,13 @@ async def get_coalition_map_by_receipt(receipt_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="Coalition map not found")
     return row
+
+
+@router.delete("/coalition-map/{receipt_id}", response_model=None)
+async def delete_coalition_map_route(receipt_id: str) -> dict[str, Any]:
+    """Delete stored map so POST /coalition-map can regenerate (Sprint 1A)."""
+    rid = receipt_id.strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="receipt_id is required")
+    deleted = await asyncio.to_thread(delete_coalition_map, rid)
+    return {"deleted": deleted, "receipt_id": rid}

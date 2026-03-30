@@ -21,6 +21,7 @@ class CoalitionChainLink(BaseModel):
     outlet_type: OutletType = "private"
     alignment_confidence: AlignmentConfidence = "medium"
     alignment_note: str = ""
+    story_url: str = ""
 
 
 class CoalitionPosition(BaseModel):
@@ -58,6 +59,7 @@ def chain_link_from_dict(d: dict[str, Any]) -> CoalitionChainLink:
         outlet_type=ot,  # type: ignore[arg-type]
         alignment_confidence=conf,  # type: ignore[arg-type]
         alignment_note=str(d.get("alignment_note", "")),
+        story_url=str(d.get("story_url") or ""),
     )
 
 
