@@ -104,6 +104,8 @@ from article_ingest import fetch_article
 from claim_extractor import extract_claims
 from claim_router import build_query_for_adapter, route_claim as route_article_claim
 from deep_receipt_api import build_deep_receipt
+from lens_api import process_audio, process_document_image, process_media_url, process_place_image
+from receipt_store import ensure_table, get_receipt as load_stored_receipt, list_recent_receipts, store_receipt
 from report_api import attach_article_analysis_signing, build_extended_report_async
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
 from dispute_api import pattern_ids_in_library, run_dispute_append, run_dispute_get
@@ -289,6 +291,45 @@ class QueryBody(BaseModel):
     query: str = Field(..., min_length=1, max_length=20000)
     max_sources: int = Field(8, ge=1, le=20)
     include_global_perspectives: bool = True
+
+
+class LensDocumentBody(BaseModel):
+    """Lens: document image (base64) for OCR + claim extraction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image_b64: str = Field(..., min_length=1)
+    media_type: str = "image/jpeg"
+    location: dict[str, Any] | None = None
+
+
+class LensPlaceBody(BaseModel):
+    """Lens: place image + optional GPS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image_b64: str = Field(..., min_length=1)
+    media_type: str = "image/jpeg"
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class LensAudioBody(BaseModel):
+    """Lens: audio blob (base64)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    audio_b64: str = Field(..., min_length=1)
+    audio_format: str = "m4a"
+    context_note: str | None = None
+
+
+class LensUrlBody(BaseModel):
+    """Lens: universal URL (article or direct audio file)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(..., min_length=8, max_length=8000)
 
 
 class ActorEventBody(BaseModel):
@@ -527,6 +568,12 @@ async def capture_schema_baselines() -> None:
     First run: captures genesis baselines.
     Subsequent runs: verifies schema hasn't changed, updates last_verified_at.
     """
+    try:
+        ensure_table()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.warning("Receipt table creation failed: %s", exc)
     asyncio.create_task(_run_schema_baseline_capture())
     asyncio.create_task(_verify_signing_pipeline())
 
@@ -927,7 +974,12 @@ async def report_post(body: ReportPostBody) -> dict[str, Any]:
     Per-ring adapter failures are captured in-ring with absent_fields.
     """
     try:
-        return await build_extended_report_async(body.narrative.strip())
+        rep = await build_extended_report_async(body.narrative.strip())
+        try:
+            store_receipt(rep)
+        except Exception:  # noqa: BLE001
+            pass
+        return rep
     except (RuntimeError, OSError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -1068,7 +1120,12 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
         "sources_checked": adapter_names,
         "generated_at": now,
     }
-    return attach_article_analysis_signing(receipt_payload)
+    signed_payload = attach_article_analysis_signing(receipt_payload)
+    try:
+        store_receipt(signed_payload)
+    except Exception:  # noqa: BLE001
+        pass
+    return signed_payload
 
 
 @app.post("/v1/global-perspectives")
@@ -1160,7 +1217,12 @@ async def query_endpoint(body: QueryBody) -> dict[str, Any]:
             "global_perspectives": global_perspectives,
             "error": query_result.get("error"),
         }
-        return attach_article_analysis_signing(receipt)
+        out = attach_article_analysis_signing(receipt)
+        try:
+            store_receipt(out)
+        except Exception:  # noqa: BLE001
+            pass
+        return out
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -1370,7 +1432,12 @@ async def deep_receipt_post(body: DeepReceiptBody) -> dict[str, Any]:
     Query type selects adapters; structure is always the same. Signed via JCS + Ed25519 when keys are set.
     """
     try:
-        return await build_deep_receipt(body.query.strip())
+        rec = await build_deep_receipt(body.query.strip())
+        try:
+            store_receipt(rec)
+        except Exception:  # noqa: BLE001
+            pass
+        return rec
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -1378,6 +1445,86 @@ async def deep_receipt_post(body: DeepReceiptBody) -> dict[str, Any]:
             status_code=502,
             detail=str(exc)[:4000],
         ) from exc
+
+
+@app.post("/v1/lens/document")
+async def lens_document(body: LensDocumentBody) -> dict[str, Any]:
+    """OCR a document image → extract claims → signed receipt."""
+    if not body.image_b64.strip():
+        raise HTTPException(status_code=400, detail="image_b64 is required")
+    receipt = await process_document_image(
+        body.image_b64.strip(), body.media_type, body.location
+    )
+    try:
+        store_receipt(receipt)
+    except Exception:  # noqa: BLE001
+        pass
+    return receipt
+
+
+@app.post("/v1/lens/place")
+async def lens_place(body: LensPlaceBody) -> dict[str, Any]:
+    """Identify a place from image + optional GPS → actor layer + recent RSS coverage."""
+    if not body.image_b64.strip():
+        raise HTTPException(status_code=400, detail="image_b64 is required")
+    receipt = await process_place_image(
+        body.image_b64.strip(),
+        body.media_type,
+        body.latitude,
+        body.longitude,
+    )
+    try:
+        store_receipt(receipt)
+    except Exception:  # noqa: BLE001
+        pass
+    return receipt
+
+
+@app.post("/v1/lens/audio")
+async def lens_audio(body: LensAudioBody) -> dict[str, Any]:
+    """Transcribe audio (AssemblyAI) → extract claims → signed receipt."""
+    if not body.audio_b64.strip():
+        raise HTTPException(status_code=400, detail="audio_b64 is required")
+    receipt = await process_audio(
+        body.audio_b64.strip(), body.audio_format, body.context_note
+    )
+    try:
+        store_receipt(receipt)
+    except Exception:  # noqa: BLE001
+        pass
+    return receipt
+
+
+@app.post("/v1/lens/url")
+async def lens_url(body: LensUrlBody) -> dict[str, Any]:
+    """Article URL or direct audio file URL → same spine as analyze-article / lens audio."""
+    url = body.url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="url must start with http")
+    receipt = await process_media_url(url)
+    try:
+        store_receipt(receipt)
+    except Exception:  # noqa: BLE001
+        pass
+    return receipt
+
+
+@app.get("/r/{receipt_id}")
+async def get_receipt_permalink(receipt_id: str) -> dict[str, Any]:
+    """Permalink: full stored receipt JSON."""
+    rec = load_stored_receipt(receipt_id.strip())
+    if not rec:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return rec
+
+
+@app.get("/v1/receipts/recent")
+async def recent_receipts(limit: int = 20) -> dict[str, Any]:
+    """Recent receipt metadata for history / feed views."""
+    try:
+        return {"receipts": list_recent_receipts(min(limit, 50))}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def _generate_lobbying_receipt_sync(name: str, candidate_id: str | None) -> dict[str, Any]:
