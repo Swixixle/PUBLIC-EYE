@@ -93,6 +93,7 @@ from actor_ledger_api import (
     validate_actor_slug,
 )
 from pattern_api import get_pattern_lib_payload, run_pattern_match
+from public_narrative_api import run_public_narrative
 from spread_api import run_spread
 from origin_api import run_origin
 from actor_layer_api import run_actor_layer
@@ -267,6 +268,14 @@ class AnalyzeArticleBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str = Field(..., min_length=8, max_length=8000)
+
+
+class PublicNarrativePostBody(BaseModel):
+    """Public narrative / framing analysis (model-informed, not live fetches)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    narrative: str = Field(..., min_length=1, max_length=20000)
 
 
 class ActorEventBody(BaseModel):
@@ -1047,6 +1056,17 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
         "generated_at": now,
     }
     return attach_article_analysis_signing(receipt_payload)
+
+
+@app.post("/v1/public-narrative")
+async def public_narrative_post(body: PublicNarrativePostBody) -> dict[str, Any]:
+    """
+    Model-informed framing comparison across major outlets (no live page fetches).
+    """
+    try:
+        return await asyncio.to_thread(run_public_narrative, body.narrative.strip())
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/v1/pattern-lib")

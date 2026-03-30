@@ -2711,3 +2711,93 @@ body {
   background: rgba(127, 29, 29, 0.45);
   color: #fecaca;
 }
+
+/* Public narrative framing (Layer 2 assistant) */
+.depth-public-narrative {
+  margin-top: 12px;
+  padding: 12px 0;
+  border-top: 0.5px solid var(--border, #334155);
+}
+
+.depth-public-narrative-note {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.depth-public-narrative-prompt {
+  margin-top: 8px;
+}
+
+.depth-public-narrative-after-spread {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--border, #334155);
+}
+
+.depth-framings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.depth-framing-row {
+  padding: 10px 12px;
+  background: var(--surface, rgba(255, 255, 255, 0.04));
+  border-radius: 6px;
+  border-left: 3px solid #4a9eff;
+}
+
+.depth-framing-outlet {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.depth-framing-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.depth-framing-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.depth-framing-word {
+  background: rgba(74, 158, 255, 0.12);
+  color: #7dd3fc;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.depth-framing-emphasized {
+  font-size: 12px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.depth-framing-absent {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.depth-framing-tier {
+  margin-top: 6px;
+}
+
+.depth-narrative-section {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.depth-narrative-section ul {
+  margin: 4px 0 0 16px;
+  color: var(--text-muted);
+}

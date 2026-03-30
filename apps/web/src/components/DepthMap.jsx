@@ -52,6 +52,165 @@ function mediaClaimBadgeTier(claim) {
   return implicationToTier(t);
 }
 
+/** Skip rabbit-hole lookup for geographic / facility tags and common one-word places. */
+const SKIP_RABBIT_PARENTHESES = [
+  "country",
+  "location",
+  "city",
+  "region",
+  "territory",
+  "body of water",
+  "strategic waterway",
+  "building",
+  "facility",
+];
+
+const LIKELY_GEO_OR_COUNTRY_ONE_WORD = new Set([
+  "iran",
+  "iraq",
+  "israel",
+  "france",
+  "germany",
+  "china",
+  "russia",
+  "ukraine",
+  "syria",
+  "lebanon",
+  "jordan",
+  "egypt",
+  "yemen",
+  "qatar",
+  "kuwait",
+  "bahrain",
+  "oman",
+  "india",
+  "japan",
+  "korea",
+  "pakistan",
+  "afghanistan",
+  "turkey",
+  "poland",
+  "spain",
+  "italy",
+  "canada",
+  "mexico",
+  "brazil",
+  "australia",
+  "england",
+  "scotland",
+  "wales",
+  "ireland",
+  "london",
+  "paris",
+  "berlin",
+  "moscow",
+  "dubai",
+  "california",
+  "texas",
+  "florida",
+]);
+
+function entityWorthLookup(name, _confidenceTier) {
+  if (!name || typeof name !== "string") return false;
+  const trimmed = name.trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (SKIP_RABBIT_PARENTHESES.some((t) => lower.includes(`(${t})`))) return false;
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1 && trimmed.length < 4) return false;
+  if (tokens.length === 1 && LIKELY_GEO_OR_COUNTRY_ONE_WORD.has(lower)) return false;
+  return true;
+}
+
+function PublicNarrativePanel({ result }) {
+  if (!result || typeof result !== "object") return null;
+  const framings = result.framings || [];
+  const divergence = result.divergence_points || [];
+  const consensus = result.consensus_elements || [];
+  const absent = result.absent_from_all || [];
+
+  return (
+    <div className="depth-public-narrative">
+      <h3 className="depth-inline-title">Public narrative framing</h3>
+      {result.error ? <p className="depth-banner-error">{result.error}</p> : null}
+      <p className="depth-muted depth-public-narrative-note">
+        {result.confidence_note ||
+          "Framing analysis is model-informed; verify against live sources before citing."}
+      </p>
+
+      {framings.length > 0 ? (
+        <div className="depth-framings">
+          {framings.map((f, i) => (
+            <div key={i} className="depth-framing-row">
+              <div className="depth-framing-outlet">{f.outlet}</div>
+              <div className="depth-framing-summary">{f.framing_summary}</div>
+              {f.key_word_choices?.length > 0 ? (
+                <div className="depth-framing-words">
+                  {f.key_word_choices.map((w, j) => (
+                    <code key={j} className="depth-framing-word">
+                      {w}
+                    </code>
+                  ))}
+                </div>
+              ) : null}
+              {f.emphasized ? (
+                <div className="depth-framing-emphasized">
+                  <span className="depth-muted">Emphasizes: </span>
+                  {f.emphasized}
+                </div>
+              ) : null}
+              {f.absent ? (
+                <div className="depth-framing-absent">
+                  <span className="depth-muted">Absent: </span>
+                  {f.absent}
+                </div>
+              ) : null}
+              {f.confidence_tier ? (
+                <div className="depth-framing-tier">
+                  <TierBadge tier={f.confidence_tier} />
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {divergence.length > 0 ? (
+        <div className="depth-narrative-section">
+          <strong>Where framings conflict</strong>
+          <ul>
+            {divergence.map((d, i) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {consensus.length > 0 ? (
+        <div className="depth-narrative-section">
+          <strong>What outlets tend to agree on</strong>
+          <ul>
+            {consensus.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {absent.length > 0 ? (
+        <div className="depth-narrative-section">
+          <strong>Often absent from coverage</strong>
+          <ul>
+            {absent.map((a, i) => (
+              <li key={i}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TierBadge({ tier }) {
   const k = tier === "PATTERN_MATCH" ? "PATTERN_MATCH" : tier;
   const s = TIER_BADGE[k] || TIER_BADGE.structural_heuristic;
@@ -185,7 +344,7 @@ function SurfaceTraceFields({
                     <span className="depth-muted rabbit-nudge-pending" title="Checking ledger…">
                       …
                     </span>
-                  ) : (
+                  ) : entityWorthLookup(w.name, w.confidence_tier) ? (
                     <ActorDepthTrigger
                       entityName={w.name}
                       ledgerHref={
@@ -197,7 +356,7 @@ function SurfaceTraceFields({
                       loading={actorDepthLoading[w.name]}
                       onLookup={onActorDepth}
                     />
-                  )}
+                  ) : null}
                 </div>
               </li>
             );
@@ -772,13 +931,15 @@ function ActorLayerFields({ actorLayer, onActorDepth, actorDepthByEntity, actorD
                   </span>
                 ) : null}{" "}
                 {onActorDepth ? (
-                  <ActorDepthTrigger
-                    entityName={x.name}
-                    ledgerHref={null}
-                    result={actorDepthByEntity?.[x.name]}
-                    loading={actorDepthLoading?.[x.name]}
-                    onLookup={onActorDepth}
-                  />
+                  entityWorthLookup(x.name) ? (
+                    <ActorDepthTrigger
+                      entityName={x.name}
+                      ledgerHref={null}
+                      result={actorDepthByEntity?.[x.name]}
+                      loading={actorDepthLoading?.[x.name]}
+                      onLookup={onActorDepth}
+                    />
+                  ) : null
                 ) : (
                   <RabbitNudge href={null} absent={true} />
                 )}
@@ -879,7 +1040,7 @@ function MediaClaimsList({
                           {" "}
                           …
                         </span>
-                      ) : (
+                      ) : entityWorthLookup(sp) ? (
                         <ActorDepthTrigger
                           entityName={sp}
                           ledgerHref={
@@ -891,7 +1052,7 @@ function MediaClaimsList({
                           loading={actorDepthLoading[sp]}
                           onLookup={onActorDepth}
                         />
-                      )
+                      ) : null
                     ) : null}
                   </span>
                 ) : null}
@@ -1148,13 +1309,18 @@ export default function DepthMap() {
   const [reportPayload, setReportPayload] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(null);
+  const [publicNarrativeResult, setPublicNarrativeResult] = useState(null);
+  const [publicNarrativeLoading, setPublicNarrativeLoading] = useState(false);
+  const [publicNarrativeError, setPublicNarrativeError] = useState(null);
   const actorDepthInflight = useRef(new Set());
   const [actorDepthByEntity, setActorDepthByEntity] = useState({});
   const [actorDepthLoading, setActorDepthLoading] = useState({});
 
   const fetchActorDepth = useCallback(async (entityName) => {
     const key = (entityName || "").trim();
-    if (!key || actorDepthInflight.current.has(key)) return;
+    if (!key) return;
+    // Block only concurrent in-flight requests for the same key (never skip re-clicks after completion).
+    if (actorDepthInflight.current.has(key)) return;
     actorDepthInflight.current.add(key);
     setActorDepthLoading((p) => ({ ...p, [key]: true }));
     try {
@@ -1193,6 +1359,37 @@ export default function DepthMap() {
     }
   }, []);
 
+  const fetchPublicNarrative = useCallback(async (text) => {
+    const t = (text || "").trim();
+    if (!t) return;
+    setPublicNarrativeLoading(true);
+    setPublicNarrativeResult(null);
+    setPublicNarrativeError(null);
+    try {
+      const res = await fetch(`${API}/v1/public-narrative`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ narrative: t }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPublicNarrativeError(
+          typeof data?.detail === "string"
+            ? data.detail
+            : data?.detail != null
+              ? JSON.stringify(data.detail)
+              : `HTTP ${res.status}`,
+        );
+      } else {
+        setPublicNarrativeResult(data);
+      }
+    } catch (e) {
+      setPublicNarrativeError(e.message || "Request failed");
+    } finally {
+      setPublicNarrativeLoading(false);
+    }
+  }, []);
+
   const traceComplete = useMemo(
     () =>
       !searchBusy &&
@@ -1218,6 +1415,12 @@ export default function DepthMap() {
   const onGenerateReport = useCallback(async () => {
     const text = narrative.trim();
     if (!text) return;
+    setActorDepthByEntity({});
+    setActorDepthLoading({});
+    actorDepthInflight.current.clear();
+    setPublicNarrativeResult(null);
+    setPublicNarrativeLoading(false);
+    setPublicNarrativeError(null);
     setReportLoading(true);
     setReportError(null);
     const isUrl = text.startsWith("http");
@@ -1368,6 +1571,9 @@ export default function DepthMap() {
       setActorDepthByEntity({});
       setActorDepthLoading({});
       actorDepthInflight.current.clear();
+      setPublicNarrativeResult(null);
+      setPublicNarrativeLoading(false);
+      setPublicNarrativeError(null);
 
       const narrativeReq = {
         method: "POST",
@@ -1575,10 +1781,63 @@ export default function DepthMap() {
                     <p className="depth-muted depth-trace-hint">Tracing spread…</p>
                   ) : null}
                   {!spreadResult && !spreadError && !searchBusy ? (
-                    <p className="depth-limited-msg">Limited sourcing available at this depth.</p>
+                    <div className="depth-public-narrative-prompt">
+                      <p className="depth-limited-msg">
+                        {narrative.trim()
+                          ? "Spread layer has not been loaded yet. Click Trace at depth above, or compare outlet framing below without spread indicators."
+                          : "Enter a narrative and click Trace at depth to load spread signals."}
+                      </p>
+                      {!publicNarrativeResult && !publicNarrativeLoading && narrative.trim() ? (
+                        <button
+                          type="button"
+                          className="depth-btn depth-btn-ghost"
+                          onClick={() => fetchPublicNarrative(narrative)}
+                        >
+                          How are outlets framing this?
+                        </button>
+                      ) : null}
+                      {publicNarrativeLoading ? (
+                        <p className="depth-muted">Analyzing coverage framing…</p>
+                      ) : null}
+                      {publicNarrativeError ? (
+                        <p className="depth-banner-error">{publicNarrativeError}</p>
+                      ) : null}
+                      {publicNarrativeResult ? (
+                        <PublicNarrativePanel result={publicNarrativeResult} />
+                      ) : null}
+                    </div>
                   ) : null}
                   {spreadError ? <p className="depth-banner-error">{spreadError}</p> : null}
                   {spreadResult ? <SpreadResultFields spread={spreadResult} /> : null}
+                  {spreadResult &&
+                  !spreadError &&
+                  !searchBusy &&
+                  !(spreadResult.spread_indicators || []).length &&
+                  !(spreadResult.platforms_mentioned || []).length ? (
+                    <div className="depth-public-narrative-prompt depth-public-narrative-after-spread">
+                      <p className="depth-limited-msg">
+                        No spread-indicator signals were detected in this narrative.
+                      </p>
+                      {!publicNarrativeResult && !publicNarrativeLoading ? (
+                        <button
+                          type="button"
+                          className="depth-btn depth-btn-ghost"
+                          onClick={() => fetchPublicNarrative(narrative)}
+                        >
+                          How are outlets framing this?
+                        </button>
+                      ) : null}
+                      {publicNarrativeLoading ? (
+                        <p className="depth-muted">Analyzing coverage framing…</p>
+                      ) : null}
+                      {publicNarrativeError ? (
+                        <p className="depth-banner-error">{publicNarrativeError}</p>
+                      ) : null}
+                      {publicNarrativeResult ? (
+                        <PublicNarrativePanel result={publicNarrativeResult} />
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
