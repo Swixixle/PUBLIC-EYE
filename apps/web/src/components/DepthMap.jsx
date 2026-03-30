@@ -17,23 +17,33 @@ const OPENING_DISCLAIMER =
   "Rabbit Hole shows what the cited record states and what it does not state. It does not issue verdicts, moral judgments, or recommendations about what you should do or believe. Every surfaced line ties to a source id or to an explicit unknown; if something is missing from the record, the interface says so. This is a navigational map of public material at retrieval time, not legal advice, medical advice, personal advice, or proof of anyone's intent.";
 
 const LAYER_CONFIG = [
-  { id: 1, key: "L1", label: "Surface", icon: "◈", color: "#4a9eff", description: "What is openly asserted" },
-  { id: 2, key: "L2", label: "Spread", icon: "◎", color: "#9b59b6", description: "How it propagated" },
-  { id: 3, key: "L3", label: "Origin", icon: "◉", color: "#e67e22", description: "Where it first appeared" },
-  { id: 4, key: "L4", label: "Actor", icon: "◍", color: "#1abc9c", description: "Who is involved" },
-  { id: 5, key: "L5", label: "Pattern", icon: "◌", color: "#e91e8c", description: "Recurring structures" },
-  { id: 6, key: "L6", label: "X-border", icon: "◯", color: "#64748b", description: "Cross-jurisdiction" },
+  { id: 1, label: "Surface", color: "#4a9eff" },
+  { id: 2, label: "Spread", color: "#9b59b6" },
+  { id: 3, label: "Origin", color: "#e67e22" },
+  { id: 4, label: "Actor", color: "#1abc9c" },
+  { id: 5, label: "Pattern", color: "#e91e8c" },
+  { id: 6, label: "X-border", color: "#64748b", sealed: true },
 ];
 
 const GAP_EXPLANATIONS = {
   first_instance_indicators:
     "The earliest known appearance of this claim — where it first showed up publicly",
-  seeding_actors: "Who originally introduced or amplified this narrative",
-  temporal_anchor: "A specific, verifiable date tied to the origin",
-  platforms_mentioned: "Social platforms or channels where this spread",
-  spread_indicators: "Language suggesting rapid or coordinated sharing",
-  ledger_matches: "Named entities found in the actor ledger",
-  datable_sourceable_first_instance: "A first appearance that can be independently verified",
+  seeding_actors:
+    "Who originally introduced or amplified this narrative into public circulation",
+  temporal_anchor: "A specific, verifiable date tied to the origin of this claim",
+  platforms_mentioned: "Social platforms or channels where this story was shared or amplified",
+  spread_indicators: "Language suggesting rapid, coordinated, or viral sharing patterns",
+  ledger_matches:
+    "Direct matches in the curated actor ledger — named entities with verified records",
+  extracted_candidates:
+    "Named people and organizations the actor layer tried to identify — none found",
+  actors_not_in_ledger: "Entities mentioned that could not be resolved in the actor ledger",
+  datable_sourceable_first_instance:
+    "A first appearance that can be independently verified with a source and date",
+  source_url: "A direct link to the primary source document",
+  source_url_confidence_tier: "How reliable the primary source link is",
+  what: "A factual description of what this narrative is about",
+  when: "When this event or claim originated",
 };
 
 /** Spec-aligned tier colors: green / blue / grey-blue / amber / orange / grey */
@@ -72,73 +82,40 @@ function mediaClaimBadgeTier(claim) {
   return implicationToTier(t);
 }
 
-/** Skip rabbit-hole lookup for geographic / facility tags and common one-word places. */
-const SKIP_RABBIT_PARENTHESES = [
-  "country",
-  "location",
-  "city",
-  "region",
-  "territory",
-  "body of water",
-  "strategic waterway",
-  "building",
-  "facility",
+const SKIP_ENTITY_PATTERNS = [
+  /\(city[,)]/i,
+  /\(district[,)]/i,
+  /\(neighbourhood[,)]/i,
+  /\(borough[,)]/i,
+  /\(village[,)]/i,
+  /\(town[,)]/i,
+  /\(province[,)]/i,
+  /\(region[,)]/i,
+  /\(nation[,)]/i,
+  /\(country[,)]/i,
+  /\(oil tanker[,)]/i,
+  /\(vessel[,)]/i,
+  /\(ship[,)]/i,
+  /\(waterway[,)]/i,
+  /\(body of water[,)]/i,
+  /\(strategic waterway[,)]/i,
+  /\(facility[,)]/i,
+  /\(building[,)]/i,
+  /\(port[,)]/i,
+  /\(airport[,)]/i,
+  /\(strait[,)]/i,
+  /\(bay[,)]/i,
+  /\(sea[,)]/i,
+  /\(ocean[,)]/i,
+  /\(river[,)]/i,
+  /\(lake[,)]/i,
 ];
 
-const LIKELY_GEO_OR_COUNTRY_ONE_WORD = new Set([
-  "iran",
-  "iraq",
-  "israel",
-  "france",
-  "germany",
-  "china",
-  "russia",
-  "ukraine",
-  "syria",
-  "lebanon",
-  "jordan",
-  "egypt",
-  "yemen",
-  "qatar",
-  "kuwait",
-  "bahrain",
-  "oman",
-  "india",
-  "japan",
-  "korea",
-  "pakistan",
-  "afghanistan",
-  "turkey",
-  "poland",
-  "spain",
-  "italy",
-  "canada",
-  "mexico",
-  "brazil",
-  "australia",
-  "england",
-  "scotland",
-  "wales",
-  "ireland",
-  "london",
-  "paris",
-  "berlin",
-  "moscow",
-  "dubai",
-  "california",
-  "texas",
-  "florida",
-]);
-
-function entityWorthLookup(name, _confidenceTier) {
-  if (!name || typeof name !== "string") return false;
-  const trimmed = name.trim();
-  if (!trimmed) return false;
-  const lower = trimmed.toLowerCase();
-  if (SKIP_RABBIT_PARENTHESES.some((t) => lower.includes(`(${t})`))) return false;
-  const tokens = trimmed.split(/\s+/).filter(Boolean);
-  if (tokens.length === 1 && trimmed.length < 4) return false;
-  if (tokens.length === 1 && LIKELY_GEO_OR_COUNTRY_ONE_WORD.has(lower)) return false;
+function entityWorthLookup(name) {
+  if (!name) return false;
+  if (SKIP_ENTITY_PATTERNS.some((p) => p.test(name))) return false;
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1 && name.length < 4) return false;
   return true;
 }
 
@@ -332,14 +309,16 @@ function TierBadge({ tier }) {
   );
 }
 
-function GapChips({ fields }) {
+function GapChips({ fields, showHeader = true }) {
   const [tooltip, setTooltip] = useState(null);
   if (!fields || fields.length === 0) return null;
   return (
-    <div className="depth-gap-chips">
-      <span className="depth-gap-label">
-        <span className="depth-gap-icon">⊘</span> Missing
-      </span>
+    <div className={`depth-gap-chips ${showHeader ? "" : "depth-gap-chips--no-header"}`}>
+      {showHeader ? (
+        <span className="depth-gap-label">
+          <span className="depth-gap-icon">⊘</span> Missing
+        </span>
+      ) : null}
       <div className="depth-gap-chip-row">
         {fields.map((f) => (
           <button
@@ -372,59 +351,38 @@ function DepthCard({ title, tier, children, isEmpty }) {
   );
 }
 
-function LayerRail({ activeLayer, onSelect, layerStates }) {
+function LayerTabBar({ activeLayer, onSelect, layerStates }) {
   return (
-    <nav className="depth-layer-rail" aria-label="Depth layers">
+    <div className="depth-tab-bar" role="navigation" aria-label="Depth layers">
       {LAYER_CONFIG.map((layer) => {
         const state = layerStates[layer.id] || "idle";
         const isActive = activeLayer === layer.id;
         const hasData = state === "found";
         const isEmpty = state === "empty";
-        const isLoading = state === "loading";
+        const isSealed = Boolean(layer.sealed);
         return (
           <button
             key={layer.id}
             type="button"
-            className={`depth-rail-item ${isActive ? "active" : ""} ${hasData ? "has-data" : ""} ${isEmpty ? "is-empty" : ""} ${isLoading ? "is-loading" : ""}`}
-            style={{ "--layer-color": layer.color }}
-            onClick={() => onSelect(layer.id)}
-            title={layer.description}
+            className={[
+              "depth-tab",
+              isActive ? "depth-tab--active" : "",
+              hasData ? "depth-tab--has-data" : "",
+              isEmpty ? "depth-tab--empty" : "",
+              isSealed ? "depth-tab--sealed" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{ "--tab-color": layer.color }}
+            onClick={() => !isSealed && onSelect(layer.id)}
+            disabled={isSealed}
+            title={isSealed ? "Adapter not yet built" : layer.label}
           >
-            <span className="depth-rail-icon">{layer.icon}</span>
-            <span className="depth-rail-label">{layer.label}</span>
-            {hasData ? <span className="depth-rail-dot" /> : null}
+            <span className="depth-tab-num">{layer.id}</span>
+            <span className="depth-tab-label">{layer.label}</span>
+            {hasData ? <span className="depth-tab-dot" /> : null}
+            {isSealed ? <span className="depth-tab-lock">🔒</span> : null}
           </button>
-        );
-      })}
-    </nav>
-  );
-}
-
-function LayerProgress({ layerStates, activeLayer, onSelect }) {
-  return (
-    <div className="depth-layer-progress" role="navigation" aria-label="Layer progress">
-      {LAYER_CONFIG.map((layer, i) => {
-        const state = layerStates[layer.id] || "idle";
-        const isActive = activeLayer === layer.id;
-        return (
-          <React.Fragment key={layer.id}>
-            <button
-              type="button"
-              className={`depth-progress-step ${isActive ? "active" : ""} ${state}`}
-              style={{ "--layer-color": layer.color }}
-              onClick={() => onSelect(layer.id)}
-              title={layer.description}
-            >
-              <span className="depth-progress-num">{layer.id}</span>
-              <span className="depth-progress-label">{layer.label}</span>
-            </button>
-            {i < LAYER_CONFIG.length - 1 ? (
-              <div
-                className={`depth-progress-connector ${state === "found" ? "lit" : ""}`}
-                style={{ "--layer-color": layer.color }}
-              />
-            ) : null}
-          </React.Fragment>
         );
       })}
     </div>
@@ -778,58 +736,155 @@ function DisputePanel({ patternId, onClose }) {
   );
 }
 
+const WHO_OBJECT_PATTERNS = /vessel|ship|tanker|aircraft|satellite|facility|building|plant/i;
+const WHO_STATE_PATTERNS =
+  /nation|country|government|ministry|agency|department|bureau|court|congress|senate|committee|union|organization|institution|university|company|corp|inc\.|llc/i;
+
+function groupWho(whoList) {
+  const people = [];
+  const statesInstitutions = [];
+  const objects = [];
+  const other = [];
+  for (const w of whoList) {
+    const name = w.name || "";
+    if (WHO_OBJECT_PATTERNS.test(name)) {
+      objects.push(w);
+    } else if (
+      WHO_STATE_PATTERNS.test(name) ||
+      /\(nation|country|state/i.test(name)
+    ) {
+      statesInstitutions.push(w);
+    } else if (/^[A-Z][a-z]+ [A-Z]/.test(name) && !/\(/.test(name)) {
+      people.push(w);
+    } else {
+      other.push(w);
+    }
+  }
+  return { people, statesInstitutions, objects, other };
+}
+
+function WhoGroup({ label, entities, ledgerPresence, actorDepthByEntity, actorDepthLoading, onActorDepth }) {
+  if (!entities || entities.length === 0) return null;
+  return (
+    <div className="depth-who-group">
+      <div className="depth-who-group-label">{label}</div>
+      {entities.map((w) => {
+        const { checked, resolvedSlug, inLedger } = actorLedgerResolved(w.name, ledgerPresence);
+        const showRabbit = entityWorthLookup(w.name);
+        return (
+          <div key={w.name} className="depth-who-card">
+            <div className="depth-who-card-main">
+              <span className="depth-who-card-name">{w.name}</span>
+              <TierBadge tier={w.confidence_tier} />
+            </div>
+            {!checked ? (
+              <span className="depth-muted rabbit-nudge-pending" title="Checking ledger…">
+                …
+              </span>
+            ) : showRabbit ? (
+              <ActorDepthTrigger
+                entityName={w.name}
+                ledgerHref={
+                  inLedger ? `${API}/v1/actor/${encodeURIComponent(resolvedSlug)}` : null
+                }
+                result={actorDepthByEntity[w.name]}
+                loading={actorDepthLoading[w.name]}
+                onLookup={onActorDepth}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SurfaceTraceFields({
   trace,
   ledgerPresence,
   onActorDepth,
   actorDepthByEntity,
   actorDepthLoading,
+  omitWhatForUrl,
 }) {
-  const whoList = [...(trace.who || [])].sort((a, b) =>
+  const sorted = [...(trace.who || [])].sort((a, b) =>
     String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()),
   );
+  const groups = groupWho(sorted);
+  const whoEmpty =
+    !groups.people.length &&
+    !groups.statesInstitutions.length &&
+    !groups.objects.length &&
+    !groups.other.length;
   return (
     <>
-      <DepthCard title="What" tier={trace.what_confidence_tier} isEmpty={!trace.what}>
-        <p className="depth-what">{trace.what}</p>
-        {trace.cultural_substrate ? (
+      {omitWhatForUrl ? null : (
+        <DepthCard title="What" tier={trace.what_confidence_tier} isEmpty={!trace.what}>
+          <p className="depth-what">{trace.what}</p>
+          {trace.cultural_substrate ? (
+            <p className="depth-cultural-substrate">{trace.cultural_substrate}</p>
+          ) : null}
+        </DepthCard>
+      )}
+      {trace.cultural_substrate && omitWhatForUrl ? (
+        <DepthCard title="Cultural substrate" isEmpty={false}>
           <p className="depth-cultural-substrate">{trace.cultural_substrate}</p>
+        </DepthCard>
+      ) : null}
+      <DepthCard title="Who" isEmpty={whoEmpty}>
+        <div className="depth-who">
+          <strong>Who</strong>
+          <WhoGroup
+            label="People"
+            entities={groups.people}
+            ledgerPresence={ledgerPresence}
+            actorDepthByEntity={actorDepthByEntity}
+            actorDepthLoading={actorDepthLoading}
+            onActorDepth={onActorDepth}
+          />
+          <WhoGroup
+            label="States & institutions"
+            entities={groups.statesInstitutions}
+            ledgerPresence={ledgerPresence}
+            actorDepthByEntity={actorDepthByEntity}
+            actorDepthLoading={actorDepthLoading}
+            onActorDepth={onActorDepth}
+          />
+          <WhoGroup
+            label="Vessels & objects"
+            entities={groups.objects}
+            ledgerPresence={ledgerPresence}
+            actorDepthByEntity={actorDepthByEntity}
+            actorDepthLoading={actorDepthLoading}
+            onActorDepth={onActorDepth}
+          />
+          <WhoGroup
+            label="Other"
+            entities={groups.other}
+            ledgerPresence={ledgerPresence}
+            actorDepthByEntity={actorDepthByEntity}
+            actorDepthLoading={actorDepthLoading}
+            onActorDepth={onActorDepth}
+          />
+        </div>
+      </DepthCard>
+      <DepthCard
+        title="When"
+        tier={trace.when?.confidence_tier}
+        isEmpty={!trace.when?.earliest_appearance}
+      >
+        {trace.when ? (
+          <div className="depth-when-block">
+            <strong>When</strong>
+            <div className="depth-when-primary">{trace.when.earliest_appearance}</div>
+            {trace.when.source ? (
+              <div className="depth-when-source">{trace.when.source}</div>
+            ) : null}
+            {trace.when.confidence_tier ? (
+              <TierBadge tier={trace.when.confidence_tier} />
+            ) : null}
+          </div>
         ) : null}
-      </DepthCard>
-      <DepthCard title="Who" isEmpty={whoList.length === 0}>
-        <ul>
-          {whoList.map((w) => {
-            const { checked, resolvedSlug, inLedger } = actorLedgerResolved(w.name, ledgerPresence);
-            return (
-              <li key={w.name}>
-                <div className="depth-who-line">
-                  <span>
-                    {w.name} <TierBadge tier={w.confidence_tier} />
-                  </span>
-                  {!checked ? (
-                    <span className="depth-muted rabbit-nudge-pending" title="Checking ledger…">
-                      …
-                    </span>
-                  ) : entityWorthLookup(w.name, w.confidence_tier) ? (
-                    <ActorDepthTrigger
-                      entityName={w.name}
-                      ledgerHref={
-                        inLedger ? `${API}/v1/actor/${encodeURIComponent(resolvedSlug)}` : null
-                      }
-                      result={actorDepthByEntity[w.name]}
-                      loading={actorDepthLoading[w.name]}
-                      onLookup={onActorDepth}
-                    />
-                  ) : null}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </DepthCard>
-      <DepthCard title="When" tier={trace.when?.confidence_tier} isEmpty={!trace.when?.earliest_appearance}>
-        <p>{trace.when?.earliest_appearance}</p>
-        <p className="depth-muted">{trace.when?.source}</p>
       </DepthCard>
       <GapChips fields={trace.absent_fields} />
     </>
@@ -841,54 +896,50 @@ function OriginResultFields({ origin }) {
   const indicators = origin.first_instance_indicators || [];
   const actors = origin.seeding_actors || [];
   const absent = origin.absent_fields || [];
+  const hasSignals =
+    Boolean(origin.anchor_description) || indicators.length > 0 || actors.length > 0;
   return (
     <div className="depth-origin-result">
-      <DepthCard
-        title="Origin signals"
-        tier={origin.confidence_tier}
-        isEmpty={!origin.anchor_description && indicators.length === 0 && actors.length === 0}
-      >
-        <div className="depth-meta-row depth-spread-meta">
-          <span className="depth-muted">
-            Anchor (heuristic): {origin.anchor_exists ? "yes" : "no"}
-          </span>
+      <div className="depth-origin-head depth-meta-row depth-spread-meta">
+        <span className="depth-muted">
+          Anchor (heuristic): {origin.anchor_exists ? "yes" : "no"}
+        </span>
+        {origin.confidence_tier ? <TierBadge tier={origin.confidence_tier} /> : null}
+      </div>
+      {hasSignals ? (
+        <div className="depth-signals-found">
+          <div className="depth-signals-label">Signals found</div>
+          {origin.anchor_description ? (
+            <p className="depth-origin-anchor">{origin.anchor_description}</p>
+          ) : null}
+          {indicators.length > 0 ? (
+            <div className="depth-spread-block">
+              <strong>First-instance language</strong>
+              <ul className="depth-spread-list">
+                {indicators.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {actors.length > 0 ? (
+            <div className="depth-spread-block">
+              <strong>Seeding actors (heuristic)</strong>
+              <ul className="depth-spread-list">
+                {actors.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
-        {origin.anchor_description ? (
-          <p className="depth-origin-anchor">{origin.anchor_description}</p>
-        ) : null}
-        {indicators.length > 0 ? (
-          <div className="depth-spread-block">
-            <strong>First-instance language</strong>
-            <ul className="depth-spread-list">
-              {indicators.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="depth-muted depth-spread-absent">
-            No first-instance phrases detected. Absent or underspecified: first_instance_indicators.
-          </p>
-        )}
-        {actors.length > 0 ? (
-          <div className="depth-spread-block">
-            <strong>Seeding actors (heuristic)</strong>
-            <ul className="depth-spread-list">
-              {actors.map((a) => (
-                <li key={a}>{a}</li>
-              ))}
-            </ul>
-          </div>
-        ) : indicators.length > 0 ? (
-          <p className="depth-muted depth-spread-absent">
-            No seeding actors or venues extracted.{" "}
-            {absent.includes("seeding_actors")
-              ? "Absent field: seeding_actors."
-              : "See missing fields below."}
-          </p>
-        ) : null}
-        <GapChips fields={absent} />
-      </DepthCard>
+      ) : null}
+      {absent.length > 0 ? (
+        <div className="depth-signals-missing">
+          <div className="depth-signals-label depth-signals-label--missing">Signals missing</div>
+          <GapChips fields={absent} showHeader={false} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1270,19 +1321,22 @@ function ActorLayerFields({ actorLayer, onActorDepth, actorDepthByEntity, actorD
   const gaps = actorLayer.absent_fields || [];
   const dynamicLookups = actorLayer.dynamic_lookups ?? 0;
   const hasBody = found.length > 0 || absent.length > 0;
+  const hasMissingBlock = absent.length > 0 || gaps.length > 0 || !hasBody;
   return (
     <div className="depth-actor-layer-result">
-      <DepthCard title="Actor ledger" tier={actorLayer.confidence_tier} isEmpty={!hasBody}>
-        <div className="depth-meta-row depth-spread-meta">
-          {dynamicLookups > 0 ? (
-            <span className="depth-muted" title="Resolved via Wikidata / Wikipedia / web inference">
-              Dynamic: {dynamicLookups}
-            </span>
-          ) : (
-            <span className="depth-muted">Ledger resolution</span>
-          )}
-        </div>
-        {found.length > 0 ? (
+      <div className="depth-meta-row depth-spread-meta">
+        {actorLayer.confidence_tier ? <TierBadge tier={actorLayer.confidence_tier} /> : null}
+        {dynamicLookups > 0 ? (
+          <span className="depth-muted" title="Resolved via Wikidata / Wikipedia / web inference">
+            Dynamic: {dynamicLookups}
+          </span>
+        ) : (
+          <span className="depth-muted">Ledger resolution</span>
+        )}
+      </div>
+      {found.length > 0 ? (
+        <div className="depth-signals-found">
+          <div className="depth-signals-label">Signals found</div>
           <ul className="depth-actor-found-list">
             {found.map((a) => {
               const deepHref = actorLayerDeepHref(a);
@@ -1371,45 +1425,50 @@ function ActorLayerFields({ actorLayer, onActorDepth, actorDepthByEntity, actorD
               );
             })}
           </ul>
-        ) : null}
-        {absent.length > 0 ? (
-          <div className="depth-spread-block">
-            <strong>Not in ledger (extracted)</strong>
-            <ul className="depth-actor-absent-list">
-              {absent.map((x) => (
-                <li key={x.name} className="depth-actor-absent-row">
-                  <span>{x.name}</span>
-                  {x.wikidata_attempted ? (
-                    <span className="depth-muted depth-actor-absent-chain" title="No ledger, Wikidata, Wikipedia, or web hit">
-                      {" "}
-                      (no dynamic match)
-                    </span>
-                  ) : null}{" "}
-                  {onActorDepth ? (
-                    entityWorthLookup(x.name) ? (
-                      <ActorDepthTrigger
-                        entityName={x.name}
-                        ledgerHref={null}
-                        result={actorDepthByEntity?.[x.name]}
-                        loading={actorDepthLoading?.[x.name]}
-                        onLookup={onActorDepth}
-                      />
-                    ) : null
-                  ) : (
-                    <RabbitNudge href={null} absent={true} />
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {!hasBody ? (
-          <p className="depth-muted depth-spread-absent">
-            No actor-like spans extracted for ledger lookup.
-          </p>
-        ) : null}
-        <GapChips fields={gaps} />
-      </DepthCard>
+        </div>
+      ) : null}
+      {hasMissingBlock ? (
+        <div className="depth-signals-missing">
+          <div className="depth-signals-label depth-signals-label--missing">Signals missing</div>
+          {absent.length > 0 ? (
+            <div className="depth-spread-block">
+              <strong>Not in ledger (extracted)</strong>
+              <ul className="depth-actor-absent-list">
+                {absent.map((x) => (
+                  <li key={x.name} className="depth-actor-absent-row">
+                    <span>{x.name}</span>
+                    {x.wikidata_attempted ? (
+                      <span className="depth-muted depth-actor-absent-chain" title="No ledger, Wikidata, Wikipedia, or web hit">
+                        {" "}
+                        (no dynamic match)
+                      </span>
+                    ) : null}{" "}
+                    {onActorDepth ? (
+                      entityWorthLookup(x.name) ? (
+                        <ActorDepthTrigger
+                          entityName={x.name}
+                          ledgerHref={null}
+                          result={actorDepthByEntity?.[x.name]}
+                          loading={actorDepthLoading?.[x.name]}
+                          onLookup={onActorDepth}
+                        />
+                      ) : null
+                    ) : (
+                      <RabbitNudge href={null} absent={true} />
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {!hasBody ? (
+            <p className="depth-muted depth-spread-absent">
+              No actor-like spans extracted for ledger lookup.
+            </p>
+          ) : null}
+          <GapChips fields={gaps} showHeader={false} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1419,45 +1478,46 @@ function SpreadResultFields({ spread }) {
   const platforms = spread.platforms_mentioned || [];
   const indicators = spread.spread_indicators || [];
   const absent = spread.absent_fields || [];
+  const hasSignals = platforms.length > 0 || indicators.length > 0;
   return (
     <div className="depth-spread-result">
-      <DepthCard
-        title="Spread signals"
-        tier={spread.confidence_tier}
-        isEmpty={platforms.length === 0 && indicators.length === 0}
-      >
-        <div className="depth-meta-row depth-spread-meta">
-          <span className="depth-muted">
-            Time compression (heuristic): {spread.time_compression ? "yes" : "no"}
-          </span>
+      <div className="depth-spread-head depth-meta-row depth-spread-meta">
+        <span className="depth-muted">
+          Time compression (heuristic): {spread.time_compression ? "yes" : "no"}
+        </span>
+        {spread.confidence_tier ? <TierBadge tier={spread.confidence_tier} /> : null}
+      </div>
+      {hasSignals ? (
+        <div className="depth-signals-found">
+          <div className="depth-signals-label">Signals found</div>
+          {platforms.length > 0 ? (
+            <div className="depth-spread-block">
+              <strong>Platforms mentioned</strong>
+              <ul className="depth-spread-list">
+                {platforms.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {indicators.length > 0 ? (
+            <div className="depth-spread-block">
+              <strong>Spread indicators</strong>
+              <ul className="depth-spread-list">
+                {indicators.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
-        {platforms.length > 0 ? (
-          <div className="depth-spread-block">
-            <strong>Platforms mentioned</strong>
-            <ul className="depth-spread-list">
-              {platforms.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {indicators.length > 0 ? (
-          <div className="depth-spread-block">
-            <strong>Spread indicators</strong>
-            <ul className="depth-spread-list">
-              {indicators.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="depth-muted depth-spread-absent">
-            No spread-indicator phrases detected in this narrative. Absent or underspecified:
-            spread_indicators.
-          </p>
-        )}
-        <GapChips fields={absent} />
-      </DepthCard>
+      ) : null}
+      {absent.length > 0 ? (
+        <div className="depth-signals-missing">
+          <div className="depth-signals-label depth-signals-label--missing">Signals missing</div>
+          <GapChips fields={absent} showHeader={false} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1571,6 +1631,13 @@ function FiveRingReportPanel({ report, loading, error }) {
 
   if (report.receipt_type === "article_analysis") {
     const claims = report.claims_verified || [];
+    const allActorNotFound =
+      claims.length > 1 &&
+      claims.every((c) => {
+        const actorV = (c.verifications || []).filter((v) => v.adapter === "actor_ledger");
+        if (actorV.length === 0) return false;
+        return actorV.every((v) => v.status === "not_found");
+      });
     return (
       <section className="depth-five-ring-report depth-article-analysis-report">
         <h2 className="depth-inline-title depth-five-ring-heading">Article analysis</h2>
@@ -1588,6 +1655,20 @@ function FiveRingReportPanel({ report, loading, error }) {
         </div>
         {report.extraction_error ? (
           <p className="depth-banner-error">Extraction: {report.extraction_error}</p>
+        ) : null}
+        {allActorNotFound ? (
+          <p
+            className="depth-muted"
+            style={{
+              fontSize: "12px",
+              marginBottom: "10px",
+              padding: "6px 10px",
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: "6px",
+            }}
+          >
+            Actor ledger: no matches across {claims.length} claims
+          </p>
         ) : null}
         {claims.map((c, i) => {
           const hasFound = (c.verifications || []).some((v) => v.status === "found");
@@ -1611,14 +1692,22 @@ function FiveRingReportPanel({ report, loading, error }) {
                   </div>
                 ) : null}
                 {[...(c.verifications || [])]
+                  .filter(
+                    (v) =>
+                      !(
+                        allActorNotFound &&
+                        v.adapter === "actor_ledger" &&
+                        v.status === "not_found"
+                      ),
+                  )
                   .sort((a, b) => String(a.adapter).localeCompare(String(b.adapter)))
                   .map((v, j) => (
-                  <div key={j} className="verification-row">
-                    <span className="adapter-name">{v.adapter}</span>
-                    <span className={`status-badge status-${v.status}`}>{v.status}</span>
-                    {v.detail ? <span className="status-detail">{v.detail}</span> : null}
-                  </div>
-                ))}
+                    <div key={j} className="verification-row">
+                      <span className="adapter-name">{v.adapter}</span>
+                      <span className={`status-badge status-${v.status}`}>{v.status}</span>
+                      {v.detail ? <span className="status-detail">{v.detail}</span> : null}
+                    </div>
+                  ))}
               </div>
             </AccordionSection>
           );
@@ -1760,6 +1849,7 @@ export default function DepthMap() {
   const [reportPayload, setReportPayload] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState(null);
+  const [reportPulse, setReportPulse] = useState(false);
   const [publicNarrativeResult, setPublicNarrativeResult] = useState(null);
   const [publicNarrativeLoading, setPublicNarrativeLoading] = useState(false);
   const [publicNarrativeError, setPublicNarrativeError] = useState(null);
@@ -1905,6 +1995,8 @@ export default function DepthMap() {
   const onGenerateReport = useCallback(async () => {
     const text = narrative.trim();
     if (!text) return;
+    setReportPulse(true);
+    window.setTimeout(() => setReportPulse(false), 1500);
     setQueryResult(null);
     setQueryLoading(false);
     setQueryError(null);
@@ -2309,15 +2401,26 @@ export default function DepthMap() {
 
       {mapError ? <p className="depth-banner depth-banner-error">{mapError}</p> : null}
 
-      <div className="depth-results-scaffold">
-        <LayerRail activeLayer={activeLayer} onSelect={scrollToLayer} layerStates={layerStates} />
-        <div className="depth-results-main">
-          <LayerProgress
-            activeLayer={activeLayer}
-            onSelect={scrollToLayer}
-            layerStates={layerStates}
-          />
-          <div className="depth-stack">
+      {narrative.trim().startsWith("http") && surfaceResult ? (
+        <div className="depth-source-card">
+          <div className="depth-source-card-url">{narrative.trim()}</div>
+          {surfaceResult.what ? (
+            <blockquote className="depth-source-card-quote">{surfaceResult.what}</blockquote>
+          ) : null}
+          {surfaceResult.what_confidence_tier ? (
+            <TierBadge tier={surfaceResult.what_confidence_tier} />
+          ) : null}
+        </div>
+      ) : null}
+      {surfaceResult ? (
+        <div className="depth-layers-divider">
+          <span>Structural layers</span>
+        </div>
+      ) : null}
+
+      <LayerTabBar activeLayer={activeLayer} onSelect={scrollToLayer} layerStates={layerStates} />
+
+      <div className="depth-stack">
         {[1, 2, 3, 4, 5, 6].map((num) => {
           const layer = layerByNum(num);
           if (!layer) {
@@ -2367,6 +2470,9 @@ export default function DepthMap() {
                         onActorDepth={fetchActorDepth}
                         actorDepthByEntity={actorDepthByEntity}
                         actorDepthLoading={actorDepthLoading}
+                        omitWhatForUrl={
+                          narrative.trim().startsWith("http") && Boolean(surfaceResult?.what)
+                        }
                       />
                       <MediaClaimsList
                         claims={surfaceResult.media_claims}
@@ -2388,6 +2494,7 @@ export default function DepthMap() {
                         onActorDepth={fetchActorDepth}
                         actorDepthByEntity={actorDepthByEntity}
                         actorDepthLoading={actorDepthLoading}
+                        omitWhatForUrl={false}
                       />
                       <p className="depth-example-slenderman-note">
                         <em>
@@ -2581,19 +2688,17 @@ export default function DepthMap() {
             </LayerCard>
           );
         })}
-          </div>
-        </div>
       </div>
 
       {traceComplete || narrative.trim().startsWith("http") ? (
         <div className="depth-report-actions">
           <button
             type="button"
-            className="depth-btn depth-btn-secondary"
+            className={`depth-btn depth-btn-secondary depth-generate-btn ${reportPulse ? "depth-generate-btn--pulse" : ""}`}
             disabled={reportLoading}
             onClick={onGenerateReport}
           >
-            {reportLoading ? "Generating report…" : "Generate Report"}
+            {reportLoading ? "Generating…" : "Generate Report"}
           </button>
         </div>
       ) : null}
