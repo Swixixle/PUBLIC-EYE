@@ -316,7 +316,7 @@ def run_search(
                     coalesce(f.payload->'article'->>'title', '') || ' ' ||
                     coalesce(f.payload->>'narrative', '') || ' ' ||
                     coalesce(f.payload->>'query', '') || ' ' ||
-                    coalesce(f.payload->'named_entities'::text, '')
+                    coalesce((f.payload->'named_entities')::text, '')
                   ) @@ plainto_tsquery('english', %s)
                   OR (
                     c.id IS NOT NULL

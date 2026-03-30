@@ -108,7 +108,7 @@ def ensure_search_fts_indexes() -> None:
                     coalesce(payload->'article'->>'title', '') || ' ' ||
                     coalesce(payload->>'narrative', '') || ' ' ||
                     coalesce(payload->>'query', '') || ' ' ||
-                    coalesce(payload->'named_entities'::text, '')
+                    coalesce((payload->'named_entities')::text, '')
                   )
                 )
                 """
