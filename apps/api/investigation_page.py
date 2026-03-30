@@ -17,6 +17,7 @@ from __future__ import annotations
 import html
 from collections import defaultdict
 from typing import Any
+from urllib.parse import urlparse
 
 
 _OUTLET_TYPE_ORDER = ("state", "public_broadcaster", "private")
@@ -26,21 +27,57 @@ _OUTLET_TYPE_LABEL = {
     "private": "Private / independent",
 }
 
+OUTLET_DOMAINS: dict[str, str] = {
+    "cnn": "cnn.com",
+    "fox news": "foxnews.com",
+    "msnbc": "msnbc.com",
+    "bbc": "bbc.com",
+    "reuters": "reuters.com",
+    "ap news": "apnews.com",
+    "associated press": "apnews.com",
+    "new york times": "nytimes.com",
+    "nyt": "nytimes.com",
+    "washington post": "washingtonpost.com",
+    "the guardian": "theguardian.com",
+    "daily mail": "dailymail.co.uk",
+    "times of israel": "timesofisrael.com",
+    "al jazeera": "aljazeera.com",
+    "rt": "rt.com",
+    "tass": "tass.com",
+    "xinhua": "xinhuanet.com",
+    "global times": "globaltimes.cn",
+    "press tv": "presstv.ir",
+    "presstv": "presstv.ir",
+    "der spiegel": "spiegel.de",
+    "le monde": "lemonde.fr",
+    "dawn": "dawn.com",
+    "haaretz": "haaretz.com",
+    "indianapolis star": "indystar.com",
+    "indystar": "indystar.com",
+    "chicago tribune": "chicagotribune.com",
+    "los angeles times": "latimes.com",
+    "new york post": "nypost.com",
+    "politico": "politico.com",
+    "axios": "axios.com",
+    "the hill": "thehill.com",
+    "npr": "npr.org",
+}
+
 
 def _e(s: Any) -> str:
     return html.escape(str(s) if s is not None else "")
 
 
 def _vol_theme(vol: int) -> tuple[str, str, str, str, str]:
-    """Returns (pill_bg, pill_border, accent, short_copy, bucket_label) — dark-slab accents."""
+    """Returns (pill_bg, pill_border, accent, short_copy, bucket_label) — light-slab coalition UI."""
     if vol <= 25:
-        return "#0a2218", "#0d3d2a", "#2e7d32", \
+        return "#F0FFF4", "#0d3d2a", "#2e7d32", \
                "Most outlets agree on the basics.", "Low"
     elif vol <= 60:
-        return "#2a1c04", "#3d2a06", "#E65100", \
+        return "#FFFBF0", "#3d2a06", "#E65100", \
                "Same facts, different spin.", "Moderate"
     else:
-        return "#2e0a0a", "#3d0e0e", "#B71C1C", \
+        return "#FFF5F5", "#3d0e0e", "#B71C1C", \
                "Parallel realities.", "High"
 
 
@@ -89,35 +126,75 @@ def _chain_preview(chain: list) -> str:
     return f"Backed by {len(chain)} outlet{'s' if len(chain)!=1 else ''} in {countries} countr{'ies' if countries!=1 else 'y'}"
 
 
+def _outlet_logo_html(outlet_name: str, story_url: str = "") -> str:
+    """Small Clearbit logo; hidden on error."""
+    key = outlet_name.lower().strip()
+    domain = OUTLET_DOMAINS.get(key)
+    if not domain and story_url:
+        try:
+            netloc = urlparse(story_url).netloc.lower()
+            domain = netloc[4:] if netloc.startswith("www.") else netloc
+        except Exception:  # noqa: BLE001
+            domain = ""
+    if not domain:
+        slug = key.replace(" ", "").replace("the", "")
+        if slug:
+            domain = f"{slug}.com"
+        else:
+            return ""
+    logo_url = f"https://logo.clearbit.com/{domain}"
+    return (
+        f'<img src="{_e(logo_url)}" '
+        'style="width:20px;height:20px;border-radius:3px;object-fit:contain;'
+        'flex-shrink:0;background:#f0f0f0;" '
+        'onerror="this.style.display=\'none\'" '
+        f'loading="lazy" alt="{_e(outlet_name)}">'
+    )
+
+
 def _one_outlet_row(item: dict) -> str:
     conf = item.get("alignment_confidence", "medium")
     dot = {"high": "#3ecf8e", "medium": "#e8a020", "low": "#5a5752"}.get(conf, "#5a5752")
     note = str(item.get("alignment_note", "") or "")
     story_url = str(item.get("story_url") or "").strip()
+    oname = item.get("outlet", "") or ""
     not_found = "not found in sources" in note.lower()
     if not_found:
-        note_color = "#5a5752"
+        note_color = "#555555"
         note_style = "font-style:italic"
         link_html = ""
     elif story_url:
-        note_color = "#9e9a93"
+        note_color = "#555555"
         note_style = ""
         link_html = (
             f'<a href="{_e(story_url)}" target="_blank" rel="noopener" '
-            f'style="font-size:13px;color:#5eead4;margin-top:4px;display:block;'
-            f'text-decoration:underline;text-underline-offset:3px">Read coverage ↗</a>'
+            'style="font-size:13px;color:#0d47a1;margin-top:6px;display:inline-block;'
+            'font-weight:600;text-decoration:underline;text-underline-offset:3px">'
+            "Read coverage ↗</a>"
         )
     else:
-        note_color = "#9e9a93"
+        note_color = "#555555"
         note_style = ""
         link_html = ""
+    if story_url:
+        outlet_display = (
+            f'<a href="{_e(story_url)}" target="_blank" rel="noopener" '
+            'style="font-size:16px;font-weight:500;color:#111827;text-decoration:none;'
+            'border-bottom:1px solid rgba(0,0,0,0.2)">'
+            f"{_e(oname)}</a>"
+        )
+    else:
+        outlet_display = (
+            f'<span style="font-size:16px;font-weight:500;color:#111827">'
+            f"{_e(oname)}</span>"
+        )
+    logo = _outlet_logo_html(str(oname), story_url)
     return (
         f'<div style="display:flex;gap:10px;align-items:flex-start;'
-        f'padding:8px 0;border-bottom:0.5px solid rgba(255,255,255,0.04)">'
+        f'padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.08)">'
         f'<div style="flex:1;min-width:0">'
-        f'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">'
-        f'<span style="font-size:16px;font-weight:500;color:#f0ede8">'
-        f'{_e(item.get("outlet",""))}</span>'
+        f'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">'
+        f"{logo}{outlet_display}"
         f'{_outlet_badge(item.get("outlet_type",""))}</div>'
         f'<div style="font-size:15px;color:{note_color};line-height:1.5;{note_style}">'
         f'{_e(note)}</div>{link_html}'
@@ -131,7 +208,7 @@ def _one_outlet_row(item: dict) -> str:
 def _chain_items_html(chain: list, side_prefix: str) -> str:
     """Group outlets by country (click to expand), then by media type on this story."""
     if not chain:
-        return '<div style="font-size:16px;color:#5a5752;padding:12px 0">No outlets mapped yet.</div>'
+        return '<div style="font-size:16px;color:#555;padding:12px 0">No outlets mapped yet.</div>'
 
     by_country: dict[str, list] = defaultdict(list)
     for item in chain:
@@ -166,7 +243,7 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
             type_sections.append(
                 f'<div style="margin-bottom:14px">'
                 f'<div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;'
-                f'color:#5a5752;margin-bottom:6px">{_e(label)}</div>'
+                f'color:#555;margin-bottom:6px">{_e(label)}</div>'
                 f'<div style="padding-left:2px">{inner}</div>'
                 f"</div>"
             )
@@ -177,7 +254,7 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
             type_sections.append(
                 f'<div style="margin-bottom:14px">'
                 f'<div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;'
-                f'color:#5a5752;margin-bottom:6px">{_e(otype)}</div>'
+                f'color:#555;margin-bottom:6px">{_e(otype)}</div>'
                 f'<div style="padding-left:2px">{inner}</div>'
                 f"</div>"
             )
@@ -185,25 +262,25 @@ def _chain_items_html(chain: list, side_prefix: str) -> str:
         nid = f"side-{side_prefix}-country-{cidx}"
         n_out = len(items)
         blocks.append(
-            f'<details class="country-acc" id="{nid}" style="border:0.5px solid rgba(255,255,255,0.06);'
-            f'border-radius:10px;background:rgba(0,0,0,0.25);margin-bottom:10px;overflow:hidden">'
+            f'<details class="country-acc" id="{nid}" style="border:0.5px solid rgba(0,0,0,0.08);'
+            f'border-radius:10px;background:#FFFFFF;margin-bottom:10px;overflow:hidden">'
             f'<summary style="list-style:none;cursor:pointer;padding:12px 14px;display:flex;'
             f'align-items:center;gap:8px;flex-wrap:wrap;user-select:none">'
             f'<span style="font-size:16px;line-height:1">{flag}</span>'
-            f'<span style="font-size:15px;font-weight:600;color:#f0ede8">{_e(country)}</span>'
+            f'<span style="font-size:15px;font-weight:600;color:#111827">{_e(country)}</span>'
             f'<span class="country-chev" style="font-size:13px;color:#e8a020">▾</span>'
-            f'<span style="font-size:13px;color:#5a5752;margin-left:auto">'
+            f'<span style="font-size:13px;color:#555;margin-left:auto">'
             f'{n_out} outlet{"s" if n_out != 1 else ""} · {_e(str(len(by_type)))} type{"s" if len(by_type) != 1 else ""}'
             f"</span>"
             f"</summary>"
-            f'<div style="padding:4px 14px 14px 14px;border-top:0.5px solid rgba(255,255,255,0.05)">'
+            f'<div style="padding:4px 14px 14px 14px;border-top:0.5px solid rgba(0,0,0,0.08)">'
             f'{"".join(type_sections)}'
             f"</div>"
             f"</details>"
         )
 
     hint = (
-        '<p style="font-size:16px;color:#5a5752;line-height:1.5;margin:0 0 10px 0">'
+        '<p style="font-size:16px;color:#555;line-height:1.5;margin:0 0 10px 0">'
         "Tap a country to see how outlets there break down by kind of organization "
         "on this story.</p>"
     )
@@ -350,16 +427,16 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     <span style="font-size:14px;color:{accent};opacity:0.75">/ 100</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-left:2px">
-    <span style="font-size:16px;color:#9e9a93">{_e(vol_copy)}</span>
-    <button onclick="toggleWhyNumber()" style="font-size:13px;color:#5a5752;
+    <span style="font-size:16px;color:#555555">{_e(vol_copy)}</span>
+    <button onclick="toggleWhyNumber()" style="font-size:13px;color:#555;
             background:none;border:none;cursor:pointer;padding:0;
             text-decoration:underline;text-underline-offset:3px">
       Why this number?
     </button>
   </div>
   <div id="why-number" style="display:none;margin-top:10px;padding:12px 16px;
-       border-radius:8px;background:rgba(0,0,0,0.35);border:0.5px solid rgba(255,255,255,0.08);
-       font-size:16px;color:#c8c4bc;line-height:1.6;max-width:520px">
+       border-radius:8px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.1);
+       font-size:16px;color:#333;line-height:1.6;max-width:520px">
     The volatility score measures how far apart the two most opposed outlet clusters
     are on this story — based on what each side emphasizes vs. minimizes, and how
     confidently they hold those positions. It's not a vibe: it's calculated from the
@@ -374,57 +451,57 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
             background:{pill_bg};border-radius:0 10px 10px 0">
   <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
               color:{accent};margin-bottom:8px;font-weight:600">Where the story splits</div>
-  <div style="font-size:16px;color:#F7F4EF;line-height:1.65">{_e(irreconcilable_gap)}</div>
+  <div style="font-size:16px;color:#1a1a1a;line-height:1.65">{_e(irreconcilable_gap)}</div>
 </div>
 
 <!-- TWO ANCHOR CARDS -->
-<div style="display:flex;gap:1px;background:rgba(247,244,239,0.12);
+<div style="display:flex;gap:1px;background:rgba(0,0,0,0.08);
             border-radius:14px;overflow:hidden;margin-bottom:24px">
 
   <!-- SIDE A -->
-  <div style="flex:1;background:#141414;padding:24px 22px">
+  <div style="flex:1;background:#FFFFFF;padding:24px 22px">
     <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                 color:#7eb8ff;margin-bottom:8px">{_e(a_anchor)}</div>
     <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
-                color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(a_label)}</div>
-    <div style="font-size:18px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
+                color:#111827;margin-bottom:10px;line-height:1.2">{_e(a_label)}</div>
+    <div style="font-size:18px;color:#555555;line-height:1.6;margin-bottom:16px">
       {_e(a_summary)}</div>
     <div style="margin-bottom:10px">
       <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
-                  color:#5a5752;margin-bottom:5px">Emphasizes</div>
+                  color:#555555;margin-bottom:5px">Emphasizes</div>
       {_pills(a_em, "green")}
     </div>
     <div>
       <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
-                  color:#5a5752;margin-bottom:5px">Minimizes</div>
+                  color:#555555;margin-bottom:5px">Minimizes</div>
       {_pills(a_mn, "red")}
     </div>
   </div>
 
   <!-- VS -->
   <div style="display:flex;align-items:center;justify-content:center;
-              background:#141414;padding:0 4px;min-width:36px">
-    <span style="background:#111;border:0.5px solid rgba(255,255,255,0.1);
+              background:#F5F2EC;padding:0 4px;min-width:36px">
+    <span style="background:#F5F2EC;border:0.5px solid rgba(0,0,0,0.12);
                  border-radius:20px;padding:5px 8px;
-                 font-size:12px;font-weight:700;color:#5a5752">VS</span>
+                 font-size:12px;font-weight:700;color:#555">VS</span>
   </div>
 
   <!-- SIDE B -->
-  <div style="flex:1;background:#141414;padding:24px 22px">
+  <div style="flex:1;background:#FFFFFF;padding:24px 22px">
     <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                 color:#ff8a80;margin-bottom:8px">{_e(b_anchor)}</div>
     <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
-                color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(b_label)}</div>
-    <div style="font-size:18px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
+                color:#111827;margin-bottom:10px;line-height:1.2">{_e(b_label)}</div>
+    <div style="font-size:18px;color:#555555;line-height:1.6;margin-bottom:16px">
       {_e(b_summary)}</div>
     <div style="margin-bottom:10px">
       <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
-                  color:#5a5752;margin-bottom:5px">Emphasizes</div>
+                  color:#555555;margin-bottom:5px">Emphasizes</div>
       {_pills(b_em, "green")}
     </div>
     <div>
       <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
-                  color:#5a5752;margin-bottom:5px">Minimizes</div>
+                  color:#555555;margin-bottom:5px">Minimizes</div>
       {_pills(b_mn, "red")}
     </div>
   </div>
@@ -435,17 +512,17 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   <div style="display:flex;gap:12px;flex-wrap:wrap">
 
     <!-- Side A toggle -->
-    <div style="flex:1;min-width:240px;border:0.5px solid rgba(255,255,255,0.08);
-                border-radius:12px;background:#111;overflow:hidden">
+    <div style="flex:1;min-width:240px;border:0.5px solid rgba(0,0,0,0.08);
+                border-radius:12px;background:#FFFFFF;overflow:hidden">
       <button onclick="toggleChain('chain-a')"
-              style="width:100%;padding:14px 18px;background:none;border:none;
+              style="width:100%;padding:14px 18px;background:rgba(56,132,255,0.06);border:none;
                      cursor:pointer;text-align:left;
-                     border-bottom:0.5px solid rgba(255,255,255,0.06)">
+                     border-bottom:0.5px solid rgba(0,0,0,0.08)">
         <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                     color:#5b9fff;margin-bottom:3px">Who's on this side</div>
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:15px;font-weight:600;color:#f0ede8">{_e(a_label)}</div>
-          <div style="font-size:15px;color:#5a5752;display:flex;align-items:center;gap:6px">
+          <div style="font-size:15px;font-weight:600;color:#111827">{_e(a_label)}</div>
+          <div style="font-size:15px;color:#555;display:flex;align-items:center;gap:6px">
             <span>{_e(a_preview)}</span>
             <span id="chain-a-arrow" style="transition:transform 0.2s">▾</span>
           </div>
@@ -457,17 +534,17 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     </div>
 
     <!-- Side B toggle -->
-    <div style="flex:1;min-width:240px;border:0.5px solid rgba(255,255,255,0.08);
-                border-radius:12px;background:#111;overflow:hidden">
+    <div style="flex:1;min-width:240px;border:0.5px solid rgba(0,0,0,0.08);
+                border-radius:12px;background:#FFFFFF;overflow:hidden">
       <button onclick="toggleChain('chain-b')"
-              style="width:100%;padding:14px 18px;background:none;border:none;
+              style="width:100%;padding:14px 18px;background:rgba(224,80,80,0.06);border:none;
                      cursor:pointer;text-align:left;
-                     border-bottom:0.5px solid rgba(255,255,255,0.06)">
+                     border-bottom:0.5px solid rgba(0,0,0,0.08)">
         <div style="font-size:13px;letter-spacing:0.1em;text-transform:uppercase;
                     color:#e05050;margin-bottom:3px">Who's on this side</div>
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:15px;font-weight:600;color:#f0ede8">{_e(b_label)}</div>
-          <div style="font-size:15px;color:#5a5752;display:flex;align-items:center;gap:6px">
+          <div style="font-size:15px;font-weight:600;color:#111827">{_e(b_label)}</div>
+          <div style="font-size:15px;color:#555;display:flex;align-items:center;gap:6px">
             <span>{_e(b_preview)}</span>
             <span id="chain-b-arrow" style="transition:transform 0.2s">▾</span>
           </div>
@@ -544,8 +621,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   a:hover{{opacity:.85}}
   button:hover{{opacity:.85}}
   .inv-fight-slab{{
-    background:#111;color:#F7F4EF;padding:28px 24px 32px;border-radius:8px;margin-bottom:8px;
-    border:1px solid rgba(26,26,26,0.18);
+    background:#F7F4EF;color:#1a1a1a;padding:28px 24px 32px;border-radius:8px;margin-bottom:8px;
+    border:1px solid rgba(26,26,26,0.12);
   }}
   .inv-paper-card{{background:#fff;border:1px solid rgba(26,26,26,0.15);border-radius:4px;}}
   .reporter-only{{display:none;}}

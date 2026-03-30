@@ -19,8 +19,8 @@ from gdelt_adapter import search_gdelt
 
 logger = logging.getLogger(__name__)
 
-MAX_SOURCES_DEFAULT = 5
-_CANDIDATE_MULTIPLIER = 3
+MAX_SOURCES_DEFAULT = 12
+_CANDIDATE_MULTIPLIER = 4
 
 
 def _normalize_url(url: str) -> str:
@@ -51,7 +51,7 @@ def _build_queries(topic: str, entities: list[str]) -> list[str]:
     topic_words = " ".join(topic.split()[:4])
 
     queries = []
-    top_entities = [e for e in entities[:3] if len(e) > 2]
+    top_entities = [e for e in entities[:4] if len(e) > 2]
 
     queries.append(topic_words)
     if top_entities:
@@ -59,8 +59,11 @@ def _build_queries(topic: str, entities: list[str]) -> list[str]:
         queries.append(f"{top_entities[0]} {second}")
     if len(top_entities) > 1:
         queries.append(f"{top_entities[0]} {top_entities[1]}")
+    if top_entities:
+        queries.append(f"{top_entities[0]} local impact")
+        queries.append(f"{top_entities[0]} regional news")
 
-    return queries[:3]
+    return queries[:5]
 
 
 def _search_urls_newsapi(query: str, cap: int) -> list[str]:
@@ -103,7 +106,7 @@ def _search_urls_gdelt(query: str, cap: int) -> list[str]:
     try:
         articles = search_gdelt(
             query=query[:400],
-            max_records=min(25, cap + 10),
+            max_records=min(50, max(20, cap + 8)),
             timespan="7d",
         )
         for a in articles:

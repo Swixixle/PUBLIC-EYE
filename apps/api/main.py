@@ -1288,7 +1288,7 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
             str(receipt_payload.get("article_topic") or ""),
             list(receipt_payload.get("named_entities") or []),
             url,
-            5,
+            12,
         )
         if extra_sources:
             existing = list(receipt_payload.get("sources") or [])
