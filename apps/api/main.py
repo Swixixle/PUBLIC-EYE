@@ -96,8 +96,12 @@ from pattern_api import get_pattern_lib_payload, run_pattern_match
 from spread_api import run_spread
 from origin_api import run_origin
 from actor_layer_api import run_actor_layer
+from actor_layer_fast import run_actor_layer_fast
+from article_ingest import fetch_article
+from claim_extractor import extract_claims
+from claim_router import build_query_for_adapter, route_claim as route_article_claim
 from deep_receipt_api import build_deep_receipt
-from report_api import build_extended_report_async
+from report_api import attach_article_analysis_signing, build_extended_report_async
 from surface_adapter import SLENDERMAN_SURFACE_BASELINE, run_surface_layer
 from dispute_api import pattern_ids_in_library, run_dispute_append, run_dispute_get
 from verify_record import verify_generic_record
@@ -255,6 +259,14 @@ class ReportPostBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     narrative: str = Field(..., min_length=1)
+
+
+class AnalyzeArticleBody(BaseModel):
+    """News article URL for claim extraction and public-record routing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(..., min_length=8, max_length=8000)
 
 
 class ActorEventBody(BaseModel):
@@ -896,6 +908,145 @@ async def report_post(body: ReportPostBody) -> dict[str, Any]:
         return await build_extended_report_async(body.narrative.strip())
     except (RuntimeError, OSError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/v1/analyze-article")
+async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
+    """
+    Fetch a news article URL, extract verifiable claims, route each claim to local adapters,
+    return a JCS + Ed25519 signed receipt when keys are configured.
+    """
+    url = body.url.strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="url is required and must start with http")
+
+    article = await asyncio.to_thread(fetch_article, url)
+    if article.get("fetch_error"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not fetch article: {article['fetch_error']}",
+        )
+    if not (article.get("text") or "").strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract article text from the page",
+        )
+
+    extracted = await asyncio.to_thread(
+        extract_claims, article["text"], article.get("title")
+    )
+
+    claim_results: list[dict[str, Any]] = []
+    for claim in (extracted.get("claims") or [])[:15]:
+        if not isinstance(claim, dict):
+            continue
+        adapters = route_article_claim(claim)
+        verifications: list[dict[str, Any]] = []
+
+        for adapter_name in adapters:
+            query = build_query_for_adapter(claim, adapter_name)
+            try:
+                if adapter_name == "surface":
+                    result = await asyncio.to_thread(
+                        run_surface_layer, {"narrative": query}
+                    )
+                    surface_ok = bool(
+                        result and str((result or {}).get("what") or "").strip()
+                    )
+                    verifications.append(
+                        {
+                            "adapter": "surface",
+                            "result": result,
+                            "status": "found" if surface_ok else "not_found",
+                        }
+                    )
+                elif adapter_name == "fec":
+                    verifications.append(
+                        {
+                            "adapter": "fec",
+                            "query": query,
+                            "status": "deferred",
+                            "detail": "Use GET /v1/fec-search?name=<subject> for full FEC lookup",
+                        }
+                    )
+                elif adapter_name == "congress":
+                    verifications.append(
+                        {
+                            "adapter": "congress",
+                            "query": query,
+                            "status": "deferred",
+                            "detail": "Use POST /v1/congress-votes for full legislative lookup",
+                        }
+                    )
+                elif adapter_name == "courtlistener":
+                    verifications.append(
+                        {
+                            "adapter": "courtlistener",
+                            "query": query,
+                            "status": "deferred",
+                            "detail": "Use POST /v1/judicial-network for full judicial lookup",
+                        }
+                    )
+                elif adapter_name == "actor":
+                    result = await asyncio.to_thread(run_actor_layer_fast, query)
+                    actors = result.get("actors_found") or []
+                    verifications.append(
+                        {
+                            "adapter": "actor_ledger",
+                            "result": result,
+                            "status": "found" if actors else "not_found",
+                        }
+                    )
+            except Exception as exc:  # noqa: BLE001
+                verifications.append(
+                    {
+                        "adapter": adapter_name,
+                        "status": "error",
+                        "detail": str(exc),
+                    }
+                )
+
+        claim_results.append(
+            {
+                "claim": claim.get("claim"),
+                "subject": claim.get("subject"),
+                "claim_type": claim.get("claim_type"),
+                "cited_source": claim.get("cited_source"),
+                "adapters_checked": adapters,
+                "verifications": verifications,
+            }
+        )
+
+    adapter_names: list[str] = []
+    seen_ad: set[str] = set()
+    for c in claim_results:
+        for r in c.get("verifications") or []:
+            ad = str(r.get("adapter") or "")
+            if ad and ad not in seen_ad:
+                seen_ad.add(ad)
+                adapter_names.append(ad)
+
+    rid = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    receipt_payload: dict[str, Any] = {
+        "report_id": rid,
+        "receipt_type": "article_analysis",
+        "article": {
+            "url": article["url"],
+            "title": article.get("title"),
+            "publication": article.get("publication"),
+            "word_count": article.get("word_count"),
+            "truncated": article.get("truncated", False),
+        },
+        "article_topic": extracted.get("article_topic"),
+        "named_entities": extracted.get("named_entities") or [],
+        "claims_extracted": len(extracted.get("claims") or []),
+        "claims_verified": claim_results,
+        "extraction_error": extracted.get("extraction_error"),
+        "sources_checked": adapter_names,
+        "generated_at": now,
+    }
+    return attach_article_analysis_signing(receipt_payload)
 
 
 @app.get("/v1/pattern-lib")

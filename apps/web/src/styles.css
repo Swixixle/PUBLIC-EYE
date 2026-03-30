@@ -2411,3 +2411,100 @@ body {
 .app-view-root {
   min-height: 100vh;
 }
+
+.input-mode-hint {
+  font-size: 12px;
+  color: var(--color-muted, var(--text-muted));
+  margin-top: 4px;
+  display: block;
+  transition: color 0.2s;
+}
+
+.depth-article-analysis-report .article-meta {
+  margin: 12px 0 16px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.depth-article-analysis-report .article-pub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.depth-article-analysis-report .article-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 6px 0;
+}
+
+.depth-article-analysis-report .article-topic {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.depth-article-analysis-report .claims-count {
+  font-size: 0.8rem;
+  margin-top: 8px;
+  color: #a5b4fc;
+}
+
+.depth-article-analysis-report .claim-detail {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.depth-article-analysis-report .verification-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.depth-article-analysis-report .adapter-name {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.depth-article-analysis-report .status-badge {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.depth-article-analysis-report .status-badge.status-found {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+.depth-article-analysis-report .status-badge.status-not_found,
+.depth-article-analysis-report .status-badge.status-deferred {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.depth-article-analysis-report .status-badge.status-error {
+  background: #450a0a;
+  color: #fecaca;
+}
+
+.depth-article-analysis-report .status-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex: 1 1 100%;
+}
+
+.accordion-status.status-found {
+  color: #86efac;
+}
+
+.accordion-status.status-deferred {
+  color: var(--text-muted);
+}

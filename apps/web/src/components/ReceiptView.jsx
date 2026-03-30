@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import AccordionSection from "./AccordionSection.jsx";
 import LayerZeroCard from "./LayerZeroCard.jsx";
 import EntityPills from "./EntityPills.jsx";
 import ClaimsList from "./ClaimsList.jsx";
@@ -164,6 +165,53 @@ export default function ReceiptView({
                 {significanceLead}
               </div>
             ) : null}
+            {receipt.receipt_type === "article_analysis" ? (
+              <div className="article-meta">
+                <div className="article-pub">{receipt.article?.publication}</div>
+                <div className="article-title">{receipt.article?.title}</div>
+                <div className="article-topic">{receipt.article_topic}</div>
+                <div className="claims-count">
+                  {receipt.claims_extracted} claims extracted · {receipt.claims_verified?.length}{" "}
+                  verified
+                </div>
+              </div>
+            ) : null}
+            {receipt.receipt_type === "article_analysis" &&
+              (receipt.claims_verified || []).map((c, i) => (
+                <AccordionSection
+                  key={i}
+                  title={c.claim}
+                  statusRight={
+                    c.verifications?.some((v) => v.status === "found") ? "found" : "deferred"
+                  }
+                  statusClass={
+                    c.verifications?.some((v) => v.status === "found")
+                      ? "status-found"
+                      : "status-deferred"
+                  }
+                >
+                  <div className="claim-detail">
+                    <div>
+                      <strong>Subject:</strong> {c.subject}
+                    </div>
+                    <div>
+                      <strong>Type:</strong> {c.claim_type}
+                    </div>
+                    {c.cited_source ? (
+                      <div>
+                        <strong>Article cites:</strong> {c.cited_source}
+                      </div>
+                    ) : null}
+                    {(c.verifications || []).map((v, j) => (
+                      <div key={j} className="verification-row">
+                        <span className="adapter-name">{v.adapter}</span>
+                        <span className={`status-badge status-${v.status}`}>{v.status}</span>
+                        {v.detail ? <span className="status-detail">{v.detail}</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                </AccordionSection>
+              ))}
             {lz ? <LayerZeroCard layerZero={lz} loading={false} /> : null}
             <EntityPills
               entities={entities}

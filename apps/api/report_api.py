@@ -113,6 +113,52 @@ def _attach_report_signing(
     }
 
 
+def attach_article_analysis_signing(body: dict[str, Any]) -> dict[str, Any]:
+    """
+    JCS-canonical semantic slice + SHA-256 + Ed25519, same pipeline as five-ring and deep receipts.
+    """
+    from frame_crypto import sign_frame_digest_hex
+
+    generated_at = body.get("generated_at") or _now_iso()
+    signing_body: dict[str, Any] = {
+        "receipt_type": body.get("receipt_type"),
+        "article": body.get("article"),
+        "article_topic": body.get("article_topic"),
+        "named_entities": body.get("named_entities") or [],
+        "claims_extracted": body.get("claims_extracted"),
+        "claims_verified": body.get("claims_verified") or [],
+        "sources_checked": body.get("sources_checked") or [],
+        "extraction_error": body.get("extraction_error"),
+        "generated_at": generated_at,
+    }
+    try:
+        canon = _jcs_canonicalize(signing_body)
+        content_hash = hashlib.sha256(canon.encode("utf-8")).hexdigest()
+        signature = sign_frame_digest_hex(content_hash)
+        public_key = _frame_public_key_spki_b64()
+        short = content_hash[:16]
+        merged = {**body, "generated_at": generated_at}
+        return {
+            **merged,
+            "content_hash": content_hash,
+            "signature": signature,
+            "signed": True,
+            "public_key": public_key,
+            "receipt_url": f"/v1/receipts/report/{short}",
+        }
+    except Exception as exc:  # noqa: BLE001 — never fail the receipt on signing
+        _LOG.exception("Article analysis signing failed")
+        return {
+            **body,
+            "generated_at": generated_at,
+            "content_hash": None,
+            "signature": None,
+            "public_key": None,
+            "signed": False,
+            "signing_error": str(exc),
+        }
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

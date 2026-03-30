@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getApiBase } from "../apiBase.js";
 import { actorLedgerResolved, actorSlugCandidates } from "../utils/actorSlug.js";
+import AccordionSection from "./AccordionSection.jsx";
 import RabbitNudge from "./RabbitNudge.jsx";
 
 const API = getApiBase();
@@ -728,7 +729,65 @@ function FiveRingReportPanel({ report, loading, error }) {
       </section>
     );
   }
-  if (!report || !Array.isArray(report.rings)) return null;
+  if (!report) return null;
+
+  if (report.receipt_type === "article_analysis") {
+    const claims = report.claims_verified || [];
+    return (
+      <section className="depth-five-ring-report depth-article-analysis-report">
+        <h2 className="depth-inline-title depth-five-ring-heading">Article analysis</h2>
+        <p className="depth-muted depth-report-meta">
+          <code>{report.report_id}</code> · {report.generated_at} ·{" "}
+          {report.signed ? "signed" : "unsigned"}
+        </p>
+        <div className="article-meta">
+          <div className="article-pub">{report.article?.publication}</div>
+          <div className="article-title">{report.article?.title}</div>
+          <div className="article-topic">{report.article_topic}</div>
+          <div className="claims-count">
+            {report.claims_extracted} claims extracted · {claims.length} routed
+          </div>
+        </div>
+        {report.extraction_error ? (
+          <p className="depth-banner-error">Extraction: {report.extraction_error}</p>
+        ) : null}
+        {claims.map((c, i) => {
+          const hasFound = (c.verifications || []).some((v) => v.status === "found");
+          return (
+            <AccordionSection
+              key={i}
+              title={c.claim || "—"}
+              statusRight={hasFound ? "found" : "deferred"}
+              statusClass={hasFound ? "status-found" : "status-deferred"}
+            >
+              <div className="claim-detail">
+                <div>
+                  <strong>Subject:</strong> {c.subject}
+                </div>
+                <div>
+                  <strong>Type:</strong> {c.claim_type}
+                </div>
+                {c.cited_source ? (
+                  <div>
+                    <strong>Article cites:</strong> {c.cited_source}
+                  </div>
+                ) : null}
+                {(c.verifications || []).map((v, j) => (
+                  <div key={j} className="verification-row">
+                    <span className="adapter-name">{v.adapter}</span>
+                    <span className={`status-badge status-${v.status}`}>{v.status}</span>
+                    {v.detail ? <span className="status-detail">{v.detail}</span> : null}
+                  </div>
+                ))}
+              </div>
+            </AccordionSection>
+          );
+        })}
+      </section>
+    );
+  }
+
+  if (!Array.isArray(report.rings)) return null;
   return (
     <section className="depth-five-ring-report">
       <h2 className="depth-inline-title depth-five-ring-heading">Five-ring report</h2>
@@ -893,11 +952,14 @@ export default function DepthMap() {
     if (!text) return;
     setReportLoading(true);
     setReportError(null);
+    const isUrl = text.startsWith("http");
+    const endpoint = isUrl ? "/v1/analyze-article" : "/v1/report";
+    const bodyPayload = isUrl ? { url: text } : { narrative: text };
     try {
-      const res = await fetch(`${API}/v1/report`, {
+      const res = await fetch(`${API}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ narrative: text }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -1142,6 +1204,13 @@ export default function DepthMap() {
             {searchBusy ? "Tracing…" : "Trace at depth"}
           </button>
         </div>
+        {narrative.trim().startsWith("http") ? (
+          <span className="input-mode-hint">
+            Article URL detected — Generate Report will extract and route claims
+          </span>
+        ) : (
+          <span className="input-mode-hint">Enter a claim, name, or narrative to investigate</span>
+        )}
       </form>
 
       {mapError ? <p className="depth-banner depth-banner-error">{mapError}</p> : null}
@@ -1312,7 +1381,7 @@ export default function DepthMap() {
         })}
       </div>
 
-      {traceComplete ? (
+      {traceComplete || narrative.trim().startsWith("http") ? (
         <div className="depth-report-actions">
           <button
             type="button"

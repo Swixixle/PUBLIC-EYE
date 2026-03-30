@@ -5,6 +5,7 @@ export default function SubmitView({
   disabled,
   error,
 }) {
+  const raw = url ?? "";
   return (
     <div className="submit-view view-enter">
       <div className="submit-inner">
@@ -20,6 +21,13 @@ export default function SubmitView({
           autoComplete="off"
           disabled={disabled}
         />
+        {raw.trim().startsWith("http") ? (
+          <span className="input-mode-hint">
+            Article URL detected — will extract and verify claims
+          </span>
+        ) : (
+          <span className="input-mode-hint">Enter a claim, name, or narrative to investigate</span>
+        )}
         {error ? <p className="submit-error">{error}</p> : null}
         <button
           type="button"
