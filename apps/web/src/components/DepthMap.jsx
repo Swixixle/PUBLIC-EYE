@@ -122,13 +122,15 @@ function entityWorthLookup(name, _confidenceTier) {
   return true;
 }
 
-/** Natural-language question / request (not a URL, not a short claim-only trace). */
+/** Natural-language question / request (not a URL; skips short keyword-only traces). */
 function isNaturalLanguageQuery(text) {
-  const t = (text || "").trim();
-  if (!t || t.startsWith("http")) return false;
+  const t = (text ?? "").trim();
+  if (!t) return false;
+  if (t.startsWith("http")) return false;
   const words = t.split(/\s+/);
   if (words.length < 3) return false;
-  const queryWords = [
+  const lower = t.toLowerCase();
+  const queryTriggers = [
     "tell",
     "what",
     "how",
@@ -141,10 +143,19 @@ function isNaturalLanguageQuery(text) {
     "find",
     "search",
     "happening",
+    "going",
     "latest",
+    "recent",
+    "today",
+    "now",
+    "is there",
+    "are there",
+    "give me",
+    "summarize",
+    "describe",
+    "about",
   ];
-  const low = t.toLowerCase();
-  return queryWords.some((w) => low.includes(w));
+  return queryTriggers.some((trigger) => lower.includes(trigger));
 }
 
 const ECOSYSTEM_ACCENT = {
@@ -1790,6 +1801,37 @@ export default function DepthMap() {
       e.preventDefault();
       const text = narrative.trim();
       if (!text) return;
+
+      if (isNaturalLanguageQuery(text)) {
+        setExampleTrace(null);
+        setSurfaceResult(null);
+        setSurfaceUnavailable(false);
+        setSurfaceError(null);
+        setPatternResult(null);
+        setPatternError(null);
+        setSpreadResult(null);
+        setSpreadError(null);
+        setOriginResult(null);
+        setOriginError(null);
+        setActorLayerResult(null);
+        setActorLayerError(null);
+        setOpenDispute(null);
+        setReportPayload(null);
+        setReportError(null);
+        setActorDepthByEntity({});
+        setActorDepthLoading({});
+        actorDepthInflight.current.clear();
+        setPublicNarrativeResult(null);
+        setPublicNarrativeLoading(false);
+        setPublicNarrativeError(null);
+        setQueryResult(null);
+        setQueryError(null);
+        setQueryLoading(false);
+        setSearchBusy(false);
+        await fetchQuery(text);
+        return;
+      }
+
       setSearchBusy(true);
       setExampleTrace(null);
       setSurfaceResult(null);
@@ -1815,12 +1857,6 @@ export default function DepthMap() {
       setQueryResult(null);
       setQueryError(null);
       setQueryLoading(false);
-
-      if (isNaturalLanguageQuery(text)) {
-        setSearchBusy(false);
-        await fetchQuery(text);
-        return;
-      }
 
       const narrativeReq = {
         method: "POST",
@@ -1933,9 +1969,7 @@ export default function DepthMap() {
           </button>
         </div>
         {narrative.trim().startsWith("http") ? (
-          <span className="input-mode-hint">
-            URL — will extract and verify claims (Generate Report)
-          </span>
+          <span className="input-mode-hint">URL — will extract and verify claims</span>
         ) : isNaturalLanguageQuery(narrative) ? (
           <span className="input-mode-hint">
             Query detected — will search global sources and synthesize
