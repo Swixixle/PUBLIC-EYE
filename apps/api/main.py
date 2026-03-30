@@ -1280,6 +1280,24 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
         "sources_checked": adapter_names,
         "generated_at": now,
     }
+    try:
+        from source_expansion import expand_sources
+
+        extra_sources = await asyncio.to_thread(
+            expand_sources,
+            str(receipt_payload.get("article_topic") or ""),
+            list(receipt_payload.get("named_entities") or []),
+            url,
+            5,
+        )
+        if extra_sources:
+            existing = list(receipt_payload.get("sources") or [])
+            receipt_payload["sources"] = existing + extra_sources
+    except Exception as _se_err:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).warning("source_expansion failed: %s", _se_err)
+
     signed_payload = attach_article_analysis_signing(receipt_payload)
     try:
         narrative_for_gp = (

@@ -134,7 +134,11 @@ def _sources_catalog_text(receipt: dict[str, Any]) -> str:
         url = str(s.get("url") or s.get("link") or "").strip()
         date = str(s.get("date") or s.get("published_at") or "").strip()
         if outlet or title or url:
-            add_line(f"- {outlet}: '{title}' ({date}) {url}".strip())
+            line = f"- {outlet}: '{title}' ({date}) {url}".strip()
+            snip = str(s.get("snippet") or "").strip()
+            if snip:
+                line += f" | excerpt: {snip[:400]}"
+            add_line(line)
 
     for c in receipt.get("claims_verified") or []:
         if not isinstance(c, dict):

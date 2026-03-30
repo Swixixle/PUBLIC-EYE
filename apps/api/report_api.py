@@ -8,7 +8,6 @@ import hashlib
 import json
 import logging
 import os
-import subprocess
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -25,6 +24,9 @@ from pattern_api import run_pattern_match
 from spread_api import run_spread
 from surface_adapter import run_surface_layer
 
+from jcs_canonicalize import jcs_dumps
+from receipt_versioning import stamp_receipt_version
+
 RING_TIMEOUT_SEC = 8.0
 _RING_EXECUTOR = ThreadPoolExecutor(max_workers=12)
 _LOG = logging.getLogger(__name__)
@@ -38,22 +40,31 @@ def _frame_repo_root() -> Path:
 
 
 def _jcs_canonicalize(obj: Any) -> str:
-    """RFC 8785 via repo `scripts/jcs-stringify.mjs` (same subprocess contract as main.jcs_canonicalize)."""
-    root = _frame_repo_root()
-    script = root / "scripts" / "jcs-stringify.mjs"
-    payload = json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
-    proc = subprocess.run(
-        ["node", str(script)],
-        input=payload,
-        text=True,
-        capture_output=True,
-        check=False,
-        cwd=str(root),
-        env={**os.environ},
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr or "JCS subprocess failed")
-    return proc.stdout
+    """RFC 8785 JCS — pure Python (replaces Node `jcs-stringify.mjs` subprocess)."""
+    return jcs_dumps(obj)
+
+
+def build_article_analysis_signing_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Semantic slice hashed for `content_hash` / Ed25519 (must match attach_article_analysis_signing)."""
+    generated_at = body.get("generated_at") or _now_iso()
+    signing_body: dict[str, Any] = {
+        "receipt_type": body.get("receipt_type"),
+        "article": body.get("article"),
+        "article_topic": body.get("article_topic"),
+        "named_entities": body.get("named_entities") or [],
+        "claims_extracted": body.get("claims_extracted"),
+        "claims_verified": body.get("claims_verified") or [],
+        "sources_checked": body.get("sources_checked") or [],
+        "extraction_error": body.get("extraction_error"),
+        "generated_at": generated_at,
+    }
+    src = body.get("sources")
+    if isinstance(src, list) and len(src) > 0:
+        signing_body["sources"] = src
+    sv = body.get("schema_version")
+    if sv is not None:
+        signing_body["schema_version"] = sv
+    return signing_body
 
 
 def _frame_public_key_spki_b64() -> str:
@@ -119,18 +130,10 @@ def attach_article_analysis_signing(body: dict[str, Any]) -> dict[str, Any]:
     """
     from frame_crypto import sign_frame_digest_hex
 
+    stamp_receipt_version(body)
     generated_at = body.get("generated_at") or _now_iso()
-    signing_body: dict[str, Any] = {
-        "receipt_type": body.get("receipt_type"),
-        "article": body.get("article"),
-        "article_topic": body.get("article_topic"),
-        "named_entities": body.get("named_entities") or [],
-        "claims_extracted": body.get("claims_extracted"),
-        "claims_verified": body.get("claims_verified") or [],
-        "sources_checked": body.get("sources_checked") or [],
-        "extraction_error": body.get("extraction_error"),
-        "generated_at": generated_at,
-    }
+    body = {**body, "generated_at": generated_at}
+    signing_body = build_article_analysis_signing_body(body)
     try:
         canon = _jcs_canonicalize(signing_body)
         content_hash = hashlib.sha256(canon.encode("utf-8")).hexdigest()
