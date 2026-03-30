@@ -47,17 +47,19 @@ def _normalize_url(url: str) -> str:
 
 
 def _build_queries(topic: str, entities: list[str]) -> list[str]:
-    t = (topic or "").strip()
-    if not t:
-        return []
-    top_entities = [str(e).strip() for e in (entities or []) if len(str(e).strip()) > 2][
-        :3
-    ]
-    queries = [t[:200]]
+    # Use short keyword form — GDELT needs keywords not full sentences
+    topic_words = " ".join(topic.split()[:4])
+
+    queries = []
+    top_entities = [e for e in entities[:3] if len(e) > 2]
+
+    queries.append(topic_words)
     if top_entities:
-        queries.append(f"{t[:100]} {top_entities[0]}".strip())
+        second = top_entities[1] if len(top_entities) > 1 else topic_words
+        queries.append(f"{top_entities[0]} {second}")
     if len(top_entities) > 1:
-        queries.append(f"{top_entities[0]} {top_entities[1]}".strip())
+        queries.append(f"{top_entities[0]} {top_entities[1]}")
+
     return queries[:3]
 
 
