@@ -5,6 +5,7 @@ Free, no API key required.
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -35,7 +36,7 @@ def search_gdelt(
     start_dt: datetime | None = None,
     end_dt: datetime | None = None,
     max_records: int = 25,
-    mode: str = "ArtList",
+    mode: str = "artlist",
     timespan: str | None = None,
 ) -> list[dict[str, Any]]:
     params: dict[str, str] = {
@@ -71,7 +72,10 @@ def search_gdelt(
 
     articles = data.get("articles") or data.get("article") or []
     if not isinstance(articles, list):
-        return []
+        articles = []
+
+    if not articles:
+        logging.warning("GDELT returned 0 articles. URL: %s", getattr(resp, "url", ""))
 
     results: list[dict[str, Any]] = []
     for a in articles:
@@ -128,7 +132,7 @@ def search_gdelt_timeline(
     query: str,
     start_dt: datetime,
     end_dt: datetime,
-    max_records: int = 50,
+    max_records: int = 75,
 ) -> dict[str, Any]:
     articles = search_gdelt(
         query=query,

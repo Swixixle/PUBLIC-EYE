@@ -9,6 +9,7 @@ from __future__ import annotations
 import concurrent.futures
 import re
 import time
+from datetime import timedelta
 from typing import Any
 
 import feedparser
@@ -234,13 +235,14 @@ def run_query(query: str, max_sources: int = 8) -> dict[str, Any]:
     articles: list[dict[str, Any]] = []
     timeline_data: list[dict[str, Any]] | None = None
     error: str | None = None
+    classification_date_label_suffix = ""
 
     if source == "gdelt_timeline" and date_range:
         tl = search_gdelt_timeline(
             query=gdelt_query or q,
             start_dt=date_range["start"],
             end_dt=date_range["end"],
-            max_records=50,
+            max_records=75,
         )
         articles = deduplicate_by_ecosystem(tl["articles"], max_per_ecosystem=3, total_max=12)
         timeline_data = tl["timeline_groups"]
@@ -255,6 +257,19 @@ def run_query(query: str, max_sources: int = 8) -> dict[str, Any]:
         )
         articles = deduplicate_by_ecosystem(raw, max_per_ecosystem=2, total_max=max_sources)
         _attach_fetched_bodies(articles, max_fetch=6)
+        if not articles:
+            wider_start = date_range["start"] - timedelta(days=3)
+            wider_end = date_range["end"] + timedelta(days=3)
+            raw = search_gdelt(
+                query=gdelt_query or q,
+                start_dt=wider_start,
+                end_dt=wider_end,
+                max_records=25,
+            )
+            articles = deduplicate_by_ecosystem(raw, max_per_ecosystem=2, total_max=max_sources)
+            if articles:
+                classification_date_label_suffix = " (±3 days)"
+            _attach_fetched_bodies(articles, max_fetch=6)
 
     else:
         keywords = search_terms if search_terms else extract_keywords(q)
@@ -306,10 +321,21 @@ def run_query(query: str, max_sources: int = 8) -> dict[str, Any]:
         len(RSS_FEEDS) if classification["source"] == "rss" else "GDELT"
     )
 
+    pub_classification = _public_classification(classification)
+    if classification_date_label_suffix and pub_classification.get("date_range"):
+        dr = pub_classification["date_range"]
+        pub_classification = {
+            **pub_classification,
+            "date_range": {
+                **dr,
+                "label": dr["label"] + classification_date_label_suffix,
+            },
+        }
+
     return {
         "query": q,
         "query_type": query_type,
-        "classification": _public_classification(classification),
+        "classification": pub_classification,
         "keywords": search_terms,
         "sources_searched": sources_searched,
         "articles": articles,

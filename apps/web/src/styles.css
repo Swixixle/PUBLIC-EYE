@@ -1674,6 +1674,293 @@ body {
   gap: 16px;
 }
 
+.depth-results-scaffold {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-top: 16px;
+}
+
+.depth-results-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.depth-layer-card--focused {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}
+
+.depth-layer-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  width: 100px;
+  flex-shrink: 0;
+  border-right: 0.5px solid var(--border, #334155);
+}
+
+@media (max-width: 600px) {
+  .depth-results-scaffold {
+    flex-direction: column;
+  }
+
+  .depth-layer-rail {
+    flex-direction: row;
+    width: 100%;
+    border-right: none;
+    border-bottom: 0.5px solid var(--border, #334155);
+    overflow-x: auto;
+    padding: 8px 0 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .depth-rail-item.active {
+    border-left: none;
+    border-bottom: 2px solid var(--layer-color);
+  }
+}
+
+.depth-rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  position: relative;
+  transition: background 0.15s;
+  color: var(--text-muted, #94a3b8);
+}
+
+.depth-rail-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #f1f5f9);
+}
+
+.depth-rail-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--layer-color);
+  border-left: 2px solid var(--layer-color);
+}
+
+.depth-rail-item.has-data .depth-rail-label {
+  color: var(--text, #f1f5f9);
+}
+
+.depth-rail-item.is-empty {
+  opacity: 0.45;
+}
+
+.depth-rail-item.is-loading {
+  opacity: 0.75;
+}
+
+.depth-rail-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.depth-rail-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.depth-rail-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--layer-color);
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+
+.depth-gap-chips {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.depth-gap-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #e67e22;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.depth-gap-icon {
+  font-size: 13px;
+}
+
+.depth-gap-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.depth-gap-chip {
+  position: relative;
+  background: rgba(230, 126, 34, 0.1);
+  border: 0.5px solid rgba(230, 126, 34, 0.3);
+  color: #e67e22;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+  transition: background 0.15s;
+}
+
+.depth-gap-chip:hover {
+  background: rgba(230, 126, 34, 0.18);
+}
+
+.depth-gap-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: var(--surface, #1e293b);
+  border: 0.5px solid var(--border, #334155);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text, #f1f5f9);
+  font-family: system-ui, -apple-system, sans-serif;
+  width: min(220px, 92vw);
+  line-height: 1.5;
+  z-index: 10;
+  text-align: left;
+}
+
+.depth-layer-progress {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 16px 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.depth-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
+
+.depth-progress-step .depth-progress-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--wind, rgba(255, 255, 255, 0.06));
+  border: 1.5px solid var(--border, #444);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted, #888);
+  transition: all 0.2s;
+}
+
+.depth-progress-step.found .depth-progress-num {
+  background: var(--layer-color);
+  border-color: var(--layer-color);
+  color: #fff;
+}
+
+.depth-progress-step.active .depth-progress-num {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.depth-progress-step.empty .depth-progress-num {
+  opacity: 0.35;
+}
+
+.depth-progress-label {
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #888);
+}
+
+.depth-progress-step.found .depth-progress-label {
+  color: var(--layer-color);
+}
+
+.depth-progress-connector {
+  height: 1.5px;
+  width: 20px;
+  background: var(--border, #444);
+  flex-shrink: 0;
+  margin-bottom: 14px;
+  transition: background 0.3s;
+}
+
+.depth-progress-connector.lit {
+  background: var(--layer-color, #4a9eff);
+}
+
+.depth-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid var(--border, #334155);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  overflow: visible;
+  transition: border-color 0.15s;
+}
+
+.depth-card:hover {
+  border-color: #475569;
+}
+
+.depth-card-empty {
+  opacity: 0.6;
+}
+
+.depth-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 0.5px solid var(--border, #334155);
+}
+
+.depth-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text, #f1f5f9);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.depth-card-body {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-muted, #cbd5e1);
+}
+
 .depth-layer-card {
   border-radius: 12px;
   border: 1px solid var(--border);

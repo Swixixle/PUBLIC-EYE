@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getApiBase } from "../apiBase.js";
 import { actorLedgerResolved, actorSlugCandidates } from "../utils/actorSlug.js";
@@ -15,6 +15,26 @@ async function fetchActorInLedger(slug) {
 /** Verbatim opening copy under ## Tone & Voice in `docs/RABBIT_HOLE_CONTEXT.md`. */
 const OPENING_DISCLAIMER =
   "Rabbit Hole shows what the cited record states and what it does not state. It does not issue verdicts, moral judgments, or recommendations about what you should do or believe. Every surfaced line ties to a source id or to an explicit unknown; if something is missing from the record, the interface says so. This is a navigational map of public material at retrieval time, not legal advice, medical advice, personal advice, or proof of anyone's intent.";
+
+const LAYER_CONFIG = [
+  { id: 1, key: "L1", label: "Surface", icon: "◈", color: "#4a9eff", description: "What is openly asserted" },
+  { id: 2, key: "L2", label: "Spread", icon: "◎", color: "#9b59b6", description: "How it propagated" },
+  { id: 3, key: "L3", label: "Origin", icon: "◉", color: "#e67e22", description: "Where it first appeared" },
+  { id: 4, key: "L4", label: "Actor", icon: "◍", color: "#1abc9c", description: "Who is involved" },
+  { id: 5, key: "L5", label: "Pattern", icon: "◌", color: "#e91e8c", description: "Recurring structures" },
+  { id: 6, key: "L6", label: "X-border", icon: "◯", color: "#64748b", description: "Cross-jurisdiction" },
+];
+
+const GAP_EXPLANATIONS = {
+  first_instance_indicators:
+    "The earliest known appearance of this claim — where it first showed up publicly",
+  seeding_actors: "Who originally introduced or amplified this narrative",
+  temporal_anchor: "A specific, verifiable date tied to the origin",
+  platforms_mentioned: "Social platforms or channels where this spread",
+  spread_indicators: "Language suggesting rapid or coordinated sharing",
+  ledger_matches: "Named entities found in the actor ledger",
+  datable_sourceable_first_instance: "A first appearance that can be independently verified",
+};
 
 /** Spec-aligned tier colors: green / blue / grey-blue / amber / orange / grey */
 const TIER_BADGE = {
@@ -309,6 +329,105 @@ function TierBadge({ tier }) {
     >
       {String(tier).replace(/_/g, " ")}
     </span>
+  );
+}
+
+function GapChips({ fields }) {
+  const [tooltip, setTooltip] = useState(null);
+  if (!fields || fields.length === 0) return null;
+  return (
+    <div className="depth-gap-chips">
+      <span className="depth-gap-label">
+        <span className="depth-gap-icon">⊘</span> Missing
+      </span>
+      <div className="depth-gap-chip-row">
+        {fields.map((f) => (
+          <button
+            key={f}
+            type="button"
+            className="depth-gap-chip"
+            onClick={() => setTooltip(tooltip === f ? null : f)}
+            title={GAP_EXPLANATIONS[f] || f}
+          >
+            {f.replace(/_/g, " ")}
+            {tooltip === f ? (
+              <span className="depth-gap-tooltip">{GAP_EXPLANATIONS[f] || "No explanation available"}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DepthCard({ title, tier, children, isEmpty }) {
+  return (
+    <div className={`depth-card ${isEmpty ? "depth-card-empty" : ""}`}>
+      <div className="depth-card-header">
+        <span className="depth-card-title">{title}</span>
+        {tier ? <TierBadge tier={tier} /> : null}
+      </div>
+      <div className="depth-card-body">{children}</div>
+    </div>
+  );
+}
+
+function LayerRail({ activeLayer, onSelect, layerStates }) {
+  return (
+    <nav className="depth-layer-rail" aria-label="Depth layers">
+      {LAYER_CONFIG.map((layer) => {
+        const state = layerStates[layer.id] || "idle";
+        const isActive = activeLayer === layer.id;
+        const hasData = state === "found";
+        const isEmpty = state === "empty";
+        const isLoading = state === "loading";
+        return (
+          <button
+            key={layer.id}
+            type="button"
+            className={`depth-rail-item ${isActive ? "active" : ""} ${hasData ? "has-data" : ""} ${isEmpty ? "is-empty" : ""} ${isLoading ? "is-loading" : ""}`}
+            style={{ "--layer-color": layer.color }}
+            onClick={() => onSelect(layer.id)}
+            title={layer.description}
+          >
+            <span className="depth-rail-icon">{layer.icon}</span>
+            <span className="depth-rail-label">{layer.label}</span>
+            {hasData ? <span className="depth-rail-dot" /> : null}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function LayerProgress({ layerStates, activeLayer, onSelect }) {
+  return (
+    <div className="depth-layer-progress" role="navigation" aria-label="Layer progress">
+      {LAYER_CONFIG.map((layer, i) => {
+        const state = layerStates[layer.id] || "idle";
+        const isActive = activeLayer === layer.id;
+        return (
+          <React.Fragment key={layer.id}>
+            <button
+              type="button"
+              className={`depth-progress-step ${isActive ? "active" : ""} ${state}`}
+              style={{ "--layer-color": layer.color }}
+              onClick={() => onSelect(layer.id)}
+              title={layer.description}
+            >
+              <span className="depth-progress-num">{layer.id}</span>
+              <span className="depth-progress-label">{layer.label}</span>
+            </button>
+            {i < LAYER_CONFIG.length - 1 ? (
+              <div
+                className={`depth-progress-connector ${state === "found" ? "lit" : ""}`}
+                style={{ "--layer-color": layer.color }}
+              />
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }
 
@@ -666,27 +785,21 @@ function SurfaceTraceFields({
   actorDepthByEntity,
   actorDepthLoading,
 }) {
+  const whoList = [...(trace.who || [])].sort((a, b) =>
+    String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()),
+  );
   return (
     <>
-      <p className="depth-what">{trace.what}</p>
-      {trace.cultural_substrate ? (
-        <p className="depth-cultural-substrate">{trace.cultural_substrate}</p>
-      ) : null}
-      <div className="depth-meta-row">
-        <TierBadge tier={trace.what_confidence_tier} />
-      </div>
-      <div className="depth-who">
-        <strong>Who</strong>
+      <DepthCard title="What" tier={trace.what_confidence_tier} isEmpty={!trace.what}>
+        <p className="depth-what">{trace.what}</p>
+        {trace.cultural_substrate ? (
+          <p className="depth-cultural-substrate">{trace.cultural_substrate}</p>
+        ) : null}
+      </DepthCard>
+      <DepthCard title="Who" isEmpty={whoList.length === 0}>
         <ul>
-          {[...(trace.who || [])]
-            .sort((a, b) =>
-              String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()),
-            )
-            .map((w) => {
-            const { checked, resolvedSlug, inLedger } = actorLedgerResolved(
-              w.name,
-              ledgerPresence,
-            );
+          {whoList.map((w) => {
+            const { checked, resolvedSlug, inLedger } = actorLedgerResolved(w.name, ledgerPresence);
             return (
               <li key={w.name}>
                 <div className="depth-who-line">
@@ -701,9 +814,7 @@ function SurfaceTraceFields({
                     <ActorDepthTrigger
                       entityName={w.name}
                       ledgerHref={
-                        inLedger
-                          ? `${API}/v1/actor/${encodeURIComponent(resolvedSlug)}`
-                          : null
+                        inLedger ? `${API}/v1/actor/${encodeURIComponent(resolvedSlug)}` : null
                       }
                       result={actorDepthByEntity[w.name]}
                       loading={actorDepthLoading[w.name]}
@@ -715,23 +826,12 @@ function SurfaceTraceFields({
             );
           })}
         </ul>
-      </div>
-      <div className="depth-when">
-        <strong>When</strong>
+      </DepthCard>
+      <DepthCard title="When" tier={trace.when?.confidence_tier} isEmpty={!trace.when?.earliest_appearance}>
         <p>{trace.when?.earliest_appearance}</p>
         <p className="depth-muted">{trace.when?.source}</p>
-        <TierBadge tier={trace.when?.confidence_tier} />
-      </div>
-      {trace.absent_fields && trace.absent_fields.length > 0 ? (
-        <div className="depth-absent-fields">
-          <strong>Absent fields</strong>
-          <ul className="depth-absent-list">
-            {trace.absent_fields.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      </DepthCard>
+      <GapChips fields={trace.absent_fields} />
     </>
   );
 }
@@ -743,51 +843,52 @@ function OriginResultFields({ origin }) {
   const absent = origin.absent_fields || [];
   return (
     <div className="depth-origin-result">
-      <h3 className="depth-inline-title">Origin signals</h3>
-      <div className="depth-meta-row depth-spread-meta">
-        <TierBadge tier={origin.confidence_tier} />
-        <span className="depth-muted">
-          Anchor (heuristic): {origin.anchor_exists ? "yes" : "no"}
-        </span>
-      </div>
-      {origin.anchor_description ? (
-        <p className="depth-origin-anchor">{origin.anchor_description}</p>
-      ) : null}
-      {indicators.length > 0 ? (
-        <div className="depth-spread-block">
-          <strong>First-instance language</strong>
-          <ul className="depth-spread-list">
-            {indicators.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
+      <DepthCard
+        title="Origin signals"
+        tier={origin.confidence_tier}
+        isEmpty={!origin.anchor_description && indicators.length === 0 && actors.length === 0}
+      >
+        <div className="depth-meta-row depth-spread-meta">
+          <span className="depth-muted">
+            Anchor (heuristic): {origin.anchor_exists ? "yes" : "no"}
+          </span>
         </div>
-      ) : (
-        <p className="depth-muted depth-spread-absent">
-          No first-instance phrases detected. Absent or underspecified:{" "}
-          {absent.length > 0 ? absent.join(", ") : "first_instance_indicators"}.
-        </p>
-      )}
-      {actors.length > 0 ? (
-        <div className="depth-spread-block">
-          <strong>Seeding actors (heuristic)</strong>
-          <ul className="depth-spread-list">
-            {actors.map((a) => (
-              <li key={a}>{a}</li>
-            ))}
-          </ul>
-        </div>
-      ) : indicators.length > 0 ? (
-        <p className="depth-muted depth-spread-absent">
-          No seeding actors or venues extracted.{" "}
-          {absent.includes("seeding_actors")
-            ? "Absent field: seeding_actors."
-            : "Check absent_fields below."}
-        </p>
-      ) : null}
-      {absent.length > 0 ? (
-        <p className="depth-muted depth-spread-gaps">Gaps: {absent.join(", ")}.</p>
-      ) : null}
+        {origin.anchor_description ? (
+          <p className="depth-origin-anchor">{origin.anchor_description}</p>
+        ) : null}
+        {indicators.length > 0 ? (
+          <div className="depth-spread-block">
+            <strong>First-instance language</strong>
+            <ul className="depth-spread-list">
+              {indicators.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="depth-muted depth-spread-absent">
+            No first-instance phrases detected. Absent or underspecified: first_instance_indicators.
+          </p>
+        )}
+        {actors.length > 0 ? (
+          <div className="depth-spread-block">
+            <strong>Seeding actors (heuristic)</strong>
+            <ul className="depth-spread-list">
+              {actors.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          </div>
+        ) : indicators.length > 0 ? (
+          <p className="depth-muted depth-spread-absent">
+            No seeding actors or venues extracted.{" "}
+            {absent.includes("seeding_actors")
+              ? "Absent field: seeding_actors."
+              : "See missing fields below."}
+          </p>
+        ) : null}
+        <GapChips fields={absent} />
+      </DepthCard>
     </div>
   );
 }
@@ -1171,145 +1272,144 @@ function ActorLayerFields({ actorLayer, onActorDepth, actorDepthByEntity, actorD
   const hasBody = found.length > 0 || absent.length > 0;
   return (
     <div className="depth-actor-layer-result">
-      <h3 className="depth-inline-title">Actor ledger</h3>
-      <div className="depth-meta-row depth-spread-meta">
-        <TierBadge tier={actorLayer.confidence_tier} />
-        {dynamicLookups > 0 ? (
-          <span className="depth-muted" title="Resolved via Wikidata / Wikipedia / web inference">
-            Dynamic: {dynamicLookups}
-          </span>
-        ) : null}
-      </div>
-      {found.length > 0 ? (
-        <ul className="depth-actor-found-list">
-          {found.map((a) => {
-            const deepHref = actorLayerDeepHref(a);
-            return (
-            <li key={a.slug} className="depth-actor-card">
-              <div className="depth-actor-head">
-                <strong>{a.name}</strong>
-                <ActorLookupSourceBadge lookup_source={a.lookup_source} />
-                <PrimarySourceChips events={a.events} />
-                <code className="depth-actor-slug">{a.slug}</code>
-                <RabbitNudge href={deepHref} absent={!deepHref} label="deeper" />
-              </div>
-              {a.what || a.cultural_substrate || (a.surface_who && a.surface_who.length > 0) || a.surface_when ? (
-                <div className="depth-actor-layer1-trace">
-                  <h4 className="depth-actor-layer1-title">Entity trace (Layer 1)</h4>
-                  {a.what ? <p className="depth-actor-layer1-what">{a.what}</p> : null}
-                  {a.cultural_substrate ? (
-                    <p className="depth-actor-layer1-substrate">{a.cultural_substrate}</p>
-                  ) : null}
-                  {a.what_confidence_tier ? (
-                    <div className="depth-meta-row">
-                      <TierBadge tier={a.what_confidence_tier} />
-                      <span className="depth-muted">what tier (surface)</span>
-                    </div>
-                  ) : null}
-                  {a.surface_who && a.surface_who.length > 0 ? (
-                    <div className="depth-spread-block">
-                      <strong>Who</strong>
-                      <ul className="depth-spread-list">
-                        {[...a.surface_who]
-                          .sort((x, y) =>
-                            String(x.name || "").toLowerCase().localeCompare(String(y.name || "").toLowerCase()),
-                          )
-                          .map((w) => (
-                          <li key={w.name}>
-                            {w.name} <TierBadge tier={w.confidence_tier} />
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {a.surface_when && (a.surface_when.earliest_appearance || a.surface_when.source) ? (
-                    <div className="depth-when depth-actor-layer1-when">
-                      <strong>When</strong>
-                      <p>{a.surface_when.earliest_appearance}</p>
-                      <p className="depth-muted">{a.surface_when.source}</p>
-                      <TierBadge tier={a.surface_when.confidence_tier} />
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {(a.aliases || []).length > 0 ? (
-                <div className="depth-spread-block">
-                  <strong>Aliases</strong>
-                  <ul className="depth-spread-list">
-                    {(a.aliases || []).map((al) => (
-                      <li key={al}>{al}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {(a.events || []).length > 0 ? (
-                <div className="depth-spread-block">
-                  <strong>Events</strong>
-                  {groupActorEventsByCategory(a.events || []).map((grp) => (
-                    <div key={grp.key} className="depth-actor-event-group">
-                      <h4 className="depth-actor-event-group-title">{grp.label}</h4>
-                      <ul className="depth-actor-events">
-                        {grp.items.map((ev, i) => (
-                          <li key={`${grp.key}-${ev.date}-${i}`}>
-                            <span className="depth-actor-ev-date">{ev.date}</span>{" "}
-                            <span className="depth-muted">{ev.type}</span>
-                            <TierBadge tier={ev.confidence_tier} />
-                            <p className="depth-actor-ev-desc">{ev.description}</p>
-                            <p className="depth-muted depth-actor-ev-src">{ev.source}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="depth-muted">No events on this ledger row.</p>
-              )}
-            </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {absent.length > 0 ? (
-        <div className="depth-spread-block">
-          <strong>Not in ledger (extracted)</strong>
-          <ul className="depth-actor-absent-list">
-            {absent.map((x) => (
-              <li key={x.name} className="depth-actor-absent-row">
-                <span>{x.name}</span>
-                {x.wikidata_attempted ? (
-                  <span className="depth-muted depth-actor-absent-chain" title="No ledger, Wikidata, Wikipedia, or web hit">
-                    {" "}
-                    (no dynamic match)
-                  </span>
-                ) : null}{" "}
-                {onActorDepth ? (
-                  entityWorthLookup(x.name) ? (
-                    <ActorDepthTrigger
-                      entityName={x.name}
-                      ledgerHref={null}
-                      result={actorDepthByEntity?.[x.name]}
-                      loading={actorDepthLoading?.[x.name]}
-                      onLookup={onActorDepth}
-                    />
-                  ) : null
-                ) : (
-                  <RabbitNudge href={null} absent={true} />
-                )}
-              </li>
-            ))}
-          </ul>
+      <DepthCard title="Actor ledger" tier={actorLayer.confidence_tier} isEmpty={!hasBody}>
+        <div className="depth-meta-row depth-spread-meta">
+          {dynamicLookups > 0 ? (
+            <span className="depth-muted" title="Resolved via Wikidata / Wikipedia / web inference">
+              Dynamic: {dynamicLookups}
+            </span>
+          ) : (
+            <span className="depth-muted">Ledger resolution</span>
+          )}
         </div>
-      ) : null}
-      {!hasBody ? (
-        <p className="depth-muted depth-spread-absent">
-          No actor-like spans extracted for ledger lookup.{" "}
-          {gaps.length > 0 ? `Gaps: ${gaps.join(", ")}.` : null}
-        </p>
-      ) : null}
-      {hasBody && gaps.length > 0 ? (
-        <p className="depth-muted depth-spread-gaps">Gaps: {gaps.join(", ")}.</p>
-      ) : null}
+        {found.length > 0 ? (
+          <ul className="depth-actor-found-list">
+            {found.map((a) => {
+              const deepHref = actorLayerDeepHref(a);
+              return (
+                <li key={a.slug} className="depth-actor-card">
+                  <div className="depth-actor-head">
+                    <strong>{a.name}</strong>
+                    <ActorLookupSourceBadge lookup_source={a.lookup_source} />
+                    <PrimarySourceChips events={a.events} />
+                    <code className="depth-actor-slug">{a.slug}</code>
+                    <RabbitNudge href={deepHref} absent={!deepHref} label="deeper" />
+                  </div>
+                  {a.what || a.cultural_substrate || (a.surface_who && a.surface_who.length > 0) || a.surface_when ? (
+                    <div className="depth-actor-layer1-trace">
+                      <h4 className="depth-actor-layer1-title">Entity trace (Layer 1)</h4>
+                      {a.what ? <p className="depth-actor-layer1-what">{a.what}</p> : null}
+                      {a.cultural_substrate ? (
+                        <p className="depth-actor-layer1-substrate">{a.cultural_substrate}</p>
+                      ) : null}
+                      {a.what_confidence_tier ? (
+                        <div className="depth-meta-row">
+                          <TierBadge tier={a.what_confidence_tier} />
+                          <span className="depth-muted">what tier (surface)</span>
+                        </div>
+                      ) : null}
+                      {a.surface_who && a.surface_who.length > 0 ? (
+                        <div className="depth-spread-block">
+                          <strong>Who</strong>
+                          <ul className="depth-spread-list">
+                            {[...a.surface_who]
+                              .sort((x, y) =>
+                                String(x.name || "").toLowerCase().localeCompare(String(y.name || "").toLowerCase()),
+                              )
+                              .map((w) => (
+                                <li key={w.name}>
+                                  {w.name} <TierBadge tier={w.confidence_tier} />
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {a.surface_when && (a.surface_when.earliest_appearance || a.surface_when.source) ? (
+                        <div className="depth-when depth-actor-layer1-when">
+                          <strong>When</strong>
+                          <p>{a.surface_when.earliest_appearance}</p>
+                          <p className="depth-muted">{a.surface_when.source}</p>
+                          <TierBadge tier={a.surface_when.confidence_tier} />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {(a.aliases || []).length > 0 ? (
+                    <div className="depth-spread-block">
+                      <strong>Aliases</strong>
+                      <ul className="depth-spread-list">
+                        {(a.aliases || []).map((al) => (
+                          <li key={al}>{al}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {(a.events || []).length > 0 ? (
+                    <div className="depth-spread-block">
+                      <strong>Events</strong>
+                      {groupActorEventsByCategory(a.events || []).map((grp) => (
+                        <div key={grp.key} className="depth-actor-event-group">
+                          <h4 className="depth-actor-event-group-title">{grp.label}</h4>
+                          <ul className="depth-actor-events">
+                            {grp.items.map((ev, i) => (
+                              <li key={`${grp.key}-${ev.date}-${i}`}>
+                                <span className="depth-actor-ev-date">{ev.date}</span>{" "}
+                                <span className="depth-muted">{ev.type}</span>
+                                <TierBadge tier={ev.confidence_tier} />
+                                <p className="depth-actor-ev-desc">{ev.description}</p>
+                                <p className="depth-muted depth-actor-ev-src">{ev.source}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="depth-muted">No events on this ledger row.</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {absent.length > 0 ? (
+          <div className="depth-spread-block">
+            <strong>Not in ledger (extracted)</strong>
+            <ul className="depth-actor-absent-list">
+              {absent.map((x) => (
+                <li key={x.name} className="depth-actor-absent-row">
+                  <span>{x.name}</span>
+                  {x.wikidata_attempted ? (
+                    <span className="depth-muted depth-actor-absent-chain" title="No ledger, Wikidata, Wikipedia, or web hit">
+                      {" "}
+                      (no dynamic match)
+                    </span>
+                  ) : null}{" "}
+                  {onActorDepth ? (
+                    entityWorthLookup(x.name) ? (
+                      <ActorDepthTrigger
+                        entityName={x.name}
+                        ledgerHref={null}
+                        result={actorDepthByEntity?.[x.name]}
+                        loading={actorDepthLoading?.[x.name]}
+                        onLookup={onActorDepth}
+                      />
+                    ) : null
+                  ) : (
+                    <RabbitNudge href={null} absent={true} />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {!hasBody ? (
+          <p className="depth-muted depth-spread-absent">
+            No actor-like spans extracted for ledger lookup.
+          </p>
+        ) : null}
+        <GapChips fields={gaps} />
+      </DepthCard>
     </div>
   );
 }
@@ -1321,41 +1421,43 @@ function SpreadResultFields({ spread }) {
   const absent = spread.absent_fields || [];
   return (
     <div className="depth-spread-result">
-      <h3 className="depth-inline-title">Spread signals</h3>
-      <div className="depth-meta-row depth-spread-meta">
-        <TierBadge tier={spread.confidence_tier} />
-        <span className="depth-muted">
-          Time compression (heuristic): {spread.time_compression ? "yes" : "no"}
-        </span>
-      </div>
-      {platforms.length > 0 ? (
-        <div className="depth-spread-block">
-          <strong>Platforms mentioned</strong>
-          <ul className="depth-spread-list">
-            {platforms.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
+      <DepthCard
+        title="Spread signals"
+        tier={spread.confidence_tier}
+        isEmpty={platforms.length === 0 && indicators.length === 0}
+      >
+        <div className="depth-meta-row depth-spread-meta">
+          <span className="depth-muted">
+            Time compression (heuristic): {spread.time_compression ? "yes" : "no"}
+          </span>
         </div>
-      ) : null}
-      {indicators.length > 0 ? (
-        <div className="depth-spread-block">
-          <strong>Spread indicators</strong>
-          <ul className="depth-spread-list">
-            {indicators.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="depth-muted depth-spread-absent">
-          No spread-indicator phrases detected in this narrative. Absent or underspecified:{" "}
-          {absent.length > 0 ? absent.join(", ") : "spread_indicators"}.
-        </p>
-      )}
-      {indicators.length > 0 && absent.length > 0 ? (
-        <p className="depth-muted depth-spread-gaps">Additional gaps: {absent.join(", ")}.</p>
-      ) : null}
+        {platforms.length > 0 ? (
+          <div className="depth-spread-block">
+            <strong>Platforms mentioned</strong>
+            <ul className="depth-spread-list">
+              {platforms.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {indicators.length > 0 ? (
+          <div className="depth-spread-block">
+            <strong>Spread indicators</strong>
+            <ul className="depth-spread-list">
+              {indicators.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="depth-muted depth-spread-absent">
+            No spread-indicator phrases detected in this narrative. Absent or underspecified:
+            spread_indicators.
+          </p>
+        )}
+        <GapChips fields={absent} />
+      </DepthCard>
     </div>
   );
 }
@@ -1546,12 +1648,7 @@ function FiveRingReportPanel({ report, loading, error }) {
             <div className="depth-ring-body">
               {(r.absent_fields || []).length > 0 ? (
                 <div className="depth-ring-absent">
-                  <strong>Absent / gaps</strong>
-                  <ul className="depth-spread-list">
-                    {(r.absent_fields || []).map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
+                  <GapChips fields={r.absent_fields} />
                 </div>
               ) : null}
               {(r.sources || []).length > 0 ? (
@@ -1607,13 +1704,14 @@ function FiveRingReportPanel({ report, loading, error }) {
   );
 }
 
-function LayerCard({ layer, children }) {
+function LayerCard({ layer, children, isFocused }) {
   const available = layer.depth_available;
   const sealedFloor = layer.layer_number === 6 && !available;
 
   return (
     <article
-      className={`depth-layer-card ${available ? "depth-layer--available" : "depth-layer--limited"} ${sealedFloor ? "depth-layer--sealed-floor" : ""}`}
+      id={`depth-layer-${layer.layer_number}`}
+      className={`depth-layer-card ${available ? "depth-layer--available" : "depth-layer--limited"} ${sealedFloor ? "depth-layer--sealed-floor" : ""} ${isFocused ? "depth-layer-card--focused" : ""}`}
     >
       <div className="depth-layer-head">
         <span className="depth-layer-num">Layer {layer.layer_number}</span>
@@ -1668,6 +1766,7 @@ export default function DepthMap() {
   const [queryResult, setQueryResult] = useState(null);
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
+  const [activeLayer, setActiveLayer] = useState(1);
   const actorDepthInflight = useRef(new Set());
   const [actorDepthByEntity, setActorDepthByEntity] = useState({});
   const [actorDepthLoading, setActorDepthLoading] = useState({});
@@ -1941,6 +2040,82 @@ export default function DepthMap() {
     return `Layer ${uniq.join(" & ")} of 6`;
   }, [surfaceResult, surfaceUnavailable, patternResult]);
 
+  const layerStates = useMemo(
+    () => ({
+      1: searchBusy
+        ? "loading"
+        : surfaceResult
+          ? "found"
+          : surfaceError
+            ? "error"
+            : surfaceUnavailable
+              ? "empty"
+              : "idle",
+      2: searchBusy
+        ? "loading"
+        : spreadResult
+          ? (spreadResult.spread_indicators || []).length > 0 ||
+              (spreadResult.platforms_mentioned || []).length > 0
+            ? "found"
+            : "empty"
+          : spreadError
+            ? "error"
+            : "idle",
+      3: searchBusy
+        ? "loading"
+        : originResult
+          ? originResult.anchor_exists
+            ? "found"
+            : "empty"
+          : originError
+            ? "error"
+            : "idle",
+      4: searchBusy
+        ? "loading"
+        : actorLayerResult
+          ? (actorLayerResult.actors_found || []).length > 0
+            ? "found"
+            : "empty"
+          : actorLayerError
+            ? "error"
+            : "idle",
+      5: searchBusy
+        ? "loading"
+        : patternResult
+          ? (patternResult.matches || []).length > 0
+            ? "found"
+            : "empty"
+          : patternError
+            ? "error"
+            : "idle",
+      6: "sealed",
+    }),
+    [
+      searchBusy,
+      surfaceResult,
+      surfaceError,
+      surfaceUnavailable,
+      spreadResult,
+      spreadError,
+      originResult,
+      originError,
+      actorLayerResult,
+      actorLayerError,
+      patternResult,
+      patternError,
+    ],
+  );
+
+  const scrollToLayer = useCallback((id) => {
+    setActiveLayer(id);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`depth-layer-${id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
   const onSearch = useCallback(
     async (e) => {
       e.preventDefault();
@@ -2134,7 +2309,15 @@ export default function DepthMap() {
 
       {mapError ? <p className="depth-banner depth-banner-error">{mapError}</p> : null}
 
-      <div className="depth-stack">
+      <div className="depth-results-scaffold">
+        <LayerRail activeLayer={activeLayer} onSelect={scrollToLayer} layerStates={layerStates} />
+        <div className="depth-results-main">
+          <LayerProgress
+            activeLayer={activeLayer}
+            onSelect={scrollToLayer}
+            layerStates={layerStates}
+          />
+          <div className="depth-stack">
         {[1, 2, 3, 4, 5, 6].map((num) => {
           const layer = layerByNum(num);
           if (!layer) {
@@ -2153,7 +2336,7 @@ export default function DepthMap() {
           const isL5 = num === 5;
 
           return (
-            <LayerCard key={layer.layer_number} layer={layer}>
+            <LayerCard key={layer.layer_number} layer={layer} isFocused={activeLayer === num}>
               {isL1 ? (
                 <div className="depth-layer-inline">
                   {surfaceUnavailable ? (
@@ -2398,6 +2581,8 @@ export default function DepthMap() {
             </LayerCard>
           );
         })}
+          </div>
+        </div>
       </div>
 
       {traceComplete || narrative.trim().startsWith("http") ? (
