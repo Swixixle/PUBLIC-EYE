@@ -445,6 +445,51 @@ def upsert_reporter_dossier(slug: str, name: str, payload: dict[str, Any]) -> No
         conn.close()
 
 
+def list_receipts_with_coalition_since(
+    days: int = 7,
+    limit: int = 300,
+) -> list[dict[str, Any]]:
+    """
+    Receipts that have a coalition_map row, created within the last `days` days.
+    Ordered by created_at descending (newest first — caller re-sorts by divergence).
+    Each item: receipt_id, created_at (datetime), receipt (dict), coalition (dict).
+    """
+    conn = _get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT f.id, f.created_at, f.payload AS receipt_payload,
+                       c.payload AS coalition_payload
+                FROM frame_receipts f
+                INNER JOIN coalition_maps c ON c.receipt_id = f.id
+                WHERE f.created_at >= NOW() - make_interval(days => %s)
+                ORDER BY f.created_at DESC
+                LIMIT %s
+                """,
+                (days, limit),
+            )
+            out: list[dict[str, Any]] = []
+            for row in cur.fetchall():
+                rp = row["receipt_payload"]
+                cp = row["coalition_payload"]
+                if isinstance(rp, str):
+                    rp = json.loads(rp)
+                if isinstance(cp, str):
+                    cp = json.loads(cp)
+                out.append(
+                    {
+                        "receipt_id": str(row["id"]),
+                        "created_at": row["created_at"],
+                        "receipt": dict(rp) if isinstance(rp, dict) else {},
+                        "coalition": dict(cp) if isinstance(cp, dict) else {},
+                    }
+                )
+            return out
+    finally:
+        conn.close()
+
+
 def list_recent_receipts(limit: int = 20) -> list[dict[str, Any]]:
     """List recent receipts for a feed/history view (metadata only)."""
     conn = _get_conn()

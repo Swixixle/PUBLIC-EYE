@@ -525,11 +525,14 @@ from api.dossier_route import router as dossier_http_router  # noqa: E402
 from api.frames import router as frames_http_router  # noqa: E402
 from coalition_api import router as coalition_http_router  # noqa: E402
 from media_axis_api import router as media_axis_http_router  # noqa: E402
+from front_page import build_front_page_payload, render_front_page  # noqa: E402
+from front_page_api import router as front_page_http_router  # noqa: E402
 
 app.include_router(frames_http_router)
 app.include_router(dossier_http_router)
 app.include_router(coalition_http_router, prefix="/v1")
 app.include_router(media_axis_http_router, prefix="/v1")
+app.include_router(front_page_http_router, prefix="/v1")
 
 _web_dir = _repo_root() / "apps" / "web"
 if _web_dir.is_dir():
@@ -841,9 +844,26 @@ async def verify_page() -> FileResponse:
 
 
 @app.get("/")
-async def root() -> dict[str, str]:
-    """Base URL liveness (some checks hit `/` instead of `/health`)."""
-    return {"status": "ok", "service": "frame-api", "health": "/health"}
+async def root(
+    format: str | None = Query(default=None, description="Use format=json for API probe JSON"),
+):
+    """
+    Newspaper front page (HTML). Pass format=json for legacy JSON liveness probe.
+    """
+    if (format or "").lower() == "json":
+        return {"status": "ok", "service": "frame-api", "health": "/health"}
+    try:
+        data = await asyncio.to_thread(build_front_page_payload)
+    except Exception:
+        now = datetime.now(timezone.utc)
+        data = {
+            "generated_at": now.isoformat(),
+            "lead_story": None,
+            "secondary_stories": [],
+            "edition_date": now.strftime("%A, %B %d, %Y"),
+            "empty": True,
+        }
+    return HTMLResponse(render_front_page(data))
 
 
 @app.get("/health")

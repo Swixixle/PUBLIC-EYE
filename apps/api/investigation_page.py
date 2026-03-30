@@ -32,16 +32,25 @@ def _e(s: Any) -> str:
 
 
 def _vol_theme(vol: int) -> tuple[str, str, str, str, str]:
-    """Returns (pill_bg, pill_border, accent, short_copy, bucket_label)"""
+    """Returns (pill_bg, pill_border, accent, short_copy, bucket_label) — dark-slab accents."""
     if vol <= 25:
-        return "#0a2218", "#0d3d2a", "#3ecf8e", \
+        return "#0a2218", "#0d3d2a", "#2e7d32", \
                "Most outlets agree on the basics.", "Low"
     elif vol <= 60:
-        return "#2a1c04", "#3d2a06", "#e8a020", \
+        return "#2a1c04", "#3d2a06", "#E65100", \
                "Same facts, different spin.", "Moderate"
     else:
-        return "#2e0a0a", "#3d0e0e", "#e05050", \
+        return "#2e0a0a", "#3d0e0e", "#B71C1C", \
                "Parallel realities.", "High"
+
+
+def _vol_display_num_color(vol: int) -> str:
+    """Full saturation volatility color on dark fight cards (matches front page spec)."""
+    if vol <= 25:
+        return "#66bb6a"
+    if vol <= 60:
+        return "#FF9800"
+    return "#ef5350"
 
 
 def _pills(items: list, color: str) -> str:
@@ -218,11 +227,11 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     signed_badge = (
         '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
         'border-radius:20px;font-size:11px;font-weight:600;'
-        'background:#0a2218;color:#3ecf8e;border:0.5px solid #0d3d2a">✓ Signed</span>'
+        'background:#E8F5E9;color:#2e7d32;border:1px solid #a5d6a7">✓ Signed</span>'
         if signed else
         '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;'
         'border-radius:20px;font-size:11px;font-weight:600;'
-        'background:#2e0a0a;color:#e05050;border:0.5px solid #3d0e0e">✗ Unsigned</span>'
+        'background:#ffebee;color:#B71C1C;border:1px solid #ffcdd2">✗ Unsigned</span>'
     )
 
     a_label   = pos_a.get("label",        "Position A") if pos_a else "Position A"
@@ -239,67 +248,68 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     b_chain   = pos_b.get("chain",     []) if pos_b else []
 
     nobody_html = "".join(
-        f'<div style="display:flex;gap:10px;padding:9px 14px;border-radius:8px;'
-        f'background:rgba(232,160,32,0.06);margin-bottom:6px;'
-        f'border:0.5px solid rgba(232,160,32,0.14)">'
-        f'<span style="color:#e8a020;flex-shrink:0;margin-top:1px">◈</span>'
-        f'<span style="font-size:13px;color:#e8a020;line-height:1.5">{_e(w)}</span></div>'
+        f'<div style="display:flex;gap:10px;padding:10px 14px;border-radius:6px;'
+        f'background:rgba(230,81,0,0.07);margin-bottom:8px;'
+        f'border:1px solid rgba(230,81,0,0.18)">'
+        f'<span style="color:#E65100;flex-shrink:0;margin-top:1px">◈</span>'
+        f'<span style="font-size:14px;color:#5d4037;line-height:1.5">{_e(w)}</span></div>'
         for w in what_nobody[:6]
     )
 
     confirmed_html = "".join(
-        f'<div style="display:flex;gap:10px;padding:9px 0;'
-        f'border-bottom:0.5px solid rgba(255,255,255,0.05)">'
-        f'<div style="width:5px;height:5px;border-radius:50%;background:#00c8b4;'
-        f'flex-shrink:0;margin-top:6px"></div>'
-        f'<div><div style="font-size:13px;color:#f0ede8;line-height:1.4">'
+        f'<div style="display:flex;gap:10px;padding:10px 0;'
+        f'border-bottom:1px solid rgba(26,26,26,0.08)">'
+        f'<div style="width:5px;height:5px;border-radius:50%;background:#00695c;'
+        f'flex-shrink:0;margin-top:8px"></div>'
+        f'<div><div style="font-size:15px;color:#1a1a1a;line-height:1.45">'
         f'{_e(c.get("title","") if isinstance(c,dict) else str(c))}</div>'
-        f'<div style="font-size:11px;color:#5a5752;margin-top:2px">'
+        f'<div style="font-size:12px;color:#666;margin-top:2px">'
         f'{_e(c.get("outlet","") if isinstance(c,dict) else "")} · '
         f'{_e(c.get("date","")   if isinstance(c,dict) else "")}</div></div></div>'
         for c in confirmed[:5]
     ) if confirmed else ""
 
     both_html = "".join(
-        f'<div style="font-size:13px;color:#9e9a93;padding:6px 0;'
-        f'border-bottom:0.5px solid rgba(255,255,255,0.05)">'
-        f'<span style="color:#5a5752;margin-right:10px">—</span>{_e(w)}</div>'
+        f'<div style="font-size:15px;color:#333;padding:8px 0;'
+        f'border-bottom:1px solid rgba(26,26,26,0.08)">'
+        f'<span style="color:#888;margin-right:10px">—</span>{_e(w)}</div>'
         for w in what_both
     )
 
     receipt_rows = "".join(
         f'<div style="display:grid;grid-template-columns:140px 1fr;gap:12px;'
-        f'padding:9px 0;border-bottom:0.5px solid rgba(255,255,255,0.05)">'
+        f'padding:9px 0;border-bottom:1px solid rgba(26,26,26,0.1)">'
         f'<div style="font-size:10px;letter-spacing:0.07em;text-transform:uppercase;'
-        f'color:#5a5752">{k}</div>'
-        f'<div style="font-family:monospace;font-size:12px;color:{c};'
+        f'color:#666">{k}</div>'
+        f'<div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:12px;color:{c};'
         f'word-break:break-all;line-height:1.5">{_e(v)}</div></div>'
         for k, v, c in [
-            ("Receipt ID",     rid,   "#9e9a93"),
-            ("Type",           rtype, "#9e9a93"),
+            ("Receipt ID",     rid,   "#444"),
+            ("Type",           rtype, "#444"),
             ("Signed",
              "true — Ed25519 signature present" if signed else "false",
-             "#3ecf8e" if signed else "#e05050"),
-            ("Timestamp",      timestamp,  "#9e9a93"),
-            ("Schema version", schema_ver, "#9e9a93"),
+             "#2e7d32" if signed else "#B71C1C"),
+            ("Timestamp",      timestamp,  "#444"),
+            ("Schema version", schema_ver, "#444"),
             ("Signing key",
-             (public_key[:28] + "…") if public_key else "—", "#9e9a93"),
+             (public_key[:28] + "…") if public_key else "—", "#444"),
         ]
     )
 
-    # ── No-coalition empty state ─────────────────────────────────
+    # ── No-coalition empty state (on paper) ─────────────────────
     no_coalition_html = """
-<div style="padding:32px 24px;border:0.5px solid rgba(255,255,255,0.07);
-            border-radius:12px;background:#111;text-align:center;margin-bottom:40px">
-  <div style="font-size:15px;color:#5a5752;line-height:1.7">
+<div class="inv-paper-card" style="padding:28px 24px;text-align:center;margin-bottom:32px">
+  <div style="font-size:15px;color:#444;line-height:1.7">
     We don't see enough disagreement here to map a split story yet.
   </div>
-  <div style="font-size:12px;color:#3a3a3a;margin-top:8px">
+  <div style="font-size:13px;color:#888;margin-top:8px">
     Coalition analysis runs in the background — check back in a minute.
   </div>
 </div>"""
 
     # ── Coalition section ────────────────────────────────────────
+    coalition_fight_html = ""
+    coalition_tail_html = ""
     coalition_section = no_coalition_html
     if coalition:
         a_preview = _chain_preview(a_chain)
@@ -307,7 +317,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         a_chain_html = _chain_items_html(a_chain, "a")
         b_chain_html = _chain_items_html(b_chain, "b")
 
-        coalition_section = f"""
+        vnum = _vol_display_num_color(vol)
+        coalition_fight_html = f"""
 <!-- VOLATILITY PILL -->
 <div style="margin-bottom:24px">
   <div style="display:inline-flex;align-items:center;gap:12px;
@@ -315,9 +326,9 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
               background:{pill_bg};border:0.5px solid {pill_border}">
     <span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
                  color:{accent};font-weight:600">VOLATILITY</span>
-    <span style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;
-                 color:#f0ede8;line-height:1;letter-spacing:-0.02em">{vol}</span>
-    <span style="font-size:12px;color:{accent};opacity:0.6">/ 100</span>
+    <span style="font-family:'Playfair Display',serif;font-size:52px;font-weight:900;
+                 color:{vnum};line-height:1;letter-spacing:-0.02em">{vol}</span>
+    <span style="font-size:14px;color:{accent};opacity:0.75">/ 100</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;margin-top:8px;padding-left:2px">
     <span style="font-size:13px;color:#9e9a93">{_e(vol_copy)}</span>
@@ -328,8 +339,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     </button>
   </div>
   <div id="why-number" style="display:none;margin-top:10px;padding:12px 16px;
-       border-radius:8px;background:#111;border:0.5px solid rgba(255,255,255,0.08);
-       font-size:12px;color:#9e9a93;line-height:1.6;max-width:520px">
+       border-radius:8px;background:rgba(0,0,0,0.35);border:0.5px solid rgba(255,255,255,0.08);
+       font-size:12px;color:#c8c4bc;line-height:1.6;max-width:520px">
     The volatility score measures how far apart the two most opposed outlet clusters
     are on this story — based on what each side emphasizes vs. minimizes, and how
     confidently they hold those positions. It's not a vibe: it's calculated from the
@@ -344,19 +355,19 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
             background:{pill_bg};border-radius:0 10px 10px 0">
   <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
               color:{accent};margin-bottom:8px;font-weight:600">Where the story splits</div>
-  <div style="font-size:15px;color:#f0ede8;line-height:1.7">{_e(irreconcilable_gap)}</div>
+  <div style="font-size:16px;color:#F7F4EF;line-height:1.7">{_e(irreconcilable_gap)}</div>
 </div>
 
 <!-- TWO ANCHOR CARDS -->
-<div style="display:flex;gap:1px;background:rgba(255,255,255,0.06);
+<div style="display:flex;gap:1px;background:rgba(247,244,239,0.12);
             border-radius:14px;overflow:hidden;margin-bottom:24px">
 
   <!-- SIDE A -->
-  <div style="flex:1;background:#0e0e0e;padding:24px 22px">
-    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
-                color:#5b9fff;margin-bottom:8px">{_e(a_anchor)}</div>
-    <div style="font-family:Syne,sans-serif;font-size:19px;font-weight:700;
-                color:#f0ede8;margin-bottom:10px;line-height:1.2">{_e(a_label)}</div>
+  <div style="flex:1;background:#141414;padding:24px 22px">
+    <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+                color:#7eb8ff;margin-bottom:8px">{_e(a_anchor)}</div>
+    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
+                color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(a_label)}</div>
     <div style="font-size:13px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
       {_e(a_summary)}</div>
     <div style="margin-bottom:10px">
@@ -373,18 +384,18 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
   <!-- VS -->
   <div style="display:flex;align-items:center;justify-content:center;
-              background:#0e0e0e;padding:0 4px;min-width:36px">
+              background:#141414;padding:0 4px;min-width:36px">
     <span style="background:#111;border:0.5px solid rgba(255,255,255,0.1);
                  border-radius:20px;padding:5px 8px;
                  font-size:10px;font-weight:700;color:#5a5752">VS</span>
   </div>
 
   <!-- SIDE B -->
-  <div style="flex:1;background:#0e0e0e;padding:24px 22px">
-    <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
-                color:#e05050;margin-bottom:8px">{_e(b_anchor)}</div>
-    <div style="font-family:Syne,sans-serif;font-size:19px;font-weight:700;
-                color:#f0ede8;margin-bottom:10px;line-height:1.2">{_e(b_label)}</div>
+  <div style="flex:1;background:#141414;padding:24px 22px">
+    <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+                color:#ff8a80;margin-bottom:8px">{_e(b_anchor)}</div>
+    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;
+                color:#F7F4EF;margin-bottom:10px;line-height:1.2">{_e(b_label)}</div>
     <div style="font-size:13px;color:#9e9a93;line-height:1.6;margin-bottom:16px">
       {_e(b_summary)}</div>
     <div style="margin-bottom:10px">
@@ -449,18 +460,48 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     </div>
   </div>
 </div>
+"""
 
-<!-- WHAT EVERYONE AGREES ON -->
-{"<div style='margin-bottom:40px'><div style='font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#5a5752;margin-bottom:10px'>What everyone agrees on</div><div style='border:0.5px solid rgba(255,255,255,0.08);border-radius:10px;background:#111;padding:4px 18px'>" + both_html + "</div></div>" if both_html else ""}
-
-<!-- CONTESTED CLAIM (de-emphasized, after the main fight) -->
-<div style="margin-bottom:40px">
-  <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
-              color:#5a5752;margin-bottom:10px">The specific claim in dispute</div>
-  <div style="padding:12px 18px;border-left:2px solid rgba(255,255,255,0.1);
-              font-size:13px;color:#5a5752;line-height:1.7;font-style:italic">
+        coalition_tail_html = (
+            (
+                "<div class=\"inv-paper-block\" style='margin-bottom:32px'>"
+                "<div style='font-size:11px;letter-spacing:0.12em;text-transform:uppercase;"
+                "color:#555;margin-bottom:10px'>What everyone agrees on</div>"
+                "<div class='inv-paper-card' style='padding:4px 18px'>" + both_html + "</div></div>"
+            )
+            if both_html
+            else ""
+        )
+        coalition_tail_html += f"""
+<div class="inv-paper-block" style="margin-bottom:32px">
+  <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+              color:#555;margin-bottom:10px">The specific claim in dispute</div>
+  <div class="inv-paper-card" style="padding:14px 18px;border-left:3px solid rgba(26,26,26,0.2);
+              font-size:14px;color:#555;line-height:1.7;font-style:italic">
     {_e(contested_claim)}
   </div>
+</div>
+"""
+        coalition_section = (
+            f'<div class="inv-fight-slab">{coalition_fight_html}</div>'
+            + coalition_tail_html
+        )
+    else:
+        coalition_section = no_coalition_html
+
+    reporter_strip = f"""
+<div class="reporter-only inv-reporter-tools">
+  <h3 class="inv-rt-hed">Reporter tools</h3>
+  <p class="inv-mono">Receipt: <span id="inv-rid">{_e(rid)}</span>
+    <button type="button" class="inv-btn" onclick="navigator.clipboard.writeText(document.getElementById('inv-rid').textContent.trim())">Copy</button>
+    <a class="inv-btn" href="/v1/coalition-map/{_e(rid)}">Coalition JSON ↗</a>
+    <a class="inv-btn" href="{_e(a_url)}" target="_blank" rel="noopener">Source ↗</a>
+  </p>
+  <p class="inv-mono-sub">Open in:
+    <span class="inv-btn inv-btn-ghost">LexisNexis</span>
+    <span class="inv-btn inv-btn-ghost">Google Pinpoint</span>
+    <span class="inv-btn inv-btn-ghost">Bellingcat Toolkit</span>
+  </p>
 </div>
 """
 
@@ -471,19 +512,37 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_e(a_title or "Investigation")} — PUBLIC EYE</title>
 <meta name="description" content="{_e((irreconcilable_gap or narrative)[:160])}">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
   *{{box-sizing:border-box;margin:0;padding:0}}
   html{{scroll-behavior:smooth}}
-  body{{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    background:#080808;color:#f0ede8;min-height:100vh;
-    background:radial-gradient(ellipse 80% 20% at 50% 0%,
-      rgba(0,200,180,0.03) 0%,transparent 100%),#080808;
+  body.inv-body{{
+    font-family:"IBM Plex Sans",-apple-system,sans-serif;
+    background:#F7F4EF;color:#1a1a1a;min-height:100vh;
   }}
-  a{{color:#00c8b4;text-decoration:none}}
-  a:hover{{opacity:.8}}
+  a{{color:#0d47a1;text-decoration:underline;text-underline-offset:3px}}
+  a:hover{{opacity:.85}}
   button:hover{{opacity:.85}}
+  .inv-fight-slab{{
+    background:#111;color:#F7F4EF;padding:28px 24px 32px;border-radius:8px;margin-bottom:8px;
+    border:1px solid rgba(26,26,26,0.18);
+  }}
+  .inv-paper-card{{background:#fff;border:1px solid rgba(26,26,26,0.15);border-radius:4px;}}
+  .reporter-only{{display:none;}}
+  body.inv-reporter-mode .reporter-only{{display:block !important;}}
+  body.inv-reporter-mode .inv-reader-soft{{display:none !important;}}
+  .inv-mode{{display:inline-flex;gap:4px;margin-left:12px;}}
+  .inv-mode button{{
+    font-family:"IBM Plex Sans",sans-serif;font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
+    padding:6px 12px;border:1px solid rgba(26,26,26,0.2);background:#fff;cursor:pointer;border-radius:2px;
+  }}
+  .inv-mode button.active{{background:#1a1a1a;color:#F7F4EF;border-color:#1a1a1a;}}
+  .inv-reporter-tools{{margin:24px 0;padding:18px;background:#F5F5F5;border:1px solid rgba(26,26,26,0.12);border-radius:4px;}}
+  .inv-rt-hed{{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;}}
+  .inv-mono{{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.65;color:#333;}}
+  .inv-mono-sub{{font-family:"IBM Plex Mono",monospace;font-size:11px;color:#555;margin-top:8px;}}
+  .inv-btn{{display:inline-block;margin-left:6px;padding:3px 8px;font-size:10px;border:1px solid #999;background:#fff;border-radius:2px;cursor:pointer;text-decoration:none;color:#1a1a1a;}}
+  .inv-btn-ghost{{opacity:0.55;cursor:default;}}
   details.country-acc > summary::-webkit-details-marker {{ display: none; }}
   details.country-acc > summary {{ list-style: none; }}
   details.country-acc .country-chev {{
@@ -495,95 +554,113 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   }}
 </style>
 </head>
-<body>
+<body class="inv-body">
 
 <header style="display:flex;align-items:center;justify-content:space-between;
-               padding:16px 36px;border-bottom:0.5px solid rgba(255,255,255,0.06);
+               flex-wrap:wrap;gap:12px;
+               padding:16px 36px;border-bottom:1px solid rgba(26,26,26,0.2);
                position:sticky;top:0;z-index:20;
-               background:rgba(8,8,8,0.93);backdrop-filter:blur(16px)">
-  <a href="/" style="font-family:Syne,sans-serif;font-size:14px;font-weight:800;
-                      letter-spacing:0.14em;text-transform:uppercase;color:#f0ede8">
-    PUBLIC<span style="color:#00c8b4">EYE</span>
+               background:rgba(247,244,239,0.96);backdrop-filter:blur(12px)">
+  <a href="/" style="font-family:'Playfair Display',serif;font-size:18px;font-weight:700;
+                      letter-spacing:0.06em;color:#1a1a1a;text-decoration:none">
+    PUBLIC EYE
   </a>
-  <div style="display:flex;align-items:center;gap:14px">
-    {signed_badge}
-    <a href="#verification" style="font-size:11px;color:#5a5752;letter-spacing:0.04em">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span class="inv-reader-soft">{signed_badge}</span>
+    <div class="inv-mode">
+      <button type="button" id="inv-mode-reader" class="active">Reader</button>
+      <button type="button" id="inv-mode-reporter">Reporter</button>
+    </div>
+    <a href="#verification-full" style="font-size:11px;color:#555;letter-spacing:0.04em;text-decoration:none" class="reporter-only">
+      Receipt ↓
+    </a>
+    <a href="#verification" style="font-size:11px;color:#555;letter-spacing:0.04em;text-decoration:none" class="inv-reader-soft inv-receipt-jump">
       Receipt ↓
     </a>
   </div>
 </header>
 
-<div style="max-width:880px;margin:0 auto;padding:0 36px">
+<div style="max-width:900px;margin:0 auto;padding:0 36px 48px">
 
 <!-- HOOK -->
-<div style="padding:52px 0 32px">
-  {f'<div style="margin-bottom:10px"><a href="{_e(a_url)}" target="_blank" rel="noopener" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#5a5752">{_e(a_pub)} ↗</a></div>' if a_url else ""}
-  <h1 style="font-family:Syne,sans-serif;font-size:clamp(22px,3.8vw,38px);
-              font-weight:800;line-height:1.1;letter-spacing:-0.02em;color:#f0ede8;
-              margin-bottom:0;max-width:700px">
+<div style="padding:40px 0 24px">
+  {f'<div style="margin-bottom:10px"><a href="{_e(a_url)}" target="_blank" rel="noopener" style="font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#666">{_e(a_pub)} ↗</a></div>' if a_url else ""}
+  <h1 style="font-family:'Playfair Display',serif;font-size:clamp(26px,4vw,38px);
+              font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#1a1a1a;
+              margin-bottom:0;max-width:720px">
     {_e(a_title or "Untitled Investigation")}
   </h1>
 </div>
 
-<div style="height:0.5px;background:rgba(255,255,255,0.07);margin-bottom:36px"></div>
+<div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:28px"></div>
 
 {coalition_section}
 
 <!-- SUMMARY (after the fight) -->
-{f'<div style="margin-bottom:40px;padding:16px 20px;border:0.5px solid rgba(255,255,255,0.07);border-radius:10px;background:#111"><div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#5a5752;margin-bottom:8px">Summary</div><p style="font-size:14px;color:#9e9a93;line-height:1.7">{_e(narrative[:300])}{"…" if len(narrative)>300 else ""}</p></div>' if narrative else ""}
+{f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:15px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
 
 <!-- WHAT NO ONE IS REALLY TALKING ABOUT -->
-{f'<div style="margin-bottom:40px"><div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#5a5752;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
+{f'<div class="inv-reader-soft" style="margin-bottom:32px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
 
 <!-- CROSS-CORROBORATED -->
-{f'<div style="margin-bottom:40px"><div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#5a5752;margin-bottom:12px">Cross-corroborated</div><div style="border:0.5px solid rgba(255,255,255,0.08);border-radius:10px;background:#111;padding:4px 18px">{confirmed_html}</div></div>' if confirmed_html else ""}
+{f'<div class="reporter-only" style="margin-bottom:32px"><div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">Cross-corroborated</div><div class="inv-paper-card" style="padding:4px 18px">{confirmed_html}</div></div>' if confirmed_html else ""}
 
-<div style="height:0.5px;background:rgba(255,255,255,0.07);margin-bottom:40px"></div>
+<div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:32px"></div>
 
-<!-- VERIFICATION -->
-<div id="verification" style="margin-bottom:60px">
-  <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
-              color:#5a5752;margin-bottom:12px">Verification</div>
-  <div style="border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;
-              background:#111;overflow:hidden">
-    <div style="padding:16px 20px;border-bottom:0.5px solid rgba(255,255,255,0.06);
+{reporter_strip}
+
+<!-- VERIFICATION (reader: one-line access) -->
+<div id="verification" class="inv-reader-soft" style="margin-bottom:28px;padding:16px 18px;background:#fff;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
+  <p style="font-size:15px;line-height:1.65;color:#333">
+    {signed_badge}
+    <span style="margin-left:6px">This investigation is backed by a signed, verifiable receipt.</span>
+    <a href="/verify?id={_e(rid)}" style="font-weight:600;margin-left:4px">Verify independently ↗</a>
+    <span style="color:#666"> · Use <strong>Reporter</strong> mode for IDs, raw JSON, and research links.</span>
+  </p>
+</div>
+
+<!-- VERIFICATION (reporter: full chain) -->
+<div id="verification-full" class="reporter-only" style="margin-bottom:48px">
+  <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;
+              color:#555;margin-bottom:12px">Verification</div>
+  <div style="border:1px solid rgba(26,26,26,0.15);border-radius:8px;
+              background:#fff;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid rgba(26,26,26,0.1);
                 display:flex;align-items:center;justify-content:space-between;
                 flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:14px;font-weight:500;color:#f0ede8;margin-bottom:3px">
+        <div style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:3px">
           Cryptographically signed
         </div>
-        <div style="font-size:12px;color:#5a5752">
+        <div style="font-size:13px;color:#666">
           Ed25519 · JCS canonical payload · independently verifiable
         </div>
       </div>
       {signed_badge}
     </div>
-    <div style="padding:6px 20px">{receipt_rows}</div>
-    {f'<div style="padding:12px 20px;border-top:0.5px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.01)"><div style="font-size:10px;letter-spacing:0.07em;text-transform:uppercase;color:#5a5752;margin-bottom:5px">Ed25519 Signature</div><div style="font-family:monospace;font-size:11px;color:#5a5752;word-break:break-all;line-height:1.6">{_e(signature)}</div></div>' if signature else ""}
-    <div style="padding:14px 20px;border-top:0.5px solid rgba(255,255,255,0.06);
+    <div style="padding:8px 20px">{receipt_rows}</div>
+    {f'<div style="padding:12px 20px;border-top:1px solid rgba(26,26,26,0.08);background:#fafafa"><div style="font-size:10px;letter-spacing:0.07em;text-transform:uppercase;color:#666;margin-bottom:5px">Ed25519 Signature</div><div style="font-family:&quot;IBM Plex Mono&quot;,monospace;font-size:11px;color:#555;word-break:break-all;line-height:1.6">{_e(signature)}</div></div>' if signature else ""}
+    <div style="padding:14px 20px;border-top:1px solid rgba(26,26,26,0.08);
                 display:flex;gap:8px;flex-wrap:wrap">
       <a href="/verify?id={_e(rid)}"
-         style="font-size:11px;padding:7px 16px;border-radius:6px;
-                border:0.5px solid rgba(255,255,255,0.12);color:#9e9a93">
+         style="font-size:11px;padding:8px 14px;border-radius:4px;
+                border:1px solid rgba(26,26,26,0.2);color:#333;text-decoration:none">
         Verify independently ↗
       </a>
       <a href="/r/{_e(rid)}" target="_blank"
-         style="font-size:11px;padding:7px 16px;border-radius:6px;
-                border:0.5px solid rgba(255,255,255,0.12);color:#9e9a93">
+         style="font-size:11px;padding:8px 14px;border-radius:4px;
+                border:1px solid rgba(26,26,26,0.2);color:#333;text-decoration:none">
         Raw JSON ↗
       </a>
     </div>
   </div>
 </div>
 
-<div style="padding-bottom:48px;display:flex;align-items:center;
+<div style="padding-bottom:40px;display:flex;align-items:center;
             justify-content:space-between;flex-wrap:wrap;gap:12px;
-            border-top:0.5px solid rgba(255,255,255,0.06);padding-top:24px">
-  <div style="font-size:11px;color:#5a5752">PUBLIC EYE · Receipts, not verdicts.</div>
-  <a href="/verify?id={_e(rid)}" style="font-size:11px;color:#5a5752">
-    Independent verification ↗
-  </a>
+            border-top:1px solid rgba(26,26,26,0.2);padding-top:20px">
+  <div style="font-size:12px;color:#666">PUBLIC EYE · Receipts, not verdicts.</div>
+  <a href="/verify?id={_e(rid)}" class="reporter-only" style="font-size:12px;color:#666;text-decoration:none">Independent verification ↗</a>
 </div>
 
 </div>
@@ -601,6 +678,25 @@ function toggleChain(id) {{
   el.style.display = open ? 'none' : 'block';
   if (arrow) arrow.style.transform = open ? '' : 'rotate(180deg)';
 }}
+
+(function() {{
+  var KEY = 'publicEyeMode';
+  function setMode(rep) {{
+    document.body.classList.toggle('inv-reporter-mode', rep);
+    var r = document.getElementById('inv-mode-reader');
+    var p = document.getElementById('inv-mode-reporter');
+    if (r) r.classList.toggle('active', !rep);
+    if (p) p.classList.toggle('active', rep);
+    try {{ localStorage.setItem(KEY, rep ? 'reporter' : 'reader'); }} catch (e) {{}}
+  }}
+  try {{
+    if (localStorage.getItem(KEY) === 'reporter') setMode(true);
+  }} catch (e) {{}}
+  var br = document.getElementById('inv-mode-reader');
+  var bp = document.getElementById('inv-mode-reporter');
+  if (br) br.onclick = function() {{ setMode(false); }};
+  if (bp) bp.onclick = function() {{ setMode(true); }};
+}})();
 </script>
 
 </body>
