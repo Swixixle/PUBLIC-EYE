@@ -794,15 +794,21 @@ async def pitch_page() -> FileResponse:
 
 @app.get("/verify")
 async def verify_page() -> FileResponse:
-    """PUBLIC EYE journalist verifier — static `apps/web/public/verify.html`."""
-    path = _repo_root() / "apps" / "web" / "public" / "verify.html"
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="verify.html not found")
-    return FileResponse(
-        str(path),
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-        media_type="text/html",
-    )
+    """PUBLIC EYE journalist verifier — static verify.html."""
+    # Multiple paths: local monorepo, co-located fallback (apps/api/verify.html), Render layout
+    candidates = [
+        Path(__file__).resolve().parent.parent / "web" / "public" / "verify.html",
+        Path(__file__).resolve().parent / "verify.html",
+        Path("/opt/render/project/src/apps/web/public/verify.html"),
+    ]
+    for path in candidates:
+        if path.is_file():
+            return FileResponse(
+                str(path),
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+                media_type="text/html",
+            )
+    raise HTTPException(status_code=404, detail="verify.html not found")
 
 
 @app.get("/")

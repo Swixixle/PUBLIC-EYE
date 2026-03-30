@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUBLIC EYE — Verify a Receipt</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0a0a;
+    --bg-2:      #111111;
+    --bg-3:      #1a1a1a;
+    --bg-card:   #141414;
+    --border:    rgba(255,255,255,0.07);
+    --border-2:  rgba(255,255,255,0.13);
+    --text:      #f0ede8;
+    --text-2:    #9e9a93;
+    --text-3:    #5a5752;
+    --cyan:      #00c8b4;
+    --cyan-dim:  rgba(0,200,180,0.12);
+    --cyan-glow: rgba(0,200,180,0.06);
+    --amber:     #e8a020;
+    --amber-dim: rgba(232,160,32,0.1);
+    --red:       #e05050;
+    --red-dim:   rgba(224,80,80,0.1);
+    --green:     #3ecf8e;
+    --green-dim: rgba(62,207,142,0.1);
+    --r:         6px;
+    --r-lg:      12px;
+  }
+
+  html { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; }
+
+  body {
+    min-height: 100vh;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% -10%, rgba(0,200,180,0.05) 0%, transparent 70%),
+      var(--bg);
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 0.5px solid var(--border);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(10,10,10,0.85);
+  }
+
+  .wordmark {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .wordmark span { color: var(--cyan); }
+
+  .header-right {
+    font-size: 11px;
+    color: var(--text-3);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* ── MAIN ── */
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 80px 24px 80px;
+    width: 100%;
+  }
+
+  .page-eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+
+  .page-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .page-sub {
+    font-size: 15px;
+    color: var(--text-2);
+    line-height: 1.6;
+    margin-bottom: 48px;
+    max-width: 520px;
+  }
+
+  /* ── INPUT ZONE ── */
+  .input-zone {
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--r-lg);
+    background: var(--bg-card);
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+
+  .input-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .input-row input {
+    flex: 1;
+    background: var(--bg-3);
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--r);
+    padding: 12px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input-row input:focus { border-color: var(--cyan); }
+  .input-row input::placeholder { color: var(--text-3); }
+
+  .verify-btn {
+    background: var(--cyan);
+    color: #000;
+    border: none;
+    border-radius: var(--r);
+    padding: 12px 24px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .verify-btn:hover { opacity: 0.9; }
+  .verify-btn:active { transform: scale(0.98); }
+  .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .hint-row {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+  .hint-row a { color: var(--cyan); text-decoration: none; }
+  .hint-row a:hover { text-decoration: underline; }
+
+  /* ── STATUS ── */
+  #status-area { margin-bottom: 24px; }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+  .status-pill .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .status-loading { background: rgba(255,255,255,0.05); color: var(--text-2); border: 0.5px solid var(--border); }
+  .status-loading .dot { background: var(--text-2); }
+  .status-verified { background: var(--green-dim); color: var(--green); border: 0.5px solid rgba(62,207,142,0.25); }
+  .status-verified .dot { background: var(--green); animation: none; }
+  .status-failed { background: var(--red-dim); color: var(--red); border: 0.5px solid rgba(224,80,80,0.25); }
+  .status-failed .dot { background: var(--red); animation: none; }
+  .status-warn { background: var(--amber-dim); color: var(--amber); border: 0.5px solid rgba(232,160,32,0.25); }
+  .status-warn .dot { background: var(--amber); animation: none; }
+
+  /* ── RESULT CARD ── */
+  #result-card {
+    display: none;
+    border: 0.5px solid var(--border-2);
+    border-radius: var(--r-lg);
+    background: var(--bg-card);
+    overflow: hidden;
+    animation: fadeUp 0.3s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-banner {
+    padding: 20px 28px;
+    border-bottom: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .banner-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .banner-sub {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.4;
+  }
+
+  .verified-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .verified-badge.ok  { background: var(--green-dim); color: var(--green); border: 0.5px solid rgba(62,207,142,0.3); }
+  .verified-badge.bad { background: var(--red-dim);   color: var(--red);   border: 0.5px solid rgba(224,80,80,0.3); }
+
+  /* ── FIELD GRID ── */
+  .field-grid {
+    padding: 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 0.5px solid var(--border);
+    align-items: baseline;
+  }
+  .field-row:last-child { border-bottom: none; }
+
+  .field-key {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-weight: 500;
+    padding-top: 1px;
+  }
+
+  .field-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    word-break: break-all;
+  }
+  .field-val.dim { color: var(--text-2); font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; }
+  .field-val.ok  { color: var(--green); }
+  .field-val.bad { color: var(--red); }
+  .field-val.warn { color: var(--amber); }
+
+  /* ── SIGNATURE BLOCK ── */
+  .sig-block {
+    margin: 0 28px 24px;
+    background: var(--bg-3);
+    border: 0.5px solid var(--border);
+    border-radius: var(--r);
+    padding: 14px 16px;
+  }
+  .sig-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 8px;
+  }
+  .sig-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-2);
+    word-break: break-all;
+    line-height: 1.6;
+  }
+
+  /* ── EXPLAINER ── */
+  .explainer {
+    margin: 32px 0 0;
+    padding-top: 32px;
+    border-top: 0.5px solid var(--border);
+  }
+
+  .explainer-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .explainer-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--cyan-dim);
+    border: 0.5px solid rgba(0,200,180,0.3);
+    color: var(--cyan);
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .step-body {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+  .step-body strong { color: var(--text); font-weight: 500; }
+  .step-body code {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    background: var(--bg-3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--cyan);
+  }
+
+  /* ── ACTIONS ── */
+  .actions {
+    display: flex;
+    gap: 8px;
+    padding: 20px 28px;
+    border-top: 0.5px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    font-size: 11px;
+    padding: 7px 14px;
+    border-radius: var(--r);
+    border: 0.5px solid var(--border-2);
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    transition: all 0.15s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .action-btn:hover { background: var(--bg-3); color: var(--text); border-color: var(--border-2); }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 24px 40px;
+    border-top: 0.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .footer-left {
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+
+  .footer-pubkey {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-3);
+    background: var(--bg-3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .footer-pubkey:hover { color: var(--cyan); }
+
+  @media (max-width: 600px) {
+    header { padding: 16px 20px; }
+    main { padding: 48px 16px 64px; }
+    footer { padding: 20px; flex-direction: column; align-items: flex-start; }
+    .input-row { flex-direction: column; }
+    .field-row { grid-template-columns: 1fr; gap: 4px; }
+    .card-banner { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="wordmark" href="/">PUBLIC<span>EYE</span></a>
+  <span class="header-right">Receipt Verifier</span>
+</header>
+
+<main>
+  <p class="page-eyebrow">Cryptographic verification</p>
+  <h1 class="page-title">Every analysis.<br>Independently provable.</h1>
+  <p class="page-sub">
+    Every PUBLIC EYE investigation is signed with Ed25519. Paste a receipt ID below
+    to confirm it hasn't been altered since it was generated — without trusting us.
+  </p>
+
+  <div class="input-zone">
+    <label class="input-label" for="receipt-input">Receipt ID or investigation URL</label>
+    <div class="input-row">
+      <input
+        type="text"
+        id="receipt-input"
+        placeholder="67cefd9a-9b62-471f-8ba5-6b02c849b1b1"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="verify-btn" id="verify-btn" onclick="verify()">Verify</button>
+    </div>
+    <p class="hint-row">
+      Find the receipt ID in the Verification sidebar of any
+      <a href="/" target="_blank">PUBLIC EYE investigation</a>.
+    </p>
+  </div>
+
+  <div id="status-area"></div>
+  <div id="result-card"></div>
+
+  <div class="explainer">
+    <p class="explainer-title">How verification works</p>
+    <div class="explainer-steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>We fetch the receipt</strong> from the PUBLIC EYE database using your ID.
+          The receipt contains the full analysis payload — every claim, source, and framing note.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>We canonicalize the payload</strong> using <code>RFC 8785 JCS</code>
+          — the same deterministic JSON serialization used at signing time.
+          Key order, whitespace, and encoding are all normalized before hashing.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>We verify the signature</strong> using the PUBLIC EYE
+          <code>Ed25519</code> public key (visible below). If the payload was altered
+          even by a single character, the signature fails.
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>You can verify offline</strong> — download the raw JSON and run
+          <code>openssl pkeyutl</code> against the public key yourself.
+          No trust in PUBLIC EYE required.
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-left">
+    PUBLIC EYE · Ed25519 public key (click to copy)
+  </div>
+  <div class="footer-pubkey" id="footer-pubkey" title="Click to copy public key" onclick="copyPubkey()">
+    Loading public key…
+  </div>
+</footer>
+
+<script>
+const API_BASE = (() => {
+  // In production this file is served by the same domain.
+  // In dev, point to your local API.
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  return 'https://frame-2yxu.onrender.com';
+})();
+
+let publicKey = null;
+
+// ---------------------------------------------------------------------------
+// Fetch public key on load
+// ---------------------------------------------------------------------------
+async function loadPublicKey() {
+  try {
+    const r = await fetch(`${API_BASE}/v1/status`);
+    const d = await r.json();
+    publicKey = d.public_key || d.frame_public_key || d.signing_key || null;
+    const el = document.getElementById('footer-pubkey');
+    if (publicKey) {
+      el.textContent = publicKey.length > 60
+        ? publicKey.slice(0, 28) + '…' + publicKey.slice(-20)
+        : publicKey;
+      el.title = publicKey;
+    } else {
+      el.textContent = 'Public key unavailable';
+    }
+  } catch {
+    document.getElementById('footer-pubkey').textContent = 'Public key unavailable';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main verify flow
+// ---------------------------------------------------------------------------
+async function verify() {
+  const raw = document.getElementById('receipt-input').value.trim();
+  const btn  = document.getElementById('verify-btn');
+
+  if (!raw) return;
+
+  // Extract UUID from URL if pasted as full URL
+  const uuidMatch = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  const receiptId = uuidMatch ? uuidMatch[0] : raw;
+
+  btn.disabled = true;
+  setStatus('loading', 'Fetching receipt…');
+  document.getElementById('result-card').style.display = 'none';
+
+  try {
+    const r = await fetch(`${API_BASE}/r/${receiptId}`);
+    if (r.status === 404) {
+      setStatus('failed', 'Receipt not found. Check the ID and try again.');
+      btn.disabled = false;
+      return;
+    }
+    if (!r.ok) {
+      setStatus('failed', `Server error (${r.status}). Try again shortly.`);
+      btn.disabled = false;
+      return;
+    }
+
+    const receipt = await r.json();
+    setStatus('loading', 'Checking signature…');
+
+    let crypto = null;
+    try {
+      const vr = await fetch(`${API_BASE}/v1/verify-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(receipt),
+      });
+      if (vr.ok) crypto = await vr.json();
+    } catch {
+      crypto = { ok: false, reasons: ['Could not reach verification endpoint.'] };
+    }
+
+    renderResult(receipt, crypto);
+
+  } catch (e) {
+    setStatus('failed', 'Could not reach PUBLIC EYE. Check your connection.');
+  }
+
+  btn.disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+// Render result
+// ---------------------------------------------------------------------------
+function renderResult(receipt, crypto) {
+  const signed   = receipt.signed === true;
+  const rid      = receipt.receipt_id || receipt.id || '—';
+  const rtype    = receipt.receipt_type || receipt.type || '—';
+  const ts       = receipt.timestamp || receipt.generated_at || '—';
+  const version  = receipt.schema_version || 'pre-1.0';
+  const sig      = receipt.signature || receipt.frame_signature || receipt.sig || null;
+  const pubkey   = receipt.public_key || receipt.frame_public_key || null;
+  const sources  = receipt.sources_searched ?? receipt.sources?.length ?? '—';
+  const articles = receipt.articles_found ?? '—';
+  const narrative = receipt.narrative || receipt.summary || '';
+  const cryptoOk = crypto && crypto.ok === true;
+  const cryptoReasons = (crypto && Array.isArray(crypto.reasons)) ? crypto.reasons : [];
+
+  if (cryptoOk) {
+    setStatus('verified', 'Cryptographic verification passed — JCS hash and Ed25519 signature match.');
+  } else if (signed && cryptoReasons.length) {
+    setStatus('failed', 'Receipt claims signed, but verification failed: ' + cryptoReasons.join('; '));
+  } else if (signed) {
+    setStatus('warn', 'Receipt marked signed; could not complete server verification. Check API connectivity.');
+  } else {
+    setStatus('warn', 'Receipt found but signed: false. Treat as unverified.');
+  }
+
+  const card = document.getElementById('result-card');
+  card.innerHTML = `
+    <div class="card-banner">
+      <div>
+        <div class="banner-title">${escHtml(rtype.replace(/_/g, ' '))}</div>
+        <div class="banner-sub">${escHtml(narrative.slice(0, 120))}${narrative.length > 120 ? '…' : ''}</div>
+      </div>
+      <div class="verified-badge ${signed ? 'ok' : 'bad'}">
+        ${signed ? '✓ Verified' : '✗ Unverified'}
+      </div>
+    </div>
+
+    <div class="field-grid">
+      <div class="field-row">
+        <div class="field-key">Receipt ID</div>
+        <div class="field-val">${escHtml(rid)}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Type</div>
+        <div class="field-val dim">${escHtml(rtype)}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Signed</div>
+        <div class="field-val ${signed ? 'ok' : 'bad'}">${signed ? 'true — Ed25519 signature present' : 'false — no signature'}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Crypto check</div>
+        <div class="field-val ${cryptoOk ? 'ok' : cryptoReasons.length ? 'bad' : 'warn'}">${cryptoOk ? 'OK — recomputed JCS + signature verified' : escHtml(cryptoReasons.join('; ') || 'not run')}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Timestamp</div>
+        <div class="field-val dim">${escHtml(ts)}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Schema version</div>
+        <div class="field-val dim">${escHtml(version)}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Sources searched</div>
+        <div class="field-val dim">${escHtml(String(sources))}</div>
+      </div>
+      <div class="field-row">
+        <div class="field-key">Articles found</div>
+        <div class="field-val dim">${escHtml(String(articles))}</div>
+      </div>
+      ${pubkey ? `
+      <div class="field-row">
+        <div class="field-key">Signing key</div>
+        <div class="field-val">${escHtml(pubkey.slice(0,24))}…</div>
+      </div>` : ''}
+    </div>
+
+    ${sig ? `
+    <div class="sig-block">
+      <div class="sig-label">Ed25519 Signature</div>
+      <div class="sig-value">${escHtml(sig)}</div>
+    </div>` : ''}
+
+    <div class="actions">
+      <a class="action-btn" href="${API_BASE}/r/${escHtml(rid)}" target="_blank">
+        ↗ Raw JSON
+      </a>
+      <button class="action-btn" onclick="copyId('${escHtml(rid)}')">
+        ⎘ Copy receipt ID
+      </button>
+      <a class="action-btn" href="/i/${escHtml(rid)}">
+        ← View investigation
+      </a>
+      ${sig ? `<button class="action-btn" onclick="copyJson(${JSON.stringify(JSON.stringify({receipt_id: rid, signature: sig, signed: signed}))})">⎘ Copy proof bundle</button>` : ''}
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function setStatus(type, msg) {
+  const area = document.getElementById('status-area');
+  const classes = {
+    loading: 'status-loading',
+    verified: 'status-verified',
+    failed: 'status-failed',
+    warn: 'status-warn',
+  };
+  area.innerHTML = `
+    <div class="status-pill ${classes[type] || 'status-loading'}">
+      <div class="dot"></div>
+      ${escHtml(msg)}
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function copyId(id) {
+  navigator.clipboard?.writeText(id);
+}
+
+function copyJson(json) {
+  navigator.clipboard?.writeText(json);
+}
+
+function copyPubkey() {
+  if (publicKey) navigator.clipboard?.writeText(publicKey);
+}
+
+// Enter key on input
+document.getElementById('receipt-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') verify();
+});
+
+// Pre-fill from URL ?id= param
+const params = new URLSearchParams(location.search);
+const preId  = params.get('id') || params.get('receipt');
+if (preId) {
+  document.getElementById('receipt-input').value = preId;
+  verify();
+}
+
+loadPublicKey();
+</script>
+
+</body>
+</html>
