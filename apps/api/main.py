@@ -517,6 +517,8 @@ class ContradictionAnalysisRequest(BaseModel):
     entity_name: str = Field(..., min_length=1)
 
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(
     title="PUBLIC EYE API",
     description="Evidence-linked investigations and signed public-record receipts.",
@@ -1308,7 +1310,7 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
     if not url.startswith("http"):
         raise HTTPException(status_code=400, detail="url is required and must start with http")
 
-    logging.getLogger(__name__).info("[ANALYZE] Start | url=%r", url)
+    logger.info("[ANALYZE] Start | url=%r", url)
 
     article = await asyncio.to_thread(fetch_article, url)
     if article.get("fetch_error"):
@@ -1485,9 +1487,7 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
             existing = list(receipt_payload.get("sources") or [])
             receipt_payload["sources"] = existing + extra_sources
     except Exception as _se_err:  # noqa: BLE001
-        import logging
-
-        logging.getLogger(__name__).warning("source_expansion failed: %s", _se_err)
+        logger.warning("source_expansion failed: %s", _se_err)
 
     _src_echo = list(receipt_payload.get("sources") or [])
     receipt_payload["echo_chamber"] = compute_echo_chamber_score(
@@ -1509,9 +1509,7 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
             if gp_result and isinstance(gp_result, dict):
                 signed_payload["global_perspectives"] = gp_result
     except Exception as _gp_err:  # noqa: BLE001
-        import logging
-
-        logging.getLogger(__name__).warning(
+        logger.warning(
             "global_perspectives failed in analyze_article: %s",
             _gp_err,
         )
@@ -1524,7 +1522,7 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
     grounded_fin = bool(
         isinstance(sp_fin, dict) and sp_fin.get("coverage_found") is True
     )
-    logging.getLogger(__name__).info(
+    logger.info(
         "[ANALYZE] Complete | url=%r | coverage=%s | adapter=%s | gdelt_stage=%s "
         "| grounded=%s | receipt_id=%s",
         url,
