@@ -118,7 +118,10 @@ from receipt_store import (
     list_recent_receipts,
     store_receipt,
 )
+from echo_chamber import compute_echo_chamber_score, merge_sources_for_echo
 from investigation_page import render_investigation_page
+from methodology_page import render_methodology_page
+from services.scrutiny_analyzer import analyze_asymmetric_scrutiny
 from report_api import (
     attach_article_analysis_signing,
     build_article_analysis_signing_body,
@@ -820,6 +823,15 @@ async def demo_redirect() -> FileResponse:
     )
 
 
+@app.get("/methodology", response_class=HTMLResponse)
+def methodology_html_page() -> HTMLResponse:
+    """Plain-language rubrics for volatility, echo chamber score, and podcast scrutiny."""
+    return HTMLResponse(
+        content=render_methodology_page(),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
 @app.get("/pitch")
 async def pitch_page() -> FileResponse:
     """Static pitch deck (React via CDN) — same cache policy as /demo."""
@@ -1437,6 +1449,11 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
 
         logging.getLogger(__name__).warning("source_expansion failed: %s", _se_err)
 
+    _src_echo = list(receipt_payload.get("sources") or [])
+    receipt_payload["echo_chamber"] = compute_echo_chamber_score(
+        merge_sources_for_echo(_src_echo, None),
+        None,
+    )
     signed_payload = attach_article_analysis_signing(receipt_payload)
     try:
         narrative_for_gp = (
@@ -3565,6 +3582,7 @@ async def get_podcast_dossier(receipt_id: str) -> dict[str, Any]:
         "claims": payload.get("claims", []),
         "layer_zero": layer_zero,
         "synthesis": payload.get("synthesis"),
+        "scrutiny": payload.get("scrutiny"),
         "sources": payload.get("sources", []),
         "unknowns": payload.get("unknowns", {}),
         "meta": payload.get("meta", {}),
@@ -4797,6 +4815,12 @@ async def podcast_investigate(
                     ep_title,
                     subj,
                 )
+            scrutiny_audio = await asyncio.to_thread(
+                analyze_asymmetric_scrutiny,
+                claims,
+                transcription,
+                audio_info.get("title", "") or "",
+            )
             payload = assemble_podcast_payload(
                 audio_info=audio_info,
                 transcription=transcription,
@@ -4810,6 +4834,7 @@ async def podcast_investigate(
                 if chunked_meta
                 else None,
                 synthesis=synthesis if synthesis.get("top_findings") else None,
+                scrutiny=scrutiny_audio,
             )
             update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch
@@ -5070,6 +5095,12 @@ async def podcast_investigate_upload(
                     ep_title,
                     subj_u,
                 )
+            scrutiny_upload = await asyncio.to_thread(
+                analyze_asymmetric_scrutiny,
+                claims,
+                transcription,
+                audio_info.get("title", "") or "",
+            )
             payload = assemble_podcast_payload(
                 audio_info=audio_info,
                 transcription=transcription,
@@ -5083,6 +5114,7 @@ async def podcast_investigate_upload(
                 if chunked_meta
                 else None,
                 synthesis=synthesis_up if synthesis_up.get("top_findings") else None,
+                scrutiny=scrutiny_upload,
             )
             update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch

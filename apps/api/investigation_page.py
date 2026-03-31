@@ -19,6 +19,8 @@ from collections import defaultdict
 from typing import Any
 from urllib.parse import urlparse
 
+from echo_chamber import compute_echo_chamber_score, merge_sources_for_echo
+
 
 _OUTLET_TYPE_ORDER = ("state", "public_broadcaster", "private")
 _OUTLET_TYPE_LABEL = {
@@ -414,9 +416,69 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         b_chain_html = _chain_items_html(b_chain, "b")
 
         vnum = _vol_display_num_color(vol)
+        base_sources = receipt.get("sources") or []
+        echo = compute_echo_chamber_score(
+            merge_sources_for_echo(base_sources if isinstance(base_sources, list) else [], coalition),
+            coalition,
+        )
+        echo_score = int(round(float(echo.get("score", 0))))
+        echo_label = str(echo.get("label", "") or "")
+        echo_interp = str(echo.get("interpretation", "") or "")
+        echo_components = echo.get("components") or {}
+        echo_color = {"low": "#22C55E", "moderate": "#F59E0B", "high": "#EF4444"}.get(
+            echo_label, "#9CA3AF"
+        )
+        if echo_label == "high":
+            echo_pill_bg = "#FFF5F5"
+        elif echo_label == "moderate":
+            echo_pill_bg = "#FFFBF0"
+        else:
+            echo_pill_bg = "#F0FFF4"
+        components_html = "".join(
+            f'<div style="display:flex;justify-content:space-between;'
+            f'padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05);'
+            f'font-size:12px">'
+            f'<span style="color:#6B7280">{_e(k.replace("_", " ").title())}</span>'
+            f'<span style="font-weight:600;color:#111827">{_e(v)}/20</span>'
+            f"</div>"
+            for k, v in echo_components.items()
+        )
+        echo_html = f"""
+    <div style="flex:1;min-width:260px;padding:20px 24px;
+                background:#FFFFFF;border:1px solid rgba(0,0,0,0.08);
+                border-radius:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="display:inline-flex;align-items:center;gap:8px;
+                    padding:8px 16px;border-radius:20px;
+                    background:{echo_pill_bg};
+                    border:1px solid {echo_color}22">
+          <span style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;
+                       color:{echo_color};font-weight:700">ECHO CHAMBER</span>
+          <span style="font-family:'Playfair Display',serif;font-size:28px;
+                       font-weight:900;color:#111827;line-height:1">{echo_score}</span>
+          <span style="font-size:12px;color:{echo_color}">/100</span>
+        </div>
+        <a href="/methodology#echo-chamber"
+           style="font-size:12px;color:#9CA3AF;border-bottom:1px solid rgba(0,0,0,0.15)">
+          How this is calculated →
+        </a>
+      </div>
+      <div style="font-size:13px;color:#6B7280;line-height:1.6;margin-bottom:16px">
+        {_e(echo_interp)}
+      </div>
+      <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:12px">
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;
+                    color:#9CA3AF;font-weight:600;margin-bottom:8px">
+          SCORE COMPONENTS
+        </div>
+        {components_html}
+      </div>
+    </div>"""
+
         coalition_fight_html = f"""
-<!-- VOLATILITY PILL -->
-<div style="margin-bottom:24px">
+<!-- VOLATILITY + ECHO CHAMBER -->
+<div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;margin-bottom:24px">
+  <div style="flex:1;min-width:280px">
   <div style="display:inline-flex;align-items:center;gap:12px;
               padding:10px 20px;border-radius:28px;
               background:{pill_bg};border:0.5px solid {pill_border}">
@@ -433,6 +495,9 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
             text-decoration:underline;text-underline-offset:3px">
       Why this number?
     </button>
+    <span style="color:#ccc;margin:0 4px">·</span>
+    <a href="/methodology#volatility" style="font-size:13px;color:#555;
+       text-decoration:underline;text-underline-offset:3px">Methodology</a>
   </div>
   <div id="why-number" style="display:none;margin-top:10px;padding:12px 16px;
        border-radius:8px;background:#FFFFFF;border:1px solid rgba(0,0,0,0.1);
@@ -443,6 +508,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     actual emphasis and omission tags in the source analysis. 0 = everyone agrees.
     100 = parallel realities with no shared premise.
   </div>
+  </div>
+  {echo_html}
 </div>
 
 <!-- IRRECONCILABLE GAP — always visible -->

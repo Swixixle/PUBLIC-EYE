@@ -851,6 +851,7 @@ def assemble_podcast_payload(
     content_source: str = "audio",
     article_source_record: dict[str, Any] | None = None,
     synthesis: dict | None = None,
+    scrutiny: dict[str, Any] | None = None,
 ) -> dict:
     """
     Assemble the full FrameReceiptPayload dict from all pipeline stages.
@@ -916,6 +917,8 @@ def assemble_podcast_payload(
             claim["citation_chain"] = c["citation_chain"]
         if c.get("origin_stamp"):
             claim["origin_stamp"] = c["origin_stamp"]
+        if c.get("speaker"):
+            claim["speaker"] = str(c.get("speaker") or "")[:80]
         built_claims.append(claim)
 
     # ── Sources ──────────────────────────────────────────────
@@ -1026,6 +1029,19 @@ def assemble_podcast_payload(
             "generated_by": synthesis.get("generated_by", ""),
             "generated_at": synthesis.get("generated_at", ""),
         }
+
+    if scrutiny:
+        if scrutiny.get("operational_unknown"):
+            operational.append({
+                "text": str(scrutiny["operational_unknown"]),
+                "resolution_possible": True,
+            })
+        else:
+            payload["scrutiny"] = {
+                "patterns": scrutiny.get("scrutiny_patterns", []),
+                "speakers_analyzed": scrutiny.get("speakers_analyzed", []),
+                "note": str(scrutiny.get("note") or ""),
+            }
 
     return payload
 
