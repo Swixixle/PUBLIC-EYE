@@ -852,6 +852,7 @@ def assemble_podcast_payload(
     article_source_record: dict[str, Any] | None = None,
     synthesis: dict | None = None,
     scrutiny: dict[str, Any] | None = None,
+    content_provenance: dict[str, Any] | None = None,
 ) -> dict:
     """
     Assemble the full FrameReceiptPayload dict from all pipeline stages.
@@ -931,6 +932,8 @@ def assemble_podcast_payload(
             "language": transcription.get("language", "unknown"),
             "duration_seconds": str(transcription.get("duration", "")),
         }
+        if transcription.get("resolver_source_url"):
+            audio_meta["resolver_source_url"] = transcription["resolver_source_url"]
         if provider == "assemblyai":
             audio_meta["speaker_labels"] = True
         else:
@@ -962,7 +965,17 @@ def assemble_podcast_payload(
             })
         else:
             provider = str(transcription.get("transcription_provider") or "whisper")
-            if provider == "assemblyai":
+            if provider == "youtube_timedtext":
+                trans_note = (
+                    "Transcript from YouTube captions (timedtext; no primary audio download). "
+                )
+            elif provider == "publisher_transcript":
+                trans_note = "Transcript taken from the publisher web page (URL resolver). "
+            elif provider == "podcast_index_mp3":
+                trans_note = (
+                    "Episode audio discovered via Podcast Index; transcribed locally. "
+                )
+            elif provider == "assemblyai":
                 trans_note = "Audio transcribed via AssemblyAI (speaker diarization)."
             else:
                 trans_note = (
@@ -970,7 +983,7 @@ def assemble_podcast_payload(
                     f"({os.environ.get('FRAME_WHISPER_MODEL', 'base')} model)."
                 )
             narrative.append({
-                "text": f"{trans_note} {len(built_claims)} factual claim(s) extracted.",
+                "text": f"{trans_note.rstrip()} {len(built_claims)} factual claim(s) extracted.",
                 "sourceId": "s001",
             })
 
@@ -1008,6 +1021,9 @@ def assemble_podcast_payload(
         payload["meta"]["chunk_strategy"] = chunk_strategy
     if canonical_entities_chunked:
         payload["meta"]["canonical_entities"] = canonical_entities_chunked
+
+    if content_provenance:
+        payload["content_provenance"] = dict(content_provenance)
 
     if layer_zero.get("text"):
         payload["layer_zero"] = {

@@ -121,7 +121,9 @@ from receipt_store import (
 from echo_chamber import compute_echo_chamber_score, merge_sources_for_echo
 from investigation_page import render_investigation_page
 from methodology_page import render_methodology_page
+from publisher_registry import content_provenance_for_article
 from services.scrutiny_analyzer import analyze_asymmetric_scrutiny
+from url_resolver import format_content_provenance, provenance_user_upload, resolve_url
 from report_api import (
     attach_article_analysis_signing,
     build_article_analysis_signing_body,
@@ -3583,6 +3585,7 @@ async def get_podcast_dossier(receipt_id: str) -> dict[str, Any]:
         "layer_zero": layer_zero,
         "synthesis": payload.get("synthesis"),
         "scrutiny": payload.get("scrutiny"),
+        "content_provenance": payload.get("content_provenance"),
         "sources": payload.get("sources", []),
         "unknowns": payload.get("unknowns", {}),
         "meta": payload.get("meta", {}),
@@ -4591,6 +4594,7 @@ async def _investigate_article(
         },
     }
 
+    _art_prov = content_provenance_for_article(url, result.title or "")
     payload = assemble_podcast_payload(
         audio_info=audio_info,
         transcription=transcription,
@@ -4603,6 +4607,7 @@ async def _investigate_article(
         canonical_entities_chunked=None,
         content_source="article",
         article_source_record=article_source_record,
+        content_provenance=_art_prov,
     )
     update_job(job, stage="dossier")
     all_entities_claims = list({
@@ -4682,69 +4687,46 @@ async def podcast_investigate(
                     tier_enum,
                 )
                 return
-            update_job(job, stage="downloading")
-            audio_info = await asyncio.to_thread(download_audio, request.source_url)
-            update_job(job, stage="transcribing")
-            orig_path = audio_info["path"]
-            duration_sec: float | None = audio_info.get("duration")
-            if duration_sec is None:
-                duration_sec = probe_audio_duration_seconds(orig_path)
-            if (
-                tier_config.max_duration_seconds is not None
-                and duration_sec is not None
-                and duration_sec > tier_config.max_duration_seconds
-            ):
-                mark_failed(
-                    job,
-                    (
-                        f"Audio duration exceeds {tier_enum.value} tier limit "
-                        f"({tier_config.max_duration_seconds}s). "
-                        "Upgrade to PRO for unlimited."
-                    ),
-                )
+            update_job(job, stage="resolving")
+            resolution = await resolve_url(src)
+            prov_acc: dict[str, Any] = dict(resolution.get("provenance") or {})
+
+            if resolution.get("error") and not resolution.get("requires_download"):
+                mark_failed(job, str(resolution["error"]))
                 return
-            audio_path, _was_trimmed = await asyncio.to_thread(
-                trim_audio_max, orig_path, PODCAST_MAX_SECONDS
-            )
-            trimmed_duration = probe_audio_duration_seconds(audio_path)
-            if trimmed_duration is None:
-                trimmed_duration = 0.0
-            strategy = get_chunk_strategy(int(trimmed_duration))
+
+            claims: list[dict[str, Any]] = []
+            audio_info: dict[str, Any]
+            transcription: dict[str, Any]
             chunked_meta: dict[str, Any] | None = None
             used_chunked = False
-            if strategy.method != "single":
-                try:
-                    chunked = await process_chunked_audio(
-                        audio_path=audio_path,
-                        duration_seconds=float(trimmed_duration),
-                        precontext=request.subject_context or "public figure",
-                        tier_config=tier_config,
-                    )
-                    if chunked is not None:
-                        transcription = {
-                            "full_text": chunked["transcript"],
-                            "segments": [],
-                            "duration": float(trimmed_duration),
-                            "language": "unknown",
-                        }
-                        claims = chunked["claims"]
-                        chunked_meta = {
-                            "chunks_processed": chunked["chunks_processed"],
-                            "chunk_strategy": chunked["strategy"],
-                            "canonical_entities": chunked.get("canonical_entities") or [],
-                        }
-                        used_chunked = True
-                        ft = transcription.get("full_text") or ""
-                        update_job(job, transcript=ft, stage="extracting")
-                        for c in claims:
-                            append_stream_claim(job, c)
-                except Exception as chunk_exc:  # noqa: BLE001
-                    print(f"[podcast-investigate] chunked pipeline failed, fallback: {chunk_exc}")
 
-            if not used_chunked:
-                transcription = await asyncio.to_thread(transcribe_audio, audio_path)
-                update_job(job, transcript=transcription.get("full_text", ""), stage="extracting")
-                claims = []
+            if resolution.get("transcript") and not resolution.get("requires_download"):
+                t = resolution["transcript"]
+                src_kind = str(t.get("source") or "url_resolver")
+                transcription = {
+                    "full_text": t.get("full_text", ""),
+                    "segments": t.get("segments") or [],
+                    "duration": float(t.get("duration") or 0),
+                    "language": t.get("language") or "en",
+                    "transcription_provider": src_kind,
+                    "resolver_source_url": t.get("source_url"),
+                }
+                audio_info = {
+                    "title": prov_acc.get("content_title")
+                    or prov_acc.get("publisher")
+                    or "media",
+                    "source_url": src,
+                    "downloaded_at": datetime.now(timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                    "path": "",
+                }
+                update_job(
+                    job,
+                    transcript=transcription.get("full_text", ""),
+                    stage="extracting",
+                )
                 if transcription.get("full_text") and os.environ.get("ANTHROPIC_API_KEY"):
                     try:
                         claims = await asyncio.to_thread(
@@ -4753,9 +4735,105 @@ async def podcast_investigate(
                             audio_info.get("title", "untitled"),
                         )
                     except Exception as claim_err:  # noqa: BLE001
-                        print(f"[podcast-investigate] Claim extraction failed: {claim_err}")
+                        print(
+                            f"[podcast-investigate] Claim extraction failed: {claim_err}",
+                        )
                 for c in claims:
                     append_stream_claim(job, c)
+            else:
+                dl_url = (resolution.get("download_url") or src).strip()
+                update_job(job, stage="downloading")
+                audio_info = await asyncio.to_thread(download_audio, dl_url)
+                update_job(job, stage="transcribing")
+                orig_path = audio_info["path"]
+                duration_sec: float | None = audio_info.get("duration")
+                if duration_sec is None:
+                    duration_sec = probe_audio_duration_seconds(orig_path)
+                if (
+                    tier_config.max_duration_seconds is not None
+                    and duration_sec is not None
+                    and duration_sec > tier_config.max_duration_seconds
+                ):
+                    mark_failed(
+                        job,
+                        (
+                            f"Audio duration exceeds {tier_enum.value} tier limit "
+                            f"({tier_config.max_duration_seconds}s). "
+                            "Upgrade to PRO for unlimited."
+                        ),
+                    )
+                    return
+                audio_path, _was_trimmed = await asyncio.to_thread(
+                    trim_audio_max, orig_path, PODCAST_MAX_SECONDS
+                )
+                trimmed_duration = probe_audio_duration_seconds(audio_path)
+                if trimmed_duration is None:
+                    trimmed_duration = 0.0
+                strategy = get_chunk_strategy(int(trimmed_duration))
+                chunked_meta = None
+                used_chunked = False
+                if strategy.method != "single":
+                    try:
+                        chunked = await process_chunked_audio(
+                            audio_path=audio_path,
+                            duration_seconds=float(trimmed_duration),
+                            precontext=request.subject_context or "public figure",
+                            tier_config=tier_config,
+                        )
+                        if chunked is not None:
+                            transcription = {
+                                "full_text": chunked["transcript"],
+                                "segments": [],
+                                "duration": float(trimmed_duration),
+                                "language": "unknown",
+                            }
+                            claims = chunked["claims"]
+                            chunked_meta = {
+                                "chunks_processed": chunked["chunks_processed"],
+                                "chunk_strategy": chunked["strategy"],
+                                "canonical_entities": chunked.get("canonical_entities")
+                                or [],
+                            }
+                            used_chunked = True
+                            ft = transcription.get("full_text") or ""
+                            update_job(job, transcript=ft, stage="extracting")
+                            for c in claims:
+                                append_stream_claim(job, c)
+                    except Exception as chunk_exc:  # noqa: BLE001
+                        print(
+                            f"[podcast-investigate] chunked pipeline failed, "
+                            f"fallback: {chunk_exc}",
+                        )
+
+                if not used_chunked:
+                    transcription = await asyncio.to_thread(transcribe_audio, audio_path)
+                    update_job(
+                        job,
+                        transcript=transcription.get("full_text", ""),
+                        stage="extracting",
+                    )
+                    claims = []
+                    if transcription.get("full_text") and os.environ.get(
+                        "ANTHROPIC_API_KEY",
+                    ):
+                        try:
+                            claims = await asyncio.to_thread(
+                                extract_speaker_claims,
+                                transcription,
+                                audio_info.get("title", "untitled"),
+                            )
+                        except Exception as claim_err:  # noqa: BLE001
+                            print(
+                                f"[podcast-investigate] Claim extraction failed: {claim_err}",
+                            )
+                    for c in claims:
+                        append_stream_claim(job, c)
+                rp = list(prov_acc.get("resolution_path") or [])
+                rp.append("audio_download_and_transcribe")
+                prov_acc["resolution_path"] = rp
+
+            content_provenance_payload = format_content_provenance(prov_acc)
+
             if tier_config.citation_tracing:
                 try:
                     await enrich_claims_with_citation_traces(claims)
@@ -4835,6 +4913,7 @@ async def podcast_investigate(
                 else None,
                 synthesis=synthesis if synthesis.get("top_findings") else None,
                 scrutiny=scrutiny_audio,
+                content_provenance=content_provenance_payload,
             )
             update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch
@@ -5101,6 +5180,7 @@ async def podcast_investigate_upload(
                 transcription,
                 audio_info.get("title", "") or "",
             )
+            _upload_cp = provenance_user_upload(filename)
             payload = assemble_podcast_payload(
                 audio_info=audio_info,
                 transcription=transcription,
@@ -5115,6 +5195,7 @@ async def podcast_investigate_upload(
                 else None,
                 synthesis=synthesis_up if synthesis_up.get("top_findings") else None,
                 scrutiny=scrutiny_upload,
+                content_provenance=_upload_cp,
             )
             update_job(job, stage="dossier")
             # Stage 2 — adapter dispatch
