@@ -704,182 +704,6 @@ def _sources_section_html(receipt: dict[str, Any]) -> str:
     )
 
 
-def _claims_section_html(claims: list[Any]) -> str:
-    if not claims:
-        return ""
-    claims = _deduplicate_claims(claims)
-    blocks: list[str] = []
-    for c in claims:
-        if not isinstance(c, dict):
-            continue
-        ctype = str(c.get("claim_type", "") or "").strip()
-        ctype_l = ctype.lower()
-        subject = str(c.get("subject", "") or "").strip()
-        ctext = str(c.get("claim", "") or "").strip()
-        cited = c.get("cited_source")
-        cited_s = str(cited).strip() if cited else ""
-        rumor_src_raw = str(c.get("rumor_source", "") or "").strip()
-        rumor_lang = str(c.get("rumor_language", "") or "").strip()
-        rumor_display_src = rumor_src_raw or cited_s
-        badge = _pills([ctype] if ctype else ["claim"], "blue")
-        cited_block = ""
-        if cited_s:
-            if ctype_l == "rumored":
-                dup = _claim_text_dedupe_key(cited_s) == _claim_text_dedupe_key(
-                    rumor_display_src or ""
-                )
-                if dup and not cited_s.startswith(("http://", "https://")):
-                    cited_block = ""
-                elif cited_s.startswith(("http://", "https://")):
-                    cited_block = (
-                        f'<div class="cited-source">Article cited: '
-                        f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
-                        f"<strong>{_e(cited_s)}</strong></a></div>"
-                    )
-                else:
-                    cited_block = (
-                        f'<div class="cited-source">Article cited: '
-                        f"<strong>{_e(cited_s)}</strong></div>"
-                    )
-            elif cited_s.startswith(("http://", "https://")):
-                cited_block = (
-                    f'<div class="cited-source">Article cited: '
-                    f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
-                    f"<strong>{_e(cited_s)}</strong></a></div>"
-                )
-            else:
-                cited_block = (
-                    f'<div class="cited-source">Article cited: <strong>{_e(cited_s)}</strong></div>'
-                )
-        elif ctype_l != "rumored":
-            cited_block = (
-                '<div style="font-size:15px;color:#6b7280;margin:8px 0 6px">'
-                "Cited source: none cited</div>"
-            )
-        vrows: list[str] = []
-        subj_link_html = _claim_subject_link_html(subject)
-        claim_link_html = _claim_body_link_html(ctext)
-        for v in _safe_list(c.get("verifications")):
-            if not isinstance(v, dict):
-                continue
-            adapter = str(v.get("adapter") or v.get("adapter_name") or "").strip()
-            status = str(v.get("status", "") or "").strip()
-            st_col = _status_color(status)
-            result = _verification_result_dict(v)
-            st_l = status.lower()
-            ad_k = _adapter_key(adapter)
-            is_surf = _adapter_is_surface(adapter)
-
-            if ad_k in _SKIP_VERIFICATION_ADAPTERS:
-                continue
-
-            if ad_k == "courtlistener" and st_l in ("found", "searched_none_found"):
-                raw_r = v.get("result") if isinstance(v.get("result"), dict) else {}
-                vrows.append(_courtlistener_verification_html(status, raw_r or {}))
-                continue
-
-            if _should_omit_verification_row(adapter, status, result, subject):
-                continue
-
-            brief_plain = ""
-            surface_block = ""
-            if is_surf and isinstance(result, dict) and st_l == "found":
-                surface_block = _format_surface_result(result, subject)
-            elif isinstance(result, dict):
-                brief_plain = _flat_adapter_brief(result)
-                tier = str(result.get("confidence_tier", "") or "").strip()
-                if tier:
-                    brief_plain = f"{brief_plain} ({tier})" if brief_plain else tier
-            if not isinstance(result, dict) or not result:
-                det = v.get("detail")
-                if det and not brief_plain and not surface_block:
-                    brief_plain = str(det).strip()
-            if st_l == "deferred" and not brief_plain and not surface_block:
-                brief_plain = "deferred (full lookup via dedicated endpoint)"
-
-            if not _brief_has_reader_value(brief_plain, surface_block, st_l, v):
-                continue
-
-            dash = ""
-            if brief_plain and not surface_block:
-                dash = f" — {_e(brief_plain)}"
-            surf_html = (
-                f'<div class="surface-verification-block">{surface_block}</div>'
-                if surface_block
-                else ""
-            )
-            vrows.append(
-                f'<div class="verification-row" style="font-size:15px;color:#333;padding:4px 0">'
-                f'<span style="font-weight:600">{_e(adapter)}</span>: '
-                f'<span style="color:{st_col};font-weight:600">{_e(status)}</span>'
-                f"{dash}</div>"
-                f"{surf_html}"
-            )
-        ver_html = "".join(vrows) or (
-            '<div class="verification-row verification-none">'
-            "No independent verification found for this claim."
-            "</div>"
-        )
-        if ctype_l == "rumored":
-            src_line = rumor_display_src or "Source not specified in extraction"
-            rum_lang_html = ""
-            if rumor_lang:
-                rum_lang_html = (
-                    f'<div class="rumor-language">Language from article: '
-                    f'<em>“{_e(rumor_lang)}”</em></div>'
-                )
-            blocks.append(
-                f'<div class="claim-card claim-card-rumored inv-paper-card" '
-                f'style="padding:18px 20px;margin-bottom:16px;border:1px solid rgba(255,193,7,0.45)">'
-                f'<div class="claim-header" style="display:flex;align-items:center;gap:10px;'
-                f'flex-wrap:wrap;margin-bottom:8px">'
-                f'<span class="claim-type-badge claim-type-rumored">RUMORED</span>'
-                f'<span class="claim-subject" style="font-size:16px;font-weight:600;color:#111827">'
-                f"{subj_link_html or _e(subject)}</span></div>"
-                f'<div class="claim-text" style="font-size:18px;color:#1a1a1a;line-height:1.55;'
-                f'margin:6px 0">“{claim_link_html or _e(ctext)}”</div>'
-                f'<div class="rumor-source-block"><span class="rumor-label">Source of rumor:</span> '
-                f"<strong>{_e(src_line)}</strong></div>"
-                f"{rum_lang_html}"
-                f"{cited_block}"
-                f'<div class="rumor-disclaimer">'
-                "This claim has not been independently verified. PUBLIC EYE documents that this "
-                "allegation exists and was reported — not that it is true. A dated, signed receipt "
-                "records what was published and when; it does not assert the underlying allegation."
-                "</div>"
-                f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
-                f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
-                f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
-                f"</div>"
-            )
-        else:
-            blocks.append(
-                f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:16px;'
-                f'border:1px solid rgba(26,26,26,0.1)">'
-                f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-                f"{badge}"
-                f'<span style="font-size:16px;font-weight:600;color:#111827">'
-                f"{subj_link_html or _e(subject)}</span>"
-                f"</div>"
-                f'<p style="font-size:18px;color:#1a1a1a;line-height:1.55;margin:6px 0">'
-                f"{claim_link_html or _e(ctext)}</p>"
-                f"{cited_block}"
-                f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
-                f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
-                f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
-                f"</div>"
-            )
-    if not blocks:
-        return ""
-    return (
-        f'<section id="claims-section" class="claims-section inv-reader-soft" '
-        f'style="margin-bottom:32px">'
-        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
-        f'color:#555;margin-bottom:14px">Claims traced</div>'
-        f'{"".join(blocks)}</section>'
-    )
-
-
 def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
     if not isinstance(gp, dict):
         return ""
@@ -974,27 +798,6 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
             'color:#b45309;margin-bottom:10px">Where coverage splits</div>'
             f'<ul style="margin:0;padding-left:20px">{li}</ul></div>'
         )
-    if absent:
-        boxes = "".join(
-            f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(x))}" '
-            f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
-            f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
-            f'padding:12px 16px;border-radius:8px;margin-bottom:10px;'
-            f'background:rgba(180,83,9,0.09);border:1px solid rgba(180,83,9,0.25)">'
-            f'<span class="absent-icon" style="color:#b45315;flex-shrink:0">◆</span>'
-            f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
-            f"{_e(x)}</span>"
-            f'<span class="absent-search-hint">Search →</span></div>'
-            f"</a>"
-            for x in absent
-            if x
-        )
-        parts.append(
-            '<div style="margin:24px 0 16px">'
-            '<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
-            'color:#b45309;margin-bottom:12px;font-weight:700">What nobody is covering</div>'
-            f"{boxes}</div>"
-        )
     if conf_note:
         parts.append(
             f'<p style="font-size:14px;color:#6b7280;line-height:1.55;margin-top:16px">'
@@ -1005,6 +808,258 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
         f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
         f'color:#555;margin-bottom:14px">Global perspectives</div>'
         f'{"".join(parts)}</div>'
+    )
+
+
+def _absent_from_all_section_html(gp: dict[str, Any]) -> str:
+    """Absent angles from global_perspectives only (single 'what nobody' block on page)."""
+    if not isinstance(gp, dict):
+        return ""
+    absent = _safe_list(gp.get("absent_from_all"))
+    if not absent:
+        return ""
+    boxes = "".join(
+        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(x))}" '
+        f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
+        f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
+        f'padding:12px 16px;border-radius:8px;margin-bottom:10px;'
+        f'background:rgba(180,83,9,0.09);border:1px solid rgba(180,83,9,0.25)">'
+        f'<span class="absent-icon" style="color:#b45315;flex-shrink:0">◆</span>'
+        f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
+        f"{_e(x)}</span>"
+        f'<span class="absent-search-hint">Search →</span></div>'
+        f"</a>"
+        for x in absent
+        if x
+    )
+    return (
+        f'<div class="inv-reader-soft" style="margin-bottom:32px">'
+        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+        f'color:#b45309;margin-bottom:12px;font-weight:700">What nobody is covering</div>'
+        f"{boxes}</div>"
+    )
+
+
+def _build_verification_rows(claim: dict[str, Any]) -> str:
+    """Build verification rows for one claim; filters actor_ledger noise and meaningless deferred."""
+    subject = str(claim.get("subject", "") or "").strip()
+    rows: list[str] = []
+    for v in _safe_list(claim.get("verifications")):
+        if not isinstance(v, dict):
+            continue
+        adapter = str(v.get("adapter") or v.get("adapter_name") or "").strip()
+        status = str(v.get("status", "") or "").strip()
+        st_l = status.lower()
+        ad_k = _adapter_key(adapter)
+        result = _verification_result_dict(v)
+
+        if ad_k in _SKIP_VERIFICATION_ADAPTERS:
+            continue
+        if ad_k in _DEFERRED_NOISE_ADAPTER_KEYS and st_l == "deferred":
+            continue
+
+        if ad_k == "courtlistener" and st_l in ("found", "searched_none_found"):
+            raw_r = v.get("result") if isinstance(v.get("result"), dict) else {}
+            rows.append(_courtlistener_verification_html(status, raw_r or {}))
+            continue
+
+        if _should_omit_verification_row(adapter, status, result, subject):
+            continue
+
+        is_surf = _adapter_is_surface(adapter)
+        brief_plain = ""
+        surface_block = ""
+        if is_surf and isinstance(result, dict) and st_l == "found":
+            surface_block = _format_surface_result(result, subject)
+        elif isinstance(result, dict):
+            brief_plain = _flat_adapter_brief(result)
+            tier = str(result.get("confidence_tier", "") or "").strip()
+            if tier:
+                brief_plain = f"{brief_plain} ({tier})" if brief_plain else tier
+        if not isinstance(result, dict) or not result:
+            det = v.get("detail")
+            if det and not brief_plain and not surface_block:
+                brief_plain = str(det).strip()
+        if st_l == "deferred" and not brief_plain and not surface_block:
+            brief_plain = "deferred (full lookup via dedicated endpoint)"
+
+        if not _brief_has_reader_value(brief_plain, surface_block, st_l, v):
+            continue
+
+        st_col = _status_color(status)
+        dash = ""
+        if brief_plain and not surface_block:
+            dash = f" — {_e(brief_plain)}"
+        surf_html = (
+            f'<div class="surface-verification-block">{surface_block}</div>'
+            if surface_block
+            else ""
+        )
+        rows.append(
+            f'<div class="verification-row" style="font-size:15px;color:#333;padding:4px 0">'
+            f'<span style="font-weight:600">{_e(adapter)}</span>: '
+            f'<span style="color:{st_col};font-weight:600">{_e(status)}</span>'
+            f"{dash}</div>"
+            f"{surf_html}"
+        )
+
+    if not rows:
+        return '<div class="verification-none">No independent verification found.</div>'
+    return '<div class="verification-list">' + "".join(rows) + "</div>"
+
+
+def _claims_section_html(receipt: dict[str, Any]) -> str:
+    claims_in = _safe_list(receipt.get("claims_verified"))
+    if not claims_in:
+        return ""
+    claims = _deduplicate_claims(claims_in)
+    if not claims:
+        return ""
+
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    order_key: dict[str, int] = {}
+    for i, claim in enumerate(claims):
+        if not isinstance(claim, dict):
+            continue
+        subj = str(claim.get("subject") or "").strip() or "General"
+        groups[subj].append(claim)
+        if subj not in order_key:
+            order_key[subj] = i
+
+    sorted_subjects = sorted(groups.keys(), key=lambda s: order_key.get(s, 9999))
+    cards: list[str] = []
+
+    for subject in sorted_subjects:
+        subject_claims = groups[subject]
+        encoded_subject = quote_plus(subject)
+        subject_link = (
+            f'<a href="{_GOOGLE_NEWS_SEARCH}{encoded_subject}" '
+            f'target="_blank" rel="noopener" class="claim-subject-link">{_e(subject)}</a>'
+        )
+
+        types_in_group = [
+            str(c.get("claim_type", "institutional") or "").lower() for c in subject_claims
+        ]
+        if "rumored" in types_in_group:
+            badge_type = "rumored"
+        elif "biographical" in types_in_group:
+            badge_type = "biographical"
+        elif "statistical" in types_in_group:
+            badge_type = "statistical"
+        else:
+            badge_type = types_in_group[0] if types_in_group else "institutional"
+
+        badge_label = badge_type.replace("_", " ").upper()
+        badge_html = (
+            f'<span class="claim-type-badge claim-type-{badge_type}">{badge_label}</span>'
+        )
+
+        claim_rows: list[str] = []
+        for c in subject_claims:
+            claim_text = str(c.get("claim", "") or "").strip()
+            cited = c.get("cited_source")
+            cited_s = str(cited).strip() if cited else ""
+            rumor_src_raw = str(c.get("rumor_source", "") or "").strip()
+            rumor_lang = str(c.get("rumor_language", "") or "").strip()
+            claim_type = str(c.get("claim_type", "") or "").strip()
+            ctype_l = claim_type.lower()
+
+            rumor_display_src = rumor_src_raw or cited_s
+            encoded_claim = quote_plus(claim_text[:150])
+            claim_link = (
+                f'<a href="{_GOOGLE_NEWS_SEARCH}{encoded_claim}" '
+                f'target="_blank" rel="noopener" class="claim-text-link">{_e(claim_text)}</a>'
+            )
+
+            cited_html = ""
+            if cited_s:
+                if ctype_l == "rumored":
+                    dup = _claim_text_dedupe_key(cited_s) == _claim_text_dedupe_key(
+                        rumor_display_src or ""
+                    )
+                    if dup and not cited_s.startswith(("http://", "https://")):
+                        cited_html = ""
+                    elif cited_s.startswith(("http://", "https://")):
+                        cited_html = (
+                            f'<div class="cited-source">Article cited: '
+                            f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
+                            f"<strong>{_e(cited_s)}</strong></a></div>"
+                        )
+                    else:
+                        cited_html = (
+                            f'<div class="cited-source">Article cited: '
+                            f"<strong>{_e(cited_s)}</strong></div>"
+                        )
+                elif cited_s.startswith(("http://", "https://")):
+                    cited_html = (
+                        f'<div class="cited-source">Article cited: '
+                        f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
+                        f"<strong>{_e(cited_s)}</strong></a></div>"
+                    )
+                else:
+                    cited_html = (
+                        f'<div class="cited-source">Article cited: <strong>{_e(cited_s)}</strong></div>'
+                    )
+            elif ctype_l != "rumored":
+                cited_html = (
+                    '<div style="font-size:15px;color:#6b7280;margin:8px 0 6px">'
+                    "Cited source: none cited</div>"
+                )
+
+            rumor_html = ""
+            if ctype_l == "rumored":
+                source_label = rumor_src_raw or cited_s or "unnamed source"
+                rumor_html = (
+                    f'<div class="rumor-source-block">'
+                    f'<span class="rumor-label">Source of rumor:</span> '
+                    f"<strong>{_e(source_label)}</strong>"
+                    f"</div>"
+                )
+                if rumor_lang:
+                    rumor_html += (
+                        f'<div class="rumor-language">Language from article: '
+                        f'<em>“{_e(rumor_lang)}”</em></div>'
+                    )
+                rumor_html += (
+                    f'<div class="rumor-disclaimer">'
+                    f"PUBLIC EYE documents this allegation exists — not that it is true."
+                    f"</div>"
+                )
+
+            verif_rows = _build_verification_rows(c)
+            row_cls = "claim-row claim-row-rumored" if ctype_l == "rumored" else "claim-row"
+            claim_rows.append(
+                f'<div class="{row_cls}">'
+                f'<div class="claim-row-text">{claim_link}</div>'
+                f"{cited_html}"
+                f"{rumor_html}"
+                f'<div class="claim-verification-wrap">{verif_rows}</div>'
+                f"</div>"
+            )
+
+        claim_rows_html = "\n".join(claim_rows)
+        n = len(subject_claims)
+        count_label = f"{n} claim" + ("s" if n != 1 else "")
+        card_class = "claim-card inv-paper-card"
+        if badge_type == "rumored":
+            card_class += " claim-card-rumored"
+
+        cards.append(
+            f'<div class="{card_class}">'
+            f'<div class="claim-header">'
+            f"{badge_html}"
+            f'<span class="claim-subject">{subject_link}</span>'
+            f'<span class="claim-count">{count_label}</span>'
+            f"</div>"
+            f'<div class="claim-rows">{claim_rows_html}</div>'
+            f"</div>"
+        )
+
+    return (
+        f'<section id="claims-section" class="claims-section inv-reader-soft" '
+        f'style="margin-bottom:32px">'
+        f'<h3 class="section-label">CLAIMS TRACED</h3>'
+        f'{"".join(cards)}</section>'
     )
 
 
@@ -1033,6 +1088,7 @@ def _named_entities_section_html(receipt: dict) -> str:
             f'<path class="open-outline" d="M4 13 Q13 3 22 3 Q31 3 40 13 Q31 23 22 23 Q13 23 4 13 Z"/>'
             f'<circle class="eye-pupil" cx="22" cy="13" r="5.5"/>'
             f'<circle class="eye-shine" cx="25" cy="10" r="1.5"/>'
+            f'<path class="eye-twinkle" d="M 31 4 l1.5 3 l3 1.5 l-3 1.5 l-1.5 3 l-1.5-3 l-3-1.5 l3-1.5 z"/>'
             f"</svg>"
             f'<span class="eye-label">{safe_name}</span>'
             f"</a>"
@@ -1320,7 +1376,6 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     a_url       = article.get("url",   "") if isinstance(article, dict) else ""
     a_pub       = article.get("publication", "") if isinstance(article, dict) else ""
     confirmed   = receipt.get("confirmed", [])
-    what_nobody = receipt.get("what_nobody_is_covering", [])
 
     contested_claim = irreconcilable_gap = coalition_note = ""
     divergence_score = 0
@@ -1361,20 +1416,6 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     b_mn      = pos_b.get("minimizes", []) if pos_b else []
     a_chain   = pos_a.get("chain",     []) if pos_a else []
     b_chain   = pos_b.get("chain",     []) if pos_b else []
-
-    nobody_html = "".join(
-        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(w))}" '
-        f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
-        f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
-        f'padding:10px 14px;border-radius:6px;margin-bottom:8px;'
-        f'background:rgba(230,81,0,0.07);border:1px solid rgba(230,81,0,0.18)">'
-        f'<span style="color:#E65100;flex-shrink:0">◈</span>'
-        f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
-        f"{_e(w)}</span>"
-        f'<span class="absent-search-hint">Search →</span></div>'
-        f"</a>"
-        for w in what_nobody[:6]
-    )
 
     confirmed_html = "".join(
         f'<div style="display:flex;gap:10px;padding:10px 0;'
@@ -1453,11 +1494,14 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
                     )
                 )
 
-    claims_section_html = _claims_section_html(claims_verified_list)
+    claims_section_html = _claims_section_html(receipt)
     perspectives_block_html = (
         _global_perspectives_section_html(gp_raw)
         if (rtype == "article_analysis" or gp_raw)
         else ""
+    )
+    absent_from_all_html = (
+        _absent_from_all_section_html(gp_raw) if (rtype == "article_analysis" or gp_raw) else ""
     )
     named_entities_html = _named_entities_section_html(receipt)
     coverage_block_html = (
@@ -1809,20 +1853,91 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     font-style: italic;
     font-size: 0.85em;
   }}
-  .claim-type-badge.claim-type-rumored {{
-    background: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffc107;
+  .claim-type-badge {{
     border-radius: 4px;
     padding: 2px 8px;
     font-size: 0.75em;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    background: #eee;
+    color: #444;
+    border: 1px solid #ddd;
+  }}
+  .claim-type-badge.claim-type-rumored {{
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+  }}
+  .claim-type-badge.claim-type-biographical {{
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #90caf9;
+  }}
+  .claim-type-badge.claim-type-statistical {{
+    background: #f3e5f5;
+    color: #6a1b9a;
+    border: 1px solid #ce93d8;
+  }}
+  .claim-card {{
+    border: 1px solid #e8e4dc;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
   }}
   .claim-card-rumored {{
-    border-left: 3px solid #ffc107 !important;
+    border-left: 3px solid #ffc107;
     background: #fffdf7;
+  }}
+  .claim-header {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: #f8f7f2;
+    border-bottom: 1px solid #e8e4dc;
+  }}
+  .claim-count {{
+    margin-left: auto;
+    font-size: 11px;
+    color: #999;
+    letter-spacing: 0.04em;
+  }}
+  .claim-subject {{
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+  }}
+  .claim-rows {{
+    padding: 0;
+  }}
+  .claim-row {{
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0ede6;
+  }}
+  .claim-row:last-child {{
+    border-bottom: none;
+  }}
+  .claim-row-rumored {{
+    background: #fffef7;
+  }}
+  .claim-row-text {{
+    font-size: 0.95em;
+    line-height: 1.5;
+    margin-bottom: 4px;
+  }}
+  .claim-verification-wrap {{
+    margin-top: 8px;
+  }}
+  .verification-list {{
+    margin-top: 6px;
+  }}
+  .claims-section .section-label {{
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 14px;
   }}
   .rumor-source-block {{
     margin: 10px 0;
@@ -1888,40 +2003,58 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   }}
 
   .closed-line {{
-    stroke: #1a1a1a;
-    stroke-width: 1.5;
+    stroke: #111111;
+    stroke-width: 3;
     stroke-linecap: round;
     fill: none;
     opacity: 1;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.2s ease;
   }}
 
   .eye-lash {{
-    stroke: #1a1a1a;
-    stroke-width: 1;
+    stroke: #111111;
+    stroke-width: 2;
     stroke-linecap: round;
     opacity: 1;
     transition: opacity 0.15s ease;
   }}
 
   .open-outline {{
-    fill: #f5f5f0;
-    stroke: #1a1a1a;
-    stroke-width: 1.5;
+    fill: #f0ede6;
+    stroke: #111111;
+    stroke-width: 3;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.25s ease 0.05s;
   }}
 
   .eye-pupil {{
-    fill: #1a1a1a;
+    fill: #111111;
     opacity: 0;
-    transition: opacity 0.2s ease 0.08s;
+    transition: opacity 0.2s ease 0.12s;
   }}
 
   .eye-shine {{
     fill: #ffffff;
     opacity: 0;
-    transition: opacity 0.2s ease 0.12s;
+    transition: opacity 0.15s ease 0.2s;
+  }}
+
+  .eye-twinkle {{
+    fill: #111111;
+    opacity: 0;
+    transform-origin: 31px 4px;
+    transition: opacity 0.15s ease 0.28s;
+  }}
+
+  .eye-pill:hover .eye-twinkle {{
+    opacity: 1;
+    animation: twinkle-pop 0.4s ease 0.28s forwards;
+  }}
+
+  @keyframes twinkle-pop {{
+    0%   {{ opacity: 0; transform: scale(0) rotate(0deg); }}
+    60%  {{ opacity: 1; transform: scale(1.3) rotate(15deg); }}
+    100% {{ opacity: 1; transform: scale(1) rotate(0deg); }}
   }}
 
   .eye-label {{
@@ -1930,9 +2063,9 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
-    font-size: 10px;
-    letter-spacing: 0.03em;
-    color: #888;
+    color: #222222;
+    font-size: 11px;
+    font-weight: 500;
     opacity: 0;
     transition: opacity 0.18s ease;
     pointer-events: none;
@@ -2108,21 +2241,20 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 <div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:28px"></div>
 
+<!-- SUMMARY -->
+{f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:18px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
+
 {echo_standalone_html}
 
 {coalition_section}
 
-<!-- SUMMARY (after the fight) -->
-{f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:18px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
+{perspectives_block_html}
+
+{absent_from_all_html}
 
 {claims_section_html}
 
-{perspectives_block_html}
-
 {named_entities_html}
-
-<!-- WHAT NO ONE IS REALLY TALKING ABOUT -->
-{f'<div class="inv-reader-soft" style="margin-bottom:32px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
 
 <!-- CROSS-CORROBORATED -->
 {f'<div class="reporter-only" style="margin-bottom:32px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">Cross-corroborated</div><div class="inv-paper-card" style="padding:4px 18px">{confirmed_html}</div></div>' if confirmed_html else ""}

@@ -104,7 +104,11 @@ from actor_layer_api import run_actor_layer
 from actor_layer_fast import run_actor_layer_fast
 from article_ingest import fetch_article
 from claim_extractor import extract_claims
-from claim_router import build_query_for_adapter, route_claim as route_article_claim
+from claim_router import (
+    build_query_for_adapter,
+    route_claim as route_article_claim,
+    subject_looks_like_person,
+)
 from deep_receipt_api import build_deep_receipt
 from lens_api import process_audio, process_document_image, process_media_url, process_place_image
 from receipt_store import (
@@ -1305,6 +1309,23 @@ async def report_post(body: ReportPostBody) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+def _merge_cl_opinion_rows(
+    a: list[Any] | None, b: list[Any] | None
+) -> list[dict[str, Any]]:
+    """Dedupe CourtListener opinion rows by url/case name (criminal + civil pass)."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in (a or []) + (b or []):
+        if not isinstance(row, dict):
+            continue
+        key = str(row.get("url") or row.get("case_name") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
 @app.post("/v1/analyze-article")
 async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
     """
@@ -1376,9 +1397,11 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
                         }
                     )
                 elif adapter_name == "courtlistener":
-                    if str(claim.get("claim_type") or "").lower() == "rumored":
-                        from adapters import courtlistener as _cl_search
+                    from adapters import courtlistener as _cl_search
 
+                    ct = str(claim.get("claim_type") or "").lower()
+                    subj = str(claim.get("subject") or "").strip()
+                    if ct == "rumored":
                         q = build_query_for_adapter(claim, "courtlistener")
                         cl_rows = await _cl_search.search_opinions(q, limit=5)
                         if cl_rows:
@@ -1401,6 +1424,42 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
                                         or first_hit.get("url")
                                         or "",
                                         "matches_count": len(cl_rows),
+                                    },
+                                }
+                            )
+                        else:
+                            verifications.append(
+                                {
+                                    "adapter": "courtlistener",
+                                    "status": "searched_none_found",
+                                    "result": {},
+                                }
+                            )
+                    elif subject_looks_like_person(claim) and subj:
+                        crim = await _cl_search.search_opinions(f"{subj} criminal", limit=3)
+                        civ = await _cl_search.search_opinions(subj, limit=3)
+                        merged = _merge_cl_opinion_rows(crim, civ)
+                        if merged:
+                            first_hit = merged[0]
+                            verifications.append(
+                                {
+                                    "adapter": "courtlistener",
+                                    "status": "found",
+                                    "result": {
+                                        "case_name": first_hit.get("case_name", ""),
+                                        "court": first_hit.get("court", ""),
+                                        "date_filed": first_hit.get("date_filed", ""),
+                                        "url": first_hit.get("url", ""),
+                                        "snippet": str(
+                                            first_hit.get("summary")
+                                            or first_hit.get("snippet")
+                                            or ""
+                                        )[:300],
+                                        "source_url": first_hit.get("source_url")
+                                        or first_hit.get("url")
+                                        or "",
+                                        "matches_count": len(merged),
+                                        "source": "background_check",
                                     },
                                 }
                             )

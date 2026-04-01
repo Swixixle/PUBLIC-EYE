@@ -378,6 +378,19 @@ body.fp-body {{
   border-color: var(--ink);
 }}
 
+.eye-hint {{
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #aaaaaa;
+  margin: 0 0 0.75rem;
+  text-align: center;
+  transition: opacity 0.3s ease;
+}}
+.eye-group:hover .eye-hint {{
+  opacity: 0;
+}}
+
 .eye-group {{
   display: flex;
   flex-direction: column;
@@ -403,37 +416,37 @@ body.fp-body {{
 
 .eye-closed-arc {{
   fill: none;
-  stroke: #1a1a1a;
-  stroke-width: 2.5;
+  stroke: #111111;
+  stroke-width: 3;
   stroke-linecap: round;
   transition: opacity 0.3s ease;
 }}
 
 .eye-lash-main {{
-  stroke: #1a1a1a;
+  stroke: #111111;
   stroke-width: 2;
   stroke-linecap: round;
   transition: opacity 0.2s ease;
 }}
 
 .eye-open-shape {{
-  fill: #f8f7f2;
-  stroke: #1a1a1a;
-  stroke-width: 2.5;
+  fill: #f0ede6;
+  stroke: #111111;
+  stroke-width: 3;
   opacity: 0;
   transition: opacity 0.3s ease 0.05s;
 }}
 
 .eye-iris {{
   fill: none;
-  stroke: #1a1a1a;
+  stroke: #111111;
   stroke-width: 1.5;
   opacity: 0;
   transition: opacity 0.25s ease 0.15s;
 }}
 
 .eye-pupil-main {{
-  fill: #1a1a1a;
+  fill: #111111;
   opacity: 0;
   transition: opacity 0.25s ease 0.18s;
 }}
@@ -442,6 +455,24 @@ body.fp-body {{
   fill: #ffffff;
   opacity: 0;
   transition: opacity 0.2s ease 0.25s;
+}}
+
+.eye-twinkle-main {{
+  fill: #111111;
+  opacity: 0;
+  transform-origin: 310px 45px;
+  transition: opacity 0.15s ease 0.3s;
+}}
+
+.eye-group:hover .eye-twinkle-main {{
+  opacity: 1;
+  animation: fp-twinkle-pop 0.5s ease 0.3s forwards;
+}}
+
+@keyframes fp-twinkle-pop {{
+  0%   {{ opacity: 0; transform: scale(0) rotate(0deg); }}
+  60%  {{ opacity: 1; transform: scale(1.3) rotate(15deg); }}
+  100% {{ opacity: 1; transform: scale(1) rotate(0deg); }}
 }}
 
 .eye-group:hover .eye-closed-arc,
@@ -522,21 +553,22 @@ body.fp-body {{
   font-size: clamp(2.5rem, 8vw, 4.5rem);
   font-weight: 900;
   letter-spacing: -0.02em;
-  color: #1a1a1a;
+  color: #000000 !important;
   line-height: 1;
   margin: 0;
+  -webkit-font-smoothing: antialiased;
 }}
 
 .fp-title-rule {{
   width: 60px;
   height: 1.5px;
-  background: #1a1a1a;
+  background: #000000;
   margin: 1rem auto;
 }}
 
 .fp-title-sub {{
   font-size: 11px;
-  color: #999;
+  color: #333333;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin: 0;
@@ -553,7 +585,7 @@ body.fp-body {{
   .fp-search-input::placeholder {{ color: #666; }}
   .fp-search-btn {{ background: #e0e0e0; color: #1a1a1a; }}
   .fp-search-btn:hover {{ background: #ccc; }}
-  .fp-title {{ color: #e0e0e0; }}
+  .fp-title {{ color: #e0e0e0 !important; }}
   .fp-title-rule {{ background: #e0e0e0; }}
   .masthead-top {{ color: #666; }}
   .fp-title-sub {{ color: #888; }}
@@ -731,6 +763,7 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
   </div>
 
   <div class="eye-group">
+    <p class="eye-hint">hover to investigate</p>
     <div class="eye-container" id="main-eye">
       <svg class="eye-svg-main" viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path class="eye-closed-arc" d="M10 90 Q95 20 190 20 Q285 20 370 90"/>
@@ -743,6 +776,7 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
         <circle class="eye-iris" cx="190" cy="90" r="52"/>
         <circle class="eye-pupil-main" cx="190" cy="90" r="34"/>
         <circle class="eye-shine-main" cx="208" cy="72" r="9"/>
+        <path class="eye-twinkle-main" d="M 310 45 l3 7 l7 3 l-7 3 l-3 7 l-3-7 l-7-3 l7-3 z"/>
       </svg>
     </div>
 

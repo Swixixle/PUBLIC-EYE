@@ -4,6 +4,47 @@ from __future__ import annotations
 
 from typing import Any
 
+_ORG_SUBSTRINGS = (
+    "department",
+    "agency",
+    "corporation",
+    "corp",
+    " inc",
+    "llc",
+    "ltd",
+    "administration",
+    "committee",
+    "bureau",
+    "office",
+    "ministry",
+    "pentagon",
+    "congress",
+    "senate",
+    "house",
+    "court",
+    "government",
+)
+
+
+def subject_looks_like_person(claim: dict[str, Any]) -> bool:
+    """
+    Heuristic: person names are usually short; orgs often contain institutional tokens.
+    Used to route CourtListener for background court checks on people.
+    """
+    claim_type = str(claim.get("claim_type") or "").lower()
+    if claim_type in ("biographical", "rumored"):
+        return True
+    subject = str(claim.get("subject") or "").strip()
+    if not subject:
+        return False
+    words = subject.split()
+    if len(words) > 3:
+        return False
+    sl = subject.lower()
+    if any(tok in sl for tok in _ORG_SUBSTRINGS):
+        return False
+    return True
+
 
 def route_claim(claim: dict[str, Any]) -> list[str]:
     """
@@ -83,6 +124,9 @@ def route_claim(claim: dict[str, Any]) -> list[str]:
 
     if not adapters:
         adapters.append("surface")
+
+    if subject_looks_like_person(claim) and "courtlistener" not in adapters:
+        adapters.append("courtlistener")
 
     return list(dict.fromkeys(adapters))
 
