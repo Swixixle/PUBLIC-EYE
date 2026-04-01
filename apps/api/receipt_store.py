@@ -676,3 +676,172 @@ def list_recent_receipts(limit: int = 20) -> list[dict[str, Any]]:
         return rows
     finally:
         conn.close()
+
+
+def ensure_drift_tables() -> None:
+    """Phase 3: drift_snapshots + drift_schedule (Postgres)."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS drift_snapshots (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    original_receipt_id TEXT NOT NULL,
+                    snapshot_receipt_id TEXT,
+                    article_url TEXT NOT NULL,
+                    snapshot_taken_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    hours_since_original INTEGER NOT NULL,
+                    drift_score DOUBLE PRECISION,
+                    drift_summary TEXT,
+                    framing_before JSONB,
+                    framing_after JSONB,
+                    new_outlets_added TEXT[],
+                    outlets_dropped TEXT[],
+                    consensus_formed TEXT[],
+                    newly_contested TEXT[],
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_drift_original ON drift_snapshots(original_receipt_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_drift_url ON drift_snapshots(article_url)"
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS drift_schedule (
+                    receipt_id TEXT PRIMARY KEY,
+                    article_url TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    next_check_at TIMESTAMPTZ,
+                    checkpoints_done INTEGER[] DEFAULT '{}'
+                )
+                """
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def schedule_drift_analysis(receipt_id: str, article_url: str) -> None:
+    rid = (receipt_id or "").strip()
+    url = (article_url or "").strip()
+    if not rid or not url:
+        return
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO drift_schedule (receipt_id, article_url, next_check_at)
+                VALUES (%s, %s, NOW() + INTERVAL '24 hours')
+                ON CONFLICT (receipt_id) DO UPDATE SET
+                    article_url = EXCLUDED.article_url,
+                    next_check_at = COALESCE(drift_schedule.next_check_at, EXCLUDED.next_check_at)
+                """,
+                (rid, url),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def insert_drift_snapshot(
+    original_receipt_id: str,
+    snapshot_receipt_id: str | None,
+    article_url: str,
+    hours_since_original: int,
+    drift: dict[str, Any],
+) -> str:
+    """Persist one drift snapshot row."""
+    conn = _get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO drift_snapshots (
+                    original_receipt_id, snapshot_receipt_id, article_url,
+                    hours_since_original, drift_score, drift_summary,
+                    framing_before, framing_after,
+                    new_outlets_added, outlets_dropped,
+                    consensus_formed, newly_contested
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) RETURNING id::text
+                """,
+                (
+                    original_receipt_id,
+                    snapshot_receipt_id,
+                    article_url,
+                    hours_since_original,
+                    drift.get("drift_score"),
+                    drift.get("drift_summary"),
+                    psycopg2.extras.Json(drift.get("framing_before") or {}),
+                    psycopg2.extras.Json(drift.get("framing_after") or {}),
+                    drift.get("outlets_added") or [],
+                    drift.get("outlets_dropped") or [],
+                    drift.get("consensus_formed") or [],
+                    drift.get("newly_contested") or [],
+                ),
+            )
+            row = cur.fetchone()
+            sid = str(row[0]) if row else ""
+        conn.commit()
+        return sid
+    finally:
+        conn.close()
+
+
+def list_drift_snapshots(original_receipt_id: str) -> list[dict[str, Any]]:
+    rid = (original_receipt_id or "").strip()
+    if not rid:
+        return []
+    conn = _get_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    hours_since_original,
+                    drift_score,
+                    drift_summary,
+                    new_outlets_added,
+                    outlets_dropped,
+                    consensus_formed,
+                    newly_contested,
+                    snapshot_taken_at,
+                    framing_before,
+                    framing_after
+                FROM drift_snapshots
+                WHERE original_receipt_id = %s
+                ORDER BY snapshot_taken_at ASC
+                """,
+                (rid,),
+            )
+            rows = cur.fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            d = dict(r)
+            ts = d.get("snapshot_taken_at")
+            if hasattr(ts, "isoformat"):
+                d["snapshot_taken_at"] = ts.isoformat()
+            out.append(
+                {
+                    "hours_since_original": d.get("hours_since_original"),
+                    "drift_score": float(d["drift_score"]) if d.get("drift_score") is not None else 0.0,
+                    "drift_summary": d.get("drift_summary") or "",
+                    "new_outlets_added": list(d.get("new_outlets_added") or []),
+                    "outlets_dropped": list(d.get("outlets_dropped") or []),
+                    "consensus_formed": list(d.get("consensus_formed") or []),
+                    "newly_contested": list(d.get("newly_contested") or []),
+                    "snapshot_taken_at": d.get("snapshot_taken_at"),
+                    "framing_before": d.get("framing_before"),
+                    "framing_after": d.get("framing_after"),
+                }
+            )
+        return out
+    finally:
+        conn.close()

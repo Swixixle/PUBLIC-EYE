@@ -207,7 +207,10 @@ def _fmt_generated_at(ts: Any) -> str:
         return s
 
 
-def _echo_chamber_standalone_html(echo: dict[str, Any]) -> str:
+def _echo_chamber_standalone_html(
+    echo: dict[str, Any],
+    gp_raw: dict[str, Any] | None = None,
+) -> str:
     """Echo block for article_analysis when no coalition map (score /20 components)."""
     if not isinstance(echo, dict):
         return ""
@@ -232,6 +235,16 @@ def _echo_chamber_standalone_html(echo: dict[str, Any]) -> str:
         f'<span style="font-weight:600;color:#111827">{_e(v)}/20</span></div>'
         for k, v in components.items()
     )
+    conf = {}
+    if isinstance(gp_raw, dict):
+        conf = gp_raw.get("confidence_breakdown") if isinstance(gp_raw.get("confidence_breakdown"), dict) else {}
+    evidence_type = str(conf.get("primary_evidence_type") or "").strip()
+    echo_conf_note = ""
+    if evidence_type:
+        echo_conf_note = (
+            f'<div class="echo-conf-note">Analysis grounded in: '
+            f'{_e(evidence_type.replace("_", " "))}</div>'
+        )
     return f"""
 <div class="inv-paper-card inv-reader-soft" style="margin-bottom:28px;padding:20px 22px;
             border:1px solid rgba(26,26,26,0.12)">
@@ -250,6 +263,7 @@ def _echo_chamber_standalone_html(echo: dict[str, Any]) -> str:
     <a href="/methodology#echo-chamber" style="font-size:13px;color:#9CA3AF">How this is calculated →</a>
   </div>
   <p style="font-size:17px;color:#444;line-height:1.65;margin-bottom:16px">{_e(interp)}</p>
+  {echo_conf_note}
   <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:12px">
     <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;
                 color:#9CA3AF;font-weight:600;margin-bottom:8px">Components</div>
@@ -704,6 +718,168 @@ def _sources_section_html(receipt: dict[str, Any]) -> str:
     )
 
 
+def _absence_item_html(item: Any) -> str:
+    """Single absent angle: legacy string or rich object (Phase 2)."""
+    if isinstance(item, str) and item.strip():
+        encoded = quote_plus(item.strip())
+        return (
+            f'<a href="{_GOOGLE_NEWS_SEARCH}{encoded}" '
+            f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
+            f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
+            f'padding:12px 16px;border-radius:8px;margin-bottom:10px;'
+            f'background:rgba(180,83,9,0.09);border:1px solid rgba(180,83,9,0.25)">'
+            f'<span class="absent-icon" style="color:#b45315;flex-shrink:0">◆</span>'
+            f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
+            f"{_e(item.strip())}</span>"
+            f'<span class="absent-search-hint">Search →</span></div>'
+            f"</a>"
+        )
+    if not isinstance(item, dict):
+        return ""
+    topic = str(item.get("topic") or "").strip()
+    if not topic:
+        return ""
+    reason = str(item.get("absence_reason") or "unknown").strip()
+    why = str(item.get("why_it_matters") or "").strip()
+    suggested_query = str(item.get("suggested_query") or topic).strip()
+    suggested_sources = item.get("suggested_sources")
+    if not isinstance(suggested_sources, list):
+        suggested_sources = []
+    encoded = quote_plus(suggested_query)
+    reason_labels: dict[str, tuple[str, str, str]] = {
+        "too_new": ("TOO NEW", "#1565c0", "#e3f2fd"),
+        "too_niche": ("NICHE TOPIC", "#4527a0", "#ede7f6"),
+        "avoided": ("POSSIBLY AVOIDED", "#b71c1c", "#ffebee"),
+        "poorly_indexed": ("HARD TO FIND", "#e65100", "#fff3e0"),
+        "unknown": ("UNKNOWN", "#555", "#f5f5f5"),
+    }
+    label_text, label_color, label_bg = reason_labels.get(
+        reason, ("UNKNOWN", "#555", "#f5f5f5")
+    )
+    source_urls: dict[str, str] = {
+        "OpenSecrets": "https://www.opensecrets.org/search?q=",
+        "FEC": "https://www.fec.gov/data/search/?search=",
+        "CourtListener": "https://www.courtlistener.com/?q=",
+        "Congressional Record": "https://www.congress.gov/search?q=",
+        "ProPublica Nonprofit Explorer": "https://projects.propublica.org/nonprofits/",
+        "PACER": "https://pacer.uscourts.gov/",
+    }
+    src_parts: list[str] = []
+    q_enc = quote_plus(topic[:120])
+    for src in suggested_sources:
+        if not src:
+            continue
+        s = str(src).strip()
+        base = source_urls.get(s)
+        if base and "propublica.org/nonprofits" in base:
+            src_parts.append(
+                f'<a href="{base}" target="_blank" rel="noopener" '
+                f'class="suggested-source-link">{_e(s)}</a>'
+            )
+        elif base:
+            href = base + q_enc
+            src_parts.append(
+                f'<a href="{href}" target="_blank" rel="noopener" '
+                f'class="suggested-source-link">{_e(s)}</a>'
+            )
+        else:
+            src_parts.append(f'<span class="suggested-source">{_e(s)}</span>')
+    sources_html = ""
+    if src_parts:
+        sources_html = (
+            f'<div class="absence-sources"><span class="sources-label">Check:</span> '
+            + " · ".join(src_parts)
+            + "</div>"
+        )
+    why_html = f'<div class="absent-why">{_e(why)}</div>' if why else ""
+    return f"""
+<div class="absent-item-card">
+  <div class="absent-item-header">
+    <span class="absent-reason-badge" style="background:{label_bg};color:{label_color};">{_e(label_text)}</span>
+    <a href="{_GOOGLE_NEWS_SEARCH}{encoded}" target="_blank" rel="noopener" class="absent-topic-link">
+      <span class="absent-icon">◆</span> {_e(topic)}
+      <span class="absent-search-hint">Search →</span>
+    </a>
+  </div>
+  {why_html}
+  {sources_html}
+</div>
+"""
+
+
+def _san_html_id(rid: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", (rid or "")[:48]) or "receipt"
+
+
+def _drift_tracker_html(receipt_id: str) -> str:
+    rid = (receipt_id or "").strip()
+    if not rid:
+        return ""
+    sid = _san_html_id(rid)
+    return (
+        f'<section class="drift-section inv-reader-soft" aria-label="Narrative drift">'
+        f'<div class="drift-header">'
+        f'<h3 class="section-label" style="margin:0">NARRATIVE DRIFT</h3>'
+        f'<button type="button" class="track-btn" id="drift-track-btn" data-id="{_e(rid)}">'
+        f"+ TRACK THIS STORY</button>"
+        f"</div>"
+        f'<div class="drift-timeline" id="drift-timeline-{sid}">'
+        f'<div id="drift-loaded-{sid}"></div>'
+        f'<p class="drift-empty" style="color:#888;font-size:0.9em;margin-top:8px">'
+        f"Register tracking, then run a snapshot via API "
+        f'<code style="font-size:0.85em">POST /v1/drift/run/{_e(rid)}</code> '
+        f"to compare framing to the original analysis."
+        f"</p></div></section>"
+    )
+
+
+def _actors_map_html(receipt_id: str) -> str:
+    rid = (receipt_id or "").strip()
+    if not rid:
+        return ""
+    sid = _san_html_id(rid)
+    return (
+        f'<section class="actors-section inv-reader-soft" aria-label="Actor map">'
+        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+        f'color:#555;margin-bottom:10px">Actor relationships</div>'
+        f'<div id="actors-mount-{sid}" class="actors-mount" data-id="{_e(rid)}">'
+        f'<span style="color:#888;font-size:0.9em">Loading…</span></div></section>'
+    )
+
+
+def _investigative_leads_section_html(gp: dict[str, Any]) -> str:
+    leads = _safe_list(gp.get("investigative_leads"))
+    if not leads:
+        return ""
+    rows: list[str] = []
+    for lead in leads[:8]:
+        if not isinstance(lead, dict):
+            continue
+        action = str(lead.get("action") or "").strip()
+        target = str(lead.get("target") or "").strip()
+        reason = str(lead.get("reason") or "").strip()
+        hint = str(lead.get("url_hint") or "").strip()
+        link = ""
+        if hint.startswith("http"):
+            link = (
+                f'<a href="{_e(hint)}" target="_blank" rel="noopener" class="inv-lead-link">Open →</a>'
+            )
+        rows.append(
+            f'<div class="inv-lead-card">'
+            f'<div class="inv-lead-action">{_e(action)} <strong>{_e(target)}</strong></div>'
+            f'<div class="inv-lead-reason">{_e(reason)}</div>'
+            f"{link}</div>"
+        )
+    if not rows:
+        return ""
+    return (
+        f'<div class="inv-reader-soft" style="margin-bottom:32px">'
+        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+        f'color:#1a1a1a;margin-bottom:12px;font-weight:700">Investigative leads</div>'
+        f'{"".join(rows)}</div>'
+    )
+
+
 def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
     if not isinstance(gp, dict):
         return ""
@@ -713,10 +889,20 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
     consensus = _safe_list(gp.get("consensus_elements"))
     claim_one = str(gp.get("claim", "") or "").strip()
     conf_note = str(gp.get("confidence_note", "") or "").strip()
+    reasoning_s = str(gp.get("reasoning_summary", "") or "").strip()
+    conf = gp.get("confidence_breakdown") if isinstance(gp.get("confidence_breakdown"), dict) else {}
 
     # `absent_from_all` is rendered only in _absent_from_all_section_html; do not count it here
     # or we emit an empty "Global perspectives" shell when absent is the sole GP signal.
-    has_main = bool(ecosystems) or bool(div_pts) or bool(consensus) or bool(claim_one) or bool(conf_note)
+    has_main = (
+        bool(ecosystems)
+        or bool(div_pts)
+        or bool(consensus)
+        or bool(claim_one)
+        or bool(conf_note)
+        or bool(reasoning_s)
+        or bool(conf)
+    )
     if not has_main and not absent:
         return (
             '<div class="inv-reader-soft" style="margin-bottom:32px">'
@@ -729,12 +915,61 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
     if not has_main and absent:
         return ""
 
+    reasoning_block = ""
+    if reasoning_s:
+        reasoning_block = (
+            f'<div class="reasoning-summary">'
+            f'<span class="reasoning-label">Why the divergence score is what it is:</span> '
+            f"{_e(reasoning_s)}"
+            f"</div>"
+        )
+
+    conf_block = ""
+    if conf:
+        try:
+            pct_cited = int(conf.get("pct_directly_cited") or 0)
+            pct_inf = int(conf.get("pct_inferred") or 0)
+            pct_cons = int(conf.get("pct_consensus") or 0)
+            pct_cont = int(conf.get("pct_contested") or 0)
+        except (TypeError, ValueError):
+            pct_cited = pct_inf = pct_cons = pct_cont = 0
+        evidence_type = str(conf.get("primary_evidence_type") or "").strip()
+        ev_html = (
+            f'<div class="conf-evidence-type">Primary evidence: {_e(evidence_type.replace("_", " "))}</div>'
+            if evidence_type
+            else ""
+        )
+        conf_block = (
+            f'<div class="confidence-decomp">'
+            f'<div class="conf-row">'
+            f'<span class="conf-label">Evidence basis</span>'
+            f'<div class="conf-bar-wrap">'
+            f'<div class="conf-bar-cited" style="width:{max(0, min(100, pct_cited))}%"></div>'
+            f'<div class="conf-bar-inferred" style="width:{max(0, min(100, pct_inf))}%"></div>'
+            f"</div>"
+            f'<span class="conf-detail">{pct_cited}% retrieved · {pct_inf}% inferred</span>'
+            f"</div>"
+            f'<div class="conf-row">'
+            f'<span class="conf-label">Coverage split</span>'
+            f'<div class="conf-bar-wrap">'
+            f'<div class="conf-bar-consensus" style="width:{max(0, min(100, pct_cons))}%"></div>'
+            f'<div class="conf-bar-contested" style="width:{max(0, min(100, pct_cont))}%"></div>'
+            f"</div>"
+            f'<span class="conf-detail">{pct_cons}% consensus · {pct_cont}% contested</span>'
+            f"</div>"
+            f"{ev_html}</div>"
+        )
+
     parts: list[str] = []
     if claim_one:
         parts.append(
             f'<p style="font-size:16px;color:#444;line-height:1.6;margin-bottom:18px;font-style:italic">'
             f'{_e(claim_one)}</p>'
         )
+    if reasoning_block:
+        parts.append(reasoning_block)
+    if conf_block:
+        parts.append(conf_block)
     for eco in ecosystems:
         if not isinstance(eco, dict):
             continue
@@ -745,6 +980,7 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
         emph = str(eco.get("emphasized", "") or "")
         mn = str(eco.get("minimized", "") or "")
         klang = _safe_list(eco.get("key_language"))
+        triggers = _safe_list(eco.get("trigger_phrases"))
         tier_b = _pills([tier], "amber") if tier else ""
         outlet_links: list[str] = []
         for o in outlets:
@@ -762,6 +998,50 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
                 f'<div style="font-size:15px;color:#444;margin-top:10px">'
                 f"<strong>Key language:</strong> {kl_txt}</div>"
             )
+        trigger_block = ""
+        if triggers:
+            phrases_html = "".join(
+                f'<span class="trigger-phrase">"{_e(p)}"</span>' for p in triggers if p
+            )
+            if phrases_html:
+                trigger_block = (
+                    f'<div class="trigger-phrases">'
+                    f'<span class="trigger-label">Trigger phrases</span> '
+                    f"{phrases_html}"
+                    f"</div>"
+                )
+        headlines_block = ""
+        ex_h = eco.get("example_headlines")
+        if isinstance(ex_h, list) and ex_h:
+            h_rows = ""
+            for h in ex_h[:4]:
+                if not isinstance(h, dict):
+                    continue
+                htext = str(h.get("text") or "").strip()
+                if not htext:
+                    continue
+                src = str(h.get("source") or "").strip()
+                htype = str(h.get("type") or "inferred").strip().lower()
+                enc = quote_plus(htext[:200])
+                type_badge = (
+                    '<span class="headline-type retrieved">retrieved</span>'
+                    if htype == "retrieved"
+                    else '<span class="headline-type inferred">inferred</span>'
+                )
+                h_rows += (
+                    f'<div class="example-headline">'
+                    f'<a href="{_GOOGLE_NEWS_SEARCH}{enc}" target="_blank" rel="noopener" '
+                    f'class="headline-text">{_e(htext)}</a>'
+                    f'<span class="headline-source">{_e(src)}</span>'
+                    f"{type_badge}"
+                    f"</div>"
+                )
+            if h_rows:
+                headlines_block = (
+                    f'<div class="example-headlines">'
+                    f'<div class="headlines-label">Example coverage</div>'
+                    f"{h_rows}</div>"
+                )
         parts.append(
             f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:14px;'
             f'border:1px solid rgba(26,26,26,0.1)">'
@@ -772,6 +1052,8 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
             f"{outlets_html}</div>"
             f'<div style="font-size:17px;color:#333;line-height:1.55;margin-bottom:8px">'
             f"<strong>Framing:</strong> {_e(framing)}</div>"
+            f"{trigger_block}"
+            f"{headlines_block}"
             f'<div style="font-size:16px;color:#555;line-height:1.5"><strong>Emphasizes:</strong> '
             f"{_e(emph)}</div>"
             f'<div style="font-size:16px;color:#555;line-height:1.5;margin-top:6px">'
@@ -822,20 +1104,7 @@ def _absent_from_all_section_html(gp: dict[str, Any]) -> str:
     absent = _safe_list(gp.get("absent_from_all"))
     if not absent:
         return ""
-    boxes = "".join(
-        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(x))}" '
-        f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
-        f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
-        f'padding:12px 16px;border-radius:8px;margin-bottom:10px;'
-        f'background:rgba(180,83,9,0.09);border:1px solid rgba(180,83,9,0.25)">'
-        f'<span class="absent-icon" style="color:#b45315;flex-shrink:0">◆</span>'
-        f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
-        f"{_e(x)}</span>"
-        f'<span class="absent-search-hint">Search →</span></div>'
-        f"</a>"
-        for x in absent
-        if x
-    )
+    boxes = "".join(_absence_item_html(x) for x in absent if x)
     return (
         f'<div class="inv-reader-soft" style="margin-bottom:32px">'
         f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
@@ -1153,6 +1422,24 @@ def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
             f'<a href="#claims-section" class="internal-link">{_e(n_claims)}</a>'
         )
 
+    cov_full = receipt.get("coverage_result") if isinstance(receipt.get("coverage_result"), dict) else {}
+    sparse = bool(cov_full.get("coverage_sparse"))
+    qexp = cov_full.get("query_expansions")
+    if not isinstance(qexp, list):
+        qexp = []
+    sparse_html = ""
+    if sparse and qexp:
+        chips = "".join(
+            f'<span class="query-expansion-chip">{_e(str(q))}</span>' for q in qexp[:6] if q
+        )
+        sparse_html = (
+            f'<div class="coverage-sparse-note">Sparse comparative coverage — try: {chips}</div>'
+        )
+    elif sparse:
+        sparse_html = (
+            '<div class="coverage-sparse-note">Sparse comparative coverage — broader searches may help.</div>'
+        )
+
     return f"""
 <div class="inv-reader-soft" style="margin-bottom:28px;padding:16px 20px;
             background:#fafafa;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
@@ -1165,6 +1452,7 @@ def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
     <div><strong>Claims extracted:</strong> {nc_html}</div>
     <div><strong>Generated:</strong> {_e(_fmt_generated_at(receipt.get("generated_at")))}</div>
     <div><strong>Perspectives grounded in retrieved sources:</strong> {_e(gtxt)}</div>
+    {sparse_html}
   </div>
 </div>"""
 
@@ -1518,15 +1806,21 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     div_n = _safe_list(gp_raw.get("divergence_points"))
     absent_n = _safe_list(gp_raw.get("absent_from_all"))
     consensus_n = _safe_list(gp_raw.get("consensus_elements"))
-    has_gp_signal = bool(eco_n) or bool(div_n) or bool(absent_n) or bool(consensus_n) or bool(
-        str(gp_raw.get("claim", "") or "").strip()
+    has_gp_signal = (
+        bool(eco_n)
+        or bool(div_n)
+        or bool(absent_n)
+        or bool(consensus_n)
+        or bool(str(gp_raw.get("claim", "") or "").strip())
+        or bool(str(gp_raw.get("reasoning_summary", "") or "").strip())
+        or bool(_safe_list(gp_raw.get("investigative_leads")))
     )
 
     echo_standalone_html = ""
     if not coalition:
         ech = receipt.get("echo_chamber")
         if isinstance(ech, dict) and ech.get("score") is not None:
-            echo_standalone_html = _echo_chamber_standalone_html(ech)
+            echo_standalone_html = _echo_chamber_standalone_html(ech, gp_raw)
         elif rtype == "article_analysis":
             base_sources = receipt.get("sources")
             if isinstance(base_sources, list) and base_sources:
@@ -1534,7 +1828,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
                     compute_echo_chamber_score(
                         merge_sources_for_echo(base_sources, None),
                         None,
-                    )
+                    ),
+                    gp_raw,
                 )
 
     claims_section_html = _claims_section_html(receipt)
@@ -1547,11 +1842,22 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     absent_from_all_html = (
         _absent_from_all_section_html(gp_raw) if (rtype == "article_analysis" or gp_raw) else ""
     )
+    investigative_leads_html = (
+        _investigative_leads_section_html(gp_raw)
+        if (rtype == "article_analysis" or gp_raw)
+        else ""
+    )
     named_entities_html = _named_entities_section_html(receipt)
     coverage_block_html = (
         _coverage_provenance_html(receipt) if rtype == "article_analysis" else ""
     )
     sources_section_html = _sources_section_html(receipt)
+    drift_section_html = (
+        _drift_tracker_html(str(rid)) if (rtype == "article_analysis" and rid) else ""
+    )
+    actors_section_html = (
+        _actors_map_html(str(rid)) if (rtype == "article_analysis" and rid) else ""
+    )
 
     # ── Coalition section ────────────────────────────────────────
     coalition_fight_html = ""
@@ -2296,6 +2602,254 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     text-underline-offset: 2px;
   }}
 
+  .reasoning-summary {{
+    font-size: 0.95em;
+    color: #444;
+    line-height: 1.6;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    background: #faf8f4;
+    border-left: 3px solid #111;
+    border-radius: 0 4px 4px 0;
+  }}
+  .reasoning-label {{
+    display: block;
+    font-size: 0.72em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }}
+  .confidence-decomp {{
+    margin-bottom: 20px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #e8e4dc;
+    border-radius: 4px;
+  }}
+  .conf-row {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }}
+  .conf-row:last-child {{ margin-bottom: 0; }}
+  .conf-label {{
+    min-width: 110px;
+    color: #888;
+    font-size: 0.85em;
+  }}
+  .conf-bar-wrap {{
+    flex: 1;
+    height: 6px;
+    background: #e8e4dc;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+    min-width: 120px;
+  }}
+  .conf-bar-cited {{ background: #2e7d32; height: 100%; }}
+  .conf-bar-inferred {{ background: #f9a825; height: 100%; }}
+  .conf-bar-consensus {{ background: #1565c0; height: 100%; }}
+  .conf-bar-contested {{ background: #c62828; height: 100%; }}
+  .conf-detail {{
+    font-size: 0.78em;
+    color: #888;
+    min-width: 160px;
+    text-align: right;
+  }}
+  .conf-evidence-type {{
+    font-size: 0.75em;
+    color: #aaa;
+    margin-top: 4px;
+    text-align: right;
+  }}
+  .trigger-phrases {{
+    margin: 6px 0 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }}
+  .trigger-label {{
+    font-size: 0.75em;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+  }}
+  .trigger-phrase {{
+    font-size: 0.82em;
+    background: #f0ede6;
+    border: 1px solid #e0ddd6;
+    border-radius: 3px;
+    padding: 2px 8px;
+    color: #444;
+    font-style: italic;
+  }}
+  .example-headlines {{
+    margin: 8px 0 10px;
+    padding: 8px 0 0;
+    border-top: 1px dashed #e8e4dc;
+  }}
+  .headlines-label {{
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #aaa;
+    margin-bottom: 6px;
+  }}
+  .example-headline {{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+  }}
+  .headline-text {{ color: #0d47a1; flex: 1; min-width: 0; }}
+  .headline-source {{ font-size: 0.85em; color: #888; }}
+  .headline-type {{
+    font-size: 0.65em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }}
+  .headline-type.retrieved {{ background: #e8f5e9; color: #2e7d32; }}
+  .headline-type.inferred {{ background: #fff8e1; color: #f57f17; }}
+  .echo-conf-note {{
+    font-size: 0.75em;
+    color: #aaa;
+    margin-top: 6px;
+    font-style: italic;
+  }}
+  .absent-item-card {{
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: rgba(180, 83, 9, 0.06);
+    border: 1px solid rgba(180, 83, 9, 0.2);
+    border-radius: 8px;
+    text-align: left;
+  }}
+  .absent-item-header {{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }}
+  .absent-reason-badge {{
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 4px 8px;
+    border-radius: 3px;
+  }}
+  .absent-topic-link {{
+    color: #5d4037;
+    font-weight: 600;
+    text-decoration: none;
+    flex: 1;
+    min-width: 0;
+  }}
+  .absent-why {{ font-size: 0.92em; color: #555; line-height: 1.5; margin-top: 6px; }}
+  .absence-sources {{ font-size: 0.85em; color: #666; margin-top: 8px; }}
+  .sources-label {{ font-weight: 600; margin-right: 6px; }}
+  .suggested-source-link {{ color: #0d47a1; margin-right: 6px; }}
+  .inv-lead-card {{
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid #e0ddd6;
+    border-radius: 4px;
+    background: #fff;
+    text-align: left;
+  }}
+  .inv-lead-action {{ font-size: 0.95em; color: #333; }}
+  .inv-lead-reason {{ font-size: 0.88em; color: #666; margin-top: 6px; line-height: 1.45; }}
+  .inv-lead-link {{ font-size: 0.85em; margin-top: 6px; display: inline-block; }}
+  .coverage-sparse-note {{
+    margin-top: 12px;
+    font-size: 0.88em;
+    color: #856404;
+    line-height: 1.5;
+  }}
+  .query-expansion-chip {{
+    display: inline-block;
+    margin: 2px 6px 2px 0;
+    padding: 2px 8px;
+    background: #fff8e1;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }}
+  .drift-section {{
+    margin: 28px 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(26, 26, 26, 0.12);
+    border-radius: 6px;
+    background: #fafafa;
+    text-align: left;
+  }}
+  .drift-header {{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }}
+  .track-btn {{
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    padding: 8px 14px;
+    border: 2px solid #111;
+    background: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+  }}
+  .track-btn:hover {{ background: #f5f2eb; }}
+  .drift-timeline {{ font-size: 0.92em; color: #555; line-height: 1.5; }}
+  .drift-point {{
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e8e4dc;
+  }}
+  .drift-score {{ font-weight: 700; }}
+  .actors-section {{
+    margin: 24px 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(26, 26, 26, 0.1);
+    border-radius: 6px;
+    background: #fff;
+    text-align: left;
+  }}
+  .actor-node {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 8px 4px 0;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    border: 1px solid #e0ddd6;
+  }}
+  .actor-type-person {{ background: #e3f2fd; }}
+  .actor-type-org {{ background: #f3e5f5; }}
+  .actor-type-gov {{ background: #ffebee; }}
+  .actor-type-outlet {{ background: #e8f5e9; }}
+  .actor-edge {{ font-size: 0.8em; color: #666; margin: 4px 0; }}
+  .actor-badge {{
+    font-size: 0.65em;
+    margin-left: 4px;
+    color: #0d47a1;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }}
+
   .named-entities-section {{
     margin: 2em 0 3em;
   }}
@@ -2461,6 +3015,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 {absent_from_all_html}
 
+{investigative_leads_html}
+
 {claims_section_html}
 
 {dig_deeper_html}
@@ -2477,6 +3033,10 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 {coverage_block_html}
 
 {sources_section_html}
+
+{drift_section_html}
+
+{actors_section_html}
 
 <!-- VERIFICATION (reader: one-line access) -->
 <div id="verification" class="inv-reader-soft" style="margin-bottom:28px;padding:16px 18px;background:#fff;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
@@ -2701,6 +3261,84 @@ function toggleChain(id) {{
         label.textContent = 'DIG DEEPER';
       }});
   }});
+}})();
+</script>
+<script>
+(function() {{
+  function esc(s) {{
+    if (s == null) return '';
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }}
+  function escapeAttr(s) {{
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  }}
+  function sanId(rid) {{
+    return (rid || '').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 48) || 'receipt';
+  }}
+  var dbtn = document.getElementById('drift-track-btn');
+  if (dbtn) {{
+    var drid = dbtn.getAttribute('data-id') || '';
+    var dsid = sanId(drid);
+    function loadDrift() {{
+      if (!drid) return;
+      fetch('/v1/drift/' + encodeURIComponent(drid))
+        .then(function(r) {{ return r.ok ? r.json() : []; }})
+        .then(function(data) {{
+          var el = document.getElementById('drift-loaded-' + dsid);
+          if (!el || !data || !data.length) return;
+          var html = '';
+          for (var i = 0; i < data.length; i++) {{
+            var s = data[i];
+            var sc = Number(s.drift_score || 0);
+            var col = sc > 50 ? '#c62828' : (sc > 20 ? '#f9a825' : '#2e7d32');
+            html += '<div class="drift-point"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+              + '<span>T+' + (s.hours_since_original || 0) + 'h</span>'
+              + '<span class="drift-score" style="color:' + col + '">' + Math.round(sc) + '/100 drift</span></div>'
+              + '<div style="margin-top:6px">' + esc(s.drift_summary) + '</div></div>';
+          }}
+          el.innerHTML = html;
+        }});
+    }}
+    loadDrift();
+    dbtn.addEventListener('click', function() {{
+      fetch('/v1/schedule-drift/' + encodeURIComponent(drid), {{ method: 'POST' }})
+        .then(function(r) {{ return r.json(); }})
+        .then(function() {{ dbtn.textContent = 'TRACKING ENABLED'; dbtn.disabled = true; }});
+    }});
+  }}
+  var mount = document.querySelector('.actors-mount');
+  if (mount) {{
+    var aid = mount.getAttribute('data-id');
+    if (aid) {{
+      fetch('/v1/actors/' + encodeURIComponent(aid))
+        .then(function(r) {{ return r.json(); }})
+        .then(function(data) {{
+          var h = '';
+          if (data.nodes && data.nodes.length) {{
+            for (var j = 0; j < data.nodes.length; j++) {{
+              var n = data.nodes[j];
+              var t = String(n.type || 'org').replace(/[^a-z]/gi, '');
+              h += '<span class="actor-node actor-type-' + t + '">' + esc(n.label)
+                + ' <small>(' + esc(n.type) + ')</small> '
+                + '<a href="' + escapeAttr(n.fec_search) + '" target="_blank" rel="noopener" class="actor-badge">FEC</a> '
+                + '<a href="' + escapeAttr(n.open_secrets) + '" target="_blank" rel="noopener" class="actor-badge">OS</a> '
+                + '<a href="' + escapeAttr(n.courtlistener) + '" target="_blank" rel="noopener" class="actor-badge">CL</a>'
+                + '</span>';
+            }}
+          }}
+          if (data.edges && data.edges.length) {{
+            for (var k = 0; k < data.edges.length; k++) {{
+              var e = data.edges[k];
+              h += '<div class="actor-edge">' + esc(e.from) + ' — ' + esc(e.kind) + ' — ' + esc(e.to) + '</div>';
+            }}
+          }}
+          mount.innerHTML = h || '<span style="color:#888">No named entities.</span>';
+        }})
+        .catch(function() {{ mount.innerHTML = '<span style="color:#888">Could not load actors.</span>'; }});
+    }}
+  }}
 }})();
 </script>
 

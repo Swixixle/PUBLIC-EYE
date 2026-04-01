@@ -5,6 +5,7 @@ Query terms come from article content; author/outlet terms are excluded from sea
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -356,7 +357,72 @@ def coverage_result_for_receipt(result: dict[str, Any]) -> dict[str, Any]:
         "failure_reason": result.get("failure_reason"),
         "comparative_article_count": len(result.get("articles") or []),
         "query_terms": result.get("query_terms"),
+        "query_expansions": result.get("query_expansions") or [],
+        "coverage_sparse": bool(result.get("coverage_sparse", False)),
     }
+
+
+def suggest_query_expansions(
+    terms: dict[str, Any] | None,
+    article: dict[str, Any],
+) -> list[str]:
+    """
+    When coverage is sparse, ask Claude for broader/adjacent search terms.
+    Synchronous; safe to call from get_comparative_coverage.
+    """
+    key = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+    if not key:
+        return []
+    topic = (
+        str(article.get("article_topic") or article.get("title") or article.get("text") or "")[:2000]
+    )
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=key)
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        prompt = (
+            f"Original search terms: {json.dumps(terms)}\n"
+            f"Story topic: {topic}\n\n"
+            "The comparative search returned fewer than 5 articles.\n"
+            "Suggest 4 alternative search queries that might find related coverage:\n"
+            "- Broader terms (remove specifics, keep core topic)\n"
+            "- Synonyms\n"
+            "- Adjacent topics\n"
+            "- Non-English key terms if relevant\n\n"
+            "Return JSON array of strings only. Each string is a 2-5 word query.\n"
+            "JSON only, no markdown."
+        )
+        msg = client.messages.create(
+            model=model,
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = (msg.content[0].text or "").strip()
+        if text.startswith("```"):
+            parts = text.split("```")
+            if len(parts) >= 2:
+                text = parts[1]
+                if text.lstrip().startswith("json"):
+                    text = text.lstrip()[4:].lstrip()
+        out = json.loads(text.strip())
+        return out[:4] if isinstance(out, list) else []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[QUERY_EXPANSION] %s", exc)
+        return []
+
+
+def _finalize_coverage_result(
+    result: dict[str, Any],
+    terms: dict[str, Any],
+    article: dict[str, Any],
+) -> dict[str, Any]:
+    articles = result.get("articles") or []
+    n = len(articles)
+    sparse = (not result.get("coverage_found")) or n < 5
+    result["coverage_sparse"] = sparse
+    result["query_expansions"] = suggest_query_expansions(terms, article) if sparse else []
+    return result
 
 
 def get_comparative_coverage(article: dict[str, Any]) -> dict[str, Any]:
@@ -367,25 +433,33 @@ def get_comparative_coverage(article: dict[str, Any]) -> dict[str, Any]:
 
     gdelt_articles, gdelt_stage = fetch_gdelt_coverage(terms)
     if gdelt_articles:
-        return {
-            "articles": gdelt_articles,
-            "source_adapter": "gdelt",
-            "gdelt_stage": gdelt_stage,
-            "coverage_found": True,
-            "query_terms": terms,
-            "failure_reason": None,
-        }
+        return _finalize_coverage_result(
+            {
+                "articles": gdelt_articles,
+                "source_adapter": "gdelt",
+                "gdelt_stage": gdelt_stage,
+                "coverage_found": True,
+                "query_terms": terms,
+                "failure_reason": None,
+            },
+            terms,
+            article,
+        )
 
     newsapi_articles = fetch_newsapi_coverage(terms)
     if newsapi_articles:
-        return {
-            "articles": newsapi_articles,
-            "source_adapter": "newsapi",
-            "gdelt_stage": None,
-            "coverage_found": True,
-            "query_terms": terms,
-            "failure_reason": None,
-        }
+        return _finalize_coverage_result(
+            {
+                "articles": newsapi_articles,
+                "source_adapter": "newsapi",
+                "gdelt_stage": None,
+                "coverage_found": True,
+                "query_terms": terms,
+                "failure_reason": None,
+            },
+            terms,
+            article,
+        )
 
     logger.error(
         "[COVERAGE] Total failure — no articles from any source "
@@ -394,11 +468,15 @@ def get_comparative_coverage(article: dict[str, Any]) -> dict[str, Any]:
         terms.get("core_entities"),
         article.get("url", "unknown"),
     )
-    return {
-        "articles": [],
-        "source_adapter": "none",
-        "gdelt_stage": None,
-        "coverage_found": False,
-        "query_terms": terms,
-        "failure_reason": FAILURE_REASON,
-    }
+    return _finalize_coverage_result(
+        {
+            "articles": [],
+            "source_adapter": "none",
+            "gdelt_stage": None,
+            "coverage_found": False,
+            "query_terms": terms,
+            "failure_reason": FAILURE_REASON,
+        },
+        terms,
+        article,
+    )

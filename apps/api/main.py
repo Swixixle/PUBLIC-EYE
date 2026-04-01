@@ -118,6 +118,7 @@ from deep_receipt_api import build_deep_receipt
 from lens_api import process_audio, process_document_image, process_media_url, process_place_image
 from receipt_store import (
     ensure_coalition_maps_table,
+    ensure_drift_tables,
     ensure_media_axis_table,
     ensure_outlet_dossiers_table,
     ensure_reporter_dossiers_table,
@@ -125,10 +126,14 @@ from receipt_store import (
     ensure_table,
     get_coalition_map,
     get_receipt as load_stored_receipt,
+    insert_drift_snapshot,
+    list_drift_snapshots,
     list_recent_receipts,
+    schedule_drift_analysis,
     store_receipt,
 )
 from echo_chamber import compute_echo_chamber_score, merge_sources_for_echo
+from drift_engine import compute_drift
 from investigation_page import render_investigation_page
 from methodology_page import render_methodology_page
 from publisher_registry import content_provenance_for_article
@@ -615,6 +620,12 @@ async def capture_schema_baselines() -> None:
         import logging
 
         logging.warning("Receipt table creation failed: %s", exc)
+    try:
+        ensure_drift_tables()
+    except Exception as exc:  # noqa: BLE001
+        import logging
+
+        logging.warning("Drift tables creation failed: %s", exc)
     try:
         ensure_coalition_maps_table()
     except Exception as exc:  # noqa: BLE001
@@ -1192,6 +1203,171 @@ async def dig_deeper_endpoint(receipt_id: str) -> dict[str, Any]:
                 result["court_records"].append(part)
 
     return result
+
+
+def _classify_actor_entity(name: str) -> str:
+    n = (name or "").strip()
+    if not n:
+        return "org"
+    nl = n.lower()
+    if any(
+        x in nl
+        for x in (
+            "department of",
+            "fbi",
+            "dea ",
+            "administration",
+            "congress",
+            "senate",
+            "house of",
+            "court",
+            "white house",
+            "pentagon",
+            "treasury",
+            "justice department",
+        )
+    ):
+        return "gov"
+    if any(
+        x in nl
+        for x in (
+            "times",
+            "post",
+            "news",
+            "cnn",
+            "nbc",
+            "fox ",
+            "guardian",
+            "journal",
+            "herald",
+            "tribune",
+        )
+    ):
+        return "outlet"
+    if len(n.split()) <= 3 and not any(
+        x in nl for x in ("inc", "llc", "corp", "company", "foundation", "committee")
+    ):
+        return "person"
+    return "org"
+
+
+@app.post("/v1/schedule-drift/{receipt_id}")
+async def schedule_drift_endpoint(receipt_id: str) -> dict[str, Any]:
+    """Register article URL for drift tracking (worker / manual run can consume)."""
+    rid = receipt_id.strip()
+    rec = await asyncio.to_thread(load_stored_receipt, rid)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    art = rec.get("article") if isinstance(rec.get("article"), dict) else {}
+    url = str(art.get("url") or "").strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="No article URL in receipt")
+    await asyncio.to_thread(schedule_drift_analysis, rid, url)
+    return {"scheduled": True, "receipt_id": rid}
+
+
+@app.get("/v1/drift/{receipt_id}")
+async def drift_snapshots_get(receipt_id: str) -> list[dict[str, Any]]:
+    """All drift snapshots stored for this investigation receipt."""
+    return await asyncio.to_thread(list_drift_snapshots, receipt_id.strip())
+
+
+@app.post("/v1/drift/run/{receipt_id}")
+async def drift_run_snapshot_endpoint(receipt_id: str) -> dict[str, Any]:
+    """
+    On-demand drift snapshot: re-run comparative coverage + global perspectives,
+    compare to stored receipt, persist row (manual substitute for scheduled worker).
+    """
+    from comparative_coverage import format_coverage_for_prompt, get_comparative_coverage
+
+    rid = receipt_id.strip()
+    original = await asyncio.to_thread(load_stored_receipt, rid)
+    if not original:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    art = original.get("article") if isinstance(original.get("article"), dict) else {}
+    url = str(art.get("url") or "").strip()
+    if not url.startswith("http"):
+        raise HTTPException(status_code=400, detail="No article URL")
+
+    article = await asyncio.to_thread(fetch_article, url)
+    if article.get("fetch_error"):
+        raise HTTPException(status_code=422, detail=str(article.get("fetch_error")))
+
+    ne = original.get("named_entities")
+    if not isinstance(ne, list):
+        ne = []
+    topic = original.get("article_topic")
+
+    def _fresh_gp() -> dict[str, Any]:
+        art_in = {
+            **article,
+            "named_entities": [str(x) for x in ne if isinstance(x, str) and str(x).strip()],
+            "article_topic": topic,
+        }
+        cov = get_comparative_coverage(art_in)
+        cc = format_coverage_for_prompt(cov) if cov.get("coverage_found") else ""
+        narrative = (str(topic or "").strip() or str(article.get("title") or "").strip())
+        return run_global_perspectives(narrative, cc)
+
+    gp_new = await asyncio.to_thread(_fresh_gp)
+    new_receipt = {**original, "global_perspectives": gp_new}
+    drift = compute_drift(original, new_receipt)
+
+    gen = original.get("generated_at") or original.get("timestamp")
+    hours = 0
+    if gen:
+        try:
+            s = str(gen).replace("Z", "+00:00")
+            t0 = datetime.fromisoformat(s)
+            if t0.tzinfo is None:
+                t0 = t0.replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - t0
+            hours = max(0, int(delta.total_seconds() // 3600))
+        except Exception:
+            hours = 0
+
+    await asyncio.to_thread(
+        insert_drift_snapshot,
+        rid,
+        None,
+        url,
+        hours,
+        drift,
+    )
+    return {"ok": True, "hours_since_original": hours, "drift": drift}
+
+
+@app.get("/v1/actors/{receipt_id}")
+async def actors_relationships_get(receipt_id: str) -> dict[str, Any]:
+    """Actor nodes (typed) and simple co-mention edges from named entity order."""
+    rec = await asyncio.to_thread(load_stored_receipt, receipt_id.strip())
+    if not rec:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    raw = rec.get("named_entities") or []
+    entities = [str(e).strip() for e in raw if isinstance(e, str) and str(e).strip()][:12]
+    nodes: list[dict[str, Any]] = []
+    for e in entities:
+        t = _classify_actor_entity(e)
+        nodes.append(
+            {
+                "id": e,
+                "label": e,
+                "type": t,
+                "fec_search": f"https://www.fec.gov/data/search/?search={urllib.parse.quote(e)}",
+                "open_secrets": f"https://www.opensecrets.org/search?q={urllib.parse.quote(e)}",
+                "courtlistener": f"https://www.courtlistener.com/?q={urllib.parse.quote(e)}",
+            }
+        )
+    edges: list[dict[str, Any]] = []
+    for i in range(len(entities) - 1):
+        edges.append(
+            {
+                "from": entities[i],
+                "to": entities[i + 1],
+                "kind": "co_mentioned",
+            }
+        )
+    return {"receipt_id": receipt_id.strip(), "nodes": nodes, "edges": edges}
 
 
 @app.get("/verify")
@@ -1910,25 +2086,25 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
         merge_sources_for_echo(_src_echo, None),
         None,
     )
-    signed_payload = attach_article_analysis_signing(receipt_payload)
-    try:
-        narrative_for_gp = (
-            str(signed_payload.get("article_topic") or "").strip()
-            or str((signed_payload.get("article") or {}).get("title") or "").strip()
-        )
-        if narrative_for_gp:
+    narrative_for_gp = (
+        str(receipt_payload.get("article_topic") or "").strip()
+        or str((receipt_payload.get("article") or {}).get("title") or "").strip()
+    )
+    if narrative_for_gp:
+        try:
             gp_result = await asyncio.to_thread(
                 run_global_perspectives,
                 narrative_for_gp,
                 coverage_context,
             )
             if gp_result and isinstance(gp_result, dict):
-                signed_payload["global_perspectives"] = gp_result
-    except Exception as _gp_err:  # noqa: BLE001
-        logger.warning(
-            "global_perspectives failed in analyze_article: %s",
-            _gp_err,
-        )
+                receipt_payload["global_perspectives"] = gp_result
+        except Exception as _gp_err:  # noqa: BLE001
+            logger.warning(
+                "global_perspectives failed in analyze_article: %s",
+                _gp_err,
+            )
+    signed_payload = attach_article_analysis_signing(receipt_payload)
     try:
         store_receipt(signed_payload)
     except Exception:  # noqa: BLE001
