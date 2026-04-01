@@ -18,6 +18,9 @@ def route_claim(claim: dict[str, Any]) -> list[str]:
 
     adapters: list[str] = []
 
+    if claim_type == "rumored":
+        adapters.append("courtlistener")
+
     if claim_type == "financial" or any(
         w in text
         for w in [
@@ -94,6 +97,9 @@ def build_query_for_adapter(claim: dict[str, Any], adapter: str) -> str:
     if adapter == "congress":
         return text
     if adapter == "courtlistener":
+        if str(claim.get("claim_type") or "").lower() == "rumored":
+            body = str(claim.get("claim") or "")
+            return f"{subject} {body[:100]}".strip() or (subject or body)
         return subject or text
     if adapter == "actor":
         subject_str = (subject or text) or ""

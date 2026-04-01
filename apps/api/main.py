@@ -1371,14 +1371,51 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
                         }
                     )
                 elif adapter_name == "courtlistener":
-                    verifications.append(
-                        {
-                            "adapter": "courtlistener",
-                            "query": query,
-                            "status": "deferred",
-                            "detail": "Use POST /v1/judicial-network for full judicial lookup",
-                        }
-                    )
+                    if str(claim.get("claim_type") or "").lower() == "rumored":
+                        from adapters import courtlistener as _cl_search
+
+                        q = build_query_for_adapter(claim, "courtlistener")
+                        cl_rows = await _cl_search.search_opinions(q, limit=5)
+                        if cl_rows:
+                            first_hit = cl_rows[0]
+                            verifications.append(
+                                {
+                                    "adapter": "courtlistener",
+                                    "status": "found",
+                                    "result": {
+                                        "case_name": first_hit.get("case_name", ""),
+                                        "court": first_hit.get("court", ""),
+                                        "date_filed": first_hit.get("date_filed", ""),
+                                        "url": first_hit.get("url", ""),
+                                        "snippet": str(
+                                            first_hit.get("summary")
+                                            or first_hit.get("snippet")
+                                            or ""
+                                        )[:300],
+                                        "source_url": first_hit.get("source_url")
+                                        or first_hit.get("url")
+                                        or "",
+                                        "matches_count": len(cl_rows),
+                                    },
+                                }
+                            )
+                        else:
+                            verifications.append(
+                                {
+                                    "adapter": "courtlistener",
+                                    "status": "searched_none_found",
+                                    "result": {},
+                                }
+                            )
+                    else:
+                        verifications.append(
+                            {
+                                "adapter": "courtlistener",
+                                "query": query,
+                                "status": "deferred",
+                                "detail": "Use POST /v1/judicial-network for full judicial lookup",
+                            }
+                        )
                 elif adapter_name == "actor":
                     result = await asyncio.to_thread(run_actor_layer_fast, query)
                     actors = result.get("actors_found") or []
@@ -1404,6 +1441,8 @@ async def analyze_article_post(body: AnalyzeArticleBody) -> dict[str, Any]:
                 "subject": claim.get("subject"),
                 "claim_type": claim.get("claim_type"),
                 "cited_source": claim.get("cited_source"),
+                "rumor_source": claim.get("rumor_source"),
+                "rumor_language": claim.get("rumor_language"),
                 "adapters_checked": adapters,
                 "verifications": verifications,
             }

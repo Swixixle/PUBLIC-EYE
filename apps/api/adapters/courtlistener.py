@@ -207,11 +207,10 @@ def _row_from_opinion_search_hit(
 
 async def search_opinions(query: str, limit: int = 5) -> list[dict[str, Any]]:
     """
-    Search published opinions (type=o). On failure or missing token, returns [].
+    Search published opinions (type=o). Works without a token (lower rate limits);
+    set COURTLISTENER_API_KEY for higher quotas. On HTTP/error, returns [].
     """
     _warn_no_key()
-    if _token() is None:
-        return []
     q = (query or "").strip()
     if not q:
         return []

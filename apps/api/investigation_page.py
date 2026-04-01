@@ -15,13 +15,44 @@ Changes from v3:
 
 from __future__ import annotations
 import html
+import json
+import re
+import unicodedata
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote_plus, urlparse
 
 from echo_chamber import compute_echo_chamber_score, merge_sources_for_echo
 
+
+_SURFACE_ADAPTER_IDS = frozenset({"surface", "layer_surface", "surface_adapter"})
+_DEFERRED_NOISE_ADAPTER_KEYS = frozenset({"courtlistener", "congress", "fec"})
+_SKIP_VERIFICATION_ADAPTERS = frozenset({"actor_ledger"})
+_GOOGLE_NEWS_SEARCH = "https://news.google.com/search?q="
+_WIKI_SEARCH = "https://en.wikipedia.org/wiki/Special:Search?search="
+
+OUTLET_HOMEPAGES: dict[str, str] = {
+    "AP News": "https://apnews.com",
+    "Reuters": "https://www.reuters.com",
+    "BBC": "https://www.bbc.com/news",
+    "New York Times": "https://www.nytimes.com",
+    "Washington Post": "https://www.washingtonpost.com",
+    "The Guardian": "https://www.theguardian.com",
+    "Fox News": "https://www.foxnews.com",
+    "Der Spiegel": "https://www.spiegel.de/international",
+    "Le Monde": "https://www.lemonde.fr",
+    "Al Jazeera": "https://www.aljazeera.com",
+    "ProPublica": "https://www.propublica.org",
+    "NaturalNews.com": "https://www.naturalnews.com",
+    "Washington Examiner": "https://www.washingtonexaminer.com",
+    "Miami Herald": "https://www.miamiherald.com",
+    "Dawn": "https://www.dawn.com",
+    "The Hindu": "https://www.thehindu.com",
+    "Hindustan Times": "https://www.hindustantimes.com",
+    "Euronews": "https://www.euronews.com",
+    "El País": "https://elpais.com",
+}
 
 _OUTLET_TYPE_ORDER = ("state", "public_broadcaster", "private")
 _OUTLET_TYPE_LABEL = {
@@ -69,6 +100,71 @@ OUTLET_DOMAINS: dict[str, str] = {
 
 def _e(s: Any) -> str:
     return html.escape(str(s) if s is not None else "")
+
+
+def _outlet_homepage_url(outlet: str) -> str | None:
+    o = (outlet or "").strip()
+    if not o:
+        return None
+    if o in OUTLET_HOMEPAGES:
+        return OUTLET_HOMEPAGES[o]
+    ol = o.lower()
+    for k, v in OUTLET_HOMEPAGES.items():
+        if k.lower() == ol:
+            return v
+    return None
+
+
+def _outlet_link_html(outlet: str) -> str:
+    o_str = str(outlet).strip()
+    if not o_str:
+        return ""
+    url = _outlet_homepage_url(o_str) or f"{_GOOGLE_NEWS_SEARCH}{quote_plus(o_str)}"
+    return (
+        f'<a href="{_e(url)}" target="_blank" rel="noopener" class="outlet-link">{_e(o_str)}</a>'
+    )
+
+
+def _claim_subject_link_html(subject: str) -> str:
+    s = (subject or "").strip()
+    if not s:
+        return ""
+    return (
+        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(s)}" target="_blank" rel="noopener" '
+        f'class="claim-subject-link">{_e(s)}</a>'
+    )
+
+
+def _claim_body_link_html(text: str) -> str:
+    t = (text or "").strip()
+    if not t:
+        return ""
+    enc = quote_plus(t[:150])
+    return (
+        f'<a href="{_GOOGLE_NEWS_SEARCH}{enc}" target="_blank" rel="noopener" '
+        f'class="claim-text-link">{_e(t)}</a>'
+    )
+
+
+def _name_wiki_link(name: str) -> str:
+    n = (name or "").strip()
+    if not n:
+        return ""
+    return (
+        f'<a href="{_WIKI_SEARCH}{quote_plus(n)}" target="_blank" rel="noopener" '
+        f'class="entity-ref-link">{_e(n)}</a>'
+    )
+
+
+def _courtlistener_absolute_url(path_or_url: str) -> str:
+    u = (path_or_url or "").strip()
+    if not u:
+        return ""
+    if u.startswith("http://") or u.startswith("https://"):
+        return u
+    if u.startswith("/"):
+        return f"https://www.courtlistener.com{u}"
+    return u
 
 
 def _vol_theme(vol: int) -> tuple[str, str, str, str, str]:
@@ -173,76 +269,614 @@ def _status_color(status: str) -> str:
     return "#57534e"
 
 
+def _claim_text_dedupe_key(raw: str) -> str:
+    t = unicodedata.normalize("NFKC", str(raw or ""))
+    t = re.sub(r"\s+", " ", t).strip().lower()
+    return t
+
+
+def _deduplicate_claims(claims: list[Any]) -> list[Any]:
+    seen: set[str] = set()
+    result: list[Any] = []
+    for c in claims:
+        if not isinstance(c, dict):
+            continue
+        key = _claim_text_dedupe_key(str(c.get("claim", "") or ""))
+        if not key:
+            result.append(c)
+            continue
+        if key not in seen:
+            seen.add(key)
+            result.append(c)
+    return result
+
+
+def _adapter_is_surface(adapter_name: str) -> bool:
+    n = (adapter_name or "").strip().lower().replace(" ", "_").replace("-", "_")
+    return n in _SURFACE_ADAPTER_IDS
+
+
+def _verification_result_dict(v: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap result payload (dict, JSON string, or ring-shaped { content: ... })."""
+    raw: Any = v.get("result")
+    if isinstance(raw, str) and raw.strip():
+        s = raw.strip()
+        if s.startswith("{") or s.startswith("["):
+            try:
+                raw = json.loads(s)
+            except json.JSONDecodeError:
+                return {}
+    if not isinstance(raw, dict):
+        return {}
+    inner = raw.get("content")
+    if isinstance(inner, dict) and any(
+        k in inner
+        for k in ("what", "who", "when", "cultural_substrate", "absent_fields", "what_confidence_tier")
+    ):
+        return inner
+    return raw
+
+
+def _flat_adapter_brief(result: dict[str, Any]) -> str:
+    w = result.get("what")
+    if isinstance(w, str) and w.strip():
+        return w.strip()
+    who = result.get("who")
+    if isinstance(who, list):
+        names: list[str] = []
+        for item in who:
+            if isinstance(item, dict):
+                n = str(item.get("name", "") or "").strip()
+                if n:
+                    names.append(n)
+            elif item:
+                names.append(str(item).strip())
+        if names:
+            return ", ".join(names)
+    elif who:
+        return str(who).strip()
+    when = result.get("when")
+    if isinstance(when, dict):
+        ea = str(when.get("earliest_appearance", "") or "").strip()
+        if ea:
+            return ea
+        src = str(when.get("source", "") or "").strip()
+        if src:
+            return src
+    return ""
+
+
+def _adapter_key(name: str) -> str:
+    return (name or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def _is_generic_surface_what(what: str) -> bool:
+    w = (what or "").strip().lower()
+    if not w:
+        return True
+    prefixes = (
+        "a proper name",
+        "a reference to a person",
+        "a named individual",
+        "pete hegseth is a named",
+        "reference to pete hegseth",
+    )
+    if any(w.startswith(p) for p in prefixes):
+        return True
+    if "only a name" in w or "only the name" in w:
+        return True
+    if "no additional context" in w and "name only" in w:
+        return True
+    if "without additional descriptive context" in w:
+        return True
+    return False
+
+
+def _who_entry_name(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("name", "") or "").strip()
+    return str(item).strip() if item else ""
+
+
+def _name_likely_organization(name: str) -> bool:
+    n = (name or "").lower()
+    hints = (
+        "department",
+        "ministry",
+        "university",
+        "college",
+        " inc",
+        " llc",
+        " ltd",
+        "corporation",
+        "fund",
+        "foundation",
+        "committee",
+        "commission",
+        "agency",
+        "bureau",
+        "office of",
+        "bbc",
+        "cnn",
+        "association",
+        "society",
+        "institute",
+        "organization",
+        "organisation",
+        "parliament",
+        "congress ",
+        "court ",
+        "times",
+        "tribune",
+        "herald",
+        "news",
+        "press",
+        "group",
+        "the white house",
+        "pentagon",
+    )
+    return any(h in n for h in hints)
+
+
+def _surface_result_meaningful(result: dict[str, Any], subject: str) -> bool:
+    if not result:
+        return False
+    subj_k = _claim_text_dedupe_key(subject)
+    what = str(result.get("what", "") or "").strip()
+    if what and not _is_generic_surface_what(what):
+        return True
+    cs = str(result.get("cultural_substrate", "") or "").strip()
+    if cs:
+        return True
+    when = result.get("when", {})
+    if isinstance(when, dict):
+        ea = str(when.get("earliest_appearance", "") or "").strip()
+        if ea and ea not in _WHEN_SKIP:
+            return True
+    who = result.get("who")
+    if isinstance(who, list):
+        names = [_who_entry_name(x) for x in who if _who_entry_name(x)]
+        if len(names) > 1:
+            return True
+        if len(names) == 1:
+            nm = names[0]
+            if _name_likely_organization(nm):
+                return True
+            if subj_k and _claim_text_dedupe_key(nm) != subj_k:
+                return True
+    return False
+
+
+def _should_omit_verification_row(
+    adapter: str, status: str, result: dict[str, Any], subject: str
+) -> bool:
+    ad = _adapter_key(adapter)
+    st = (status or "").lower()
+    if ad in _DEFERRED_NOISE_ADAPTER_KEYS and st == "deferred":
+        return True
+    if _adapter_is_surface(adapter):
+        cs = str(result.get("cultural_substrate") or "").strip()
+        if not _surface_result_meaningful(result, subject) and not cs:
+            return True
+        return False
+    return False
+
+
+def _brief_has_reader_value(
+    brief_plain: str, surface_block: str, st_l: str, v: dict[str, Any]
+) -> bool:
+    if surface_block:
+        return True
+    if st_l == "searched_none_found":
+        return True
+    if st_l == "error" and str(v.get("detail", "") or "").strip():
+        return True
+    b = (brief_plain or "").strip()
+    if not b:
+        return False
+    bl = b.lower()
+    if bl == "structural_heuristic":
+        return False
+    m = re.match(r"^(.+?)\s*\(\s*structural_heuristic\s*\)\s*$", b, re.I | re.DOTALL)
+    if m:
+        core = m.group(1).strip()
+        if not core or _is_generic_surface_what(core):
+            return False
+    if _is_generic_surface_what(b):
+        return False
+    return True
+
+
+def _courtlistener_verification_html(status: str, result: dict[str, Any]) -> str:
+    st_l = (status or "").lower()
+    if st_l == "searched_none_found":
+        return (
+            '<div class="verification-row verification-courtlistener">'
+            '<span style="font-weight:600">courtlistener</span>: '
+            '<span style="color:#6b7280;font-weight:600">searched — no opinions matched</span>'
+            '<div class="court-snippet">'
+            "Federal court opinions were searched on CourtListener; nothing in the index "
+            "matched this claim closely enough to list here."
+            "</div></div>"
+        )
+    case_name = str(result.get("case_name") or "Unknown case")
+    court = str(result.get("court") or "")
+    date_filed = str(result.get("date_filed") or "")
+    url = str(result.get("url") or "")
+    full_url = _courtlistener_absolute_url(url)
+    snippet = str(result.get("snippet") or result.get("summary") or "")[:300]
+    matches = 0
+    try:
+        matches = int(result.get("matches_count") or 0)
+    except (TypeError, ValueError):
+        matches = 0
+    extra = max(0, matches - 1)
+    link = (
+        f'<a href="{_e(full_url)}" target="_blank" rel="noopener" '
+        f'class="court-case-link">{_e(case_name)}</a>'
+        if full_url
+        else _e(case_name)
+    )
+    meta_parts = [p for p in (court, date_filed) if p]
+    meta = (
+        f'<div class="court-meta">{" · ".join(_e(p) for p in meta_parts)}</div>'
+        if meta_parts
+        else ""
+    )
+    snip = f'<div class="court-snippet">“{_e(snippet)}”</div>' if snippet else ""
+    more = ""
+    if extra > 0:
+        more = (
+            f'<div class="court-meta">{extra} additional match'
+            f'{"" if extra == 1 else "es"} in search results</div>'
+        )
+    return (
+        f'<div class="verification-row verification-courtlistener">'
+        f'<span style="font-weight:600">courtlistener</span>: '
+        f'<span style="color:#15803d;font-weight:600">found in court record</span>'
+        f'<div class="court-result">{link}{meta}{snip}{more}</div></div>'
+    )
+
+
+_WHEN_SKIP = frozenset({
+    "not specified",
+    "not determinable from source text",
+    "Not inferable from input",
+    "Not determinable from input",
+    "not specified in source text",
+    "absent",
+})
+_WHEN_SOURCE_SKIP = frozenset({
+    "input text",
+    "source text only",
+    "Input text contains name only",
+    "Input contains name only",
+    "absent",
+    "input text contains name only",
+})
+
+
+def _format_surface_result(
+    result: dict[str, Any],
+    claim_subject: str = "",
+) -> str:
+    """Format a surface adapter verification result into readable HTML."""
+    parts: list[str] = []
+    subj = (claim_subject or "").strip()
+
+    who_list = result.get("who", [])
+    if isinstance(who_list, list):
+        who_names: list[str] = []
+        for w in who_list:
+            if isinstance(w, dict):
+                n = str(w.get("name", "") or "").strip()
+                if n:
+                    who_names.append(n)
+            elif w:
+                who_names.append(str(w).strip())
+        if who_names:
+            linked_who = ", ".join(_name_wiki_link(n) for n in who_names)
+            parts.append(f'<span class="surface-field"><b>Who:</b> {linked_who}</span>')
+
+    what = str(result.get("what", "") or "").strip()
+    if what:
+        parts.append(f'<span class="surface-field"><b>What:</b> {_e(what)}</span>')
+
+    when = result.get("when", {})
+    if isinstance(when, dict):
+        earliest = str(when.get("earliest_appearance", "") or "").strip()
+        when_source = str(when.get("source", "") or "").strip()
+        conf_when = str(when.get("confidence_tier", "") or "").strip()
+        if earliest and earliest not in _WHEN_SKIP:
+            wiki_q = f"{subj} {earliest}".strip()
+            when_linked = (
+                f'<a href="{_WIKI_SEARCH}{quote_plus(wiki_q)}" target="_blank" rel="noopener" '
+                f'class="entity-ref-link">{_e(earliest)}</a>'
+            )
+            line = (
+                f"{when_linked} ({_e(conf_when)})" if conf_when else when_linked
+            )
+            parts.append(f'<span class="surface-field"><b>When:</b> {line}</span>')
+        elif when_source and when_source not in _WHEN_SOURCE_SKIP:
+            wiki_q2 = f"{subj} {when_source}".strip()
+            ws_linked = (
+                f'<a href="{_WIKI_SEARCH}{quote_plus(wiki_q2)}" target="_blank" rel="noopener" '
+                f'class="entity-ref-link">{_e(when_source)}</a>'
+            )
+            parts.append(f'<span class="surface-field"><b>When:</b> {ws_linked}</span>')
+
+    substrate = str(result.get("cultural_substrate", "") or "").strip()
+    if substrate:
+        sq = quote_plus(substrate[:80])
+        sub_linked = (
+            f'<a href="{_GOOGLE_NEWS_SEARCH}{sq}" target="_blank" rel="noopener" '
+            f'class="entity-ref-link">{_e(substrate)}</a>'
+        )
+        parts.append(
+            f'<span class="surface-field surface-substrate"><b>Context:</b> {sub_linked}</span>'
+        )
+
+    tier = str(
+        result.get("what_confidence_tier", "") or result.get("confidence_tier", "") or ""
+    ).strip()
+    if tier:
+        parts.append(f'<span class="surface-tier">confidence: {_e(tier)}</span>')
+
+    absent = result.get("absent_fields", [])
+    if isinstance(absent, list) and absent:
+        absent_s = ", ".join(str(x) for x in absent if x)
+        if absent_s:
+            parts.append(f'<span class="surface-absent">Missing: {_e(absent_s)}</span>')
+
+    return "<br>".join(parts) if parts else _e("surface record found")
+
+
+def _collect_http_urls(obj: Any, acc: list[str], local_seen: set[str]) -> None:
+    if isinstance(obj, str):
+        s = obj.strip()
+        if (s.startswith("http://") or s.startswith("https://")) and s not in local_seen:
+            local_seen.add(s)
+            acc.append(s)
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            _collect_http_urls(v, acc, local_seen)
+    elif isinstance(obj, list):
+        for v in obj:
+            _collect_http_urls(v, acc, local_seen)
+
+
+def _sources_section_html(receipt: dict[str, Any]) -> str:
+    sources: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+
+    def add(url: str, label: str, typ: str) -> None:
+        u = (url or "").strip()
+        if not u or u in seen_urls:
+            return
+        seen_urls.add(u)
+        sources.append({"url": u, "label": label or u, "type": typ})
+
+    article = receipt.get("article", {})
+    if isinstance(article, dict) and article.get("url"):
+        add(
+            str(article["url"]),
+            str(article.get("title") or article.get("url") or ""),
+            "Original article",
+        )
+
+    for claim in _safe_list(receipt.get("claims_verified")):
+        if not isinstance(claim, dict):
+            continue
+        subj = str(claim.get("subject", "") or "")
+        for v in _safe_list(claim.get("verifications")):
+            if not isinstance(v, dict):
+                continue
+            res = _verification_result_dict(v)
+            url = res.get("source_url") if res else None
+            if url:
+                add(str(url), str(url), f"Cited in: {subj}" if subj else "Verification source")
+
+    gp = receipt.get("global_perspectives")
+    if isinstance(gp, dict):
+        http_extra: list[str] = []
+        _collect_http_urls(gp, http_extra, set())
+        for u in http_extra:
+            add(u, u, "Global perspectives")
+
+    if not sources:
+        return ""
+
+    rows = []
+    for s in sources:
+        rows.append(
+            f'<div class="source-row">'
+            f'<span class="source-type">{_e(s["type"])}</span>'
+            f'<a href="{_e(s["url"])}" target="_blank" rel="noopener" class="source-link">'
+            f'{_e(s["label"])}</a>'
+            f"</div>"
+        )
+
+    return (
+        f'<section class="sources-section">'
+        f'<h3 class="section-label">SOURCES</h3>'
+        + "".join(rows)
+        + f"</section>"
+    )
+
+
 def _claims_section_html(claims: list[Any]) -> str:
     if not claims:
         return ""
+    claims = _deduplicate_claims(claims)
     blocks: list[str] = []
     for c in claims:
         if not isinstance(c, dict):
             continue
         ctype = str(c.get("claim_type", "") or "").strip()
+        ctype_l = ctype.lower()
         subject = str(c.get("subject", "") or "").strip()
         ctext = str(c.get("claim", "") or "").strip()
         cited = c.get("cited_source")
         cited_s = str(cited).strip() if cited else ""
+        rumor_src_raw = str(c.get("rumor_source", "") or "").strip()
+        rumor_lang = str(c.get("rumor_language", "") or "").strip()
+        rumor_display_src = rumor_src_raw or cited_s
         badge = _pills([ctype] if ctype else ["claim"], "blue")
         cited_block = ""
         if cited_s:
-            cited_block = (
-                f'<div style="font-size:15px;font-weight:600;color:#0d47a1;margin:10px 0 6px">'
-                f'Article cited: {_e(cited_s)}</div>'
-            )
-        else:
+            if ctype_l == "rumored":
+                dup = _claim_text_dedupe_key(cited_s) == _claim_text_dedupe_key(
+                    rumor_display_src or ""
+                )
+                if dup and not cited_s.startswith(("http://", "https://")):
+                    cited_block = ""
+                elif cited_s.startswith(("http://", "https://")):
+                    cited_block = (
+                        f'<div class="cited-source">Article cited: '
+                        f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
+                        f"<strong>{_e(cited_s)}</strong></a></div>"
+                    )
+                else:
+                    cited_block = (
+                        f'<div class="cited-source">Article cited: '
+                        f"<strong>{_e(cited_s)}</strong></div>"
+                    )
+            elif cited_s.startswith(("http://", "https://")):
+                cited_block = (
+                    f'<div class="cited-source">Article cited: '
+                    f'<a href="{_e(cited_s)}" target="_blank" rel="noopener">'
+                    f"<strong>{_e(cited_s)}</strong></a></div>"
+                )
+            else:
+                cited_block = (
+                    f'<div class="cited-source">Article cited: <strong>{_e(cited_s)}</strong></div>'
+                )
+        elif ctype_l != "rumored":
             cited_block = (
                 '<div style="font-size:15px;color:#6b7280;margin:8px 0 6px">'
                 "Cited source: none cited</div>"
             )
         vrows: list[str] = []
+        subj_link_html = _claim_subject_link_html(subject)
+        claim_link_html = _claim_body_link_html(ctext)
         for v in _safe_list(c.get("verifications")):
             if not isinstance(v, dict):
                 continue
-            adapter = str(v.get("adapter", "") or "")
-            status = str(v.get("status", "") or "")
+            adapter = str(v.get("adapter") or v.get("adapter_name") or "").strip()
+            status = str(v.get("status", "") or "").strip()
             st_col = _status_color(status)
-            result = v.get("result") if isinstance(v.get("result"), dict) else {}
-            brief = ""
-            if isinstance(result, dict):
-                brief = str(
-                    result.get("what") or result.get("who") or result.get("when") or ""
-                ).strip()
+            result = _verification_result_dict(v)
+            st_l = status.lower()
+            ad_k = _adapter_key(adapter)
+            is_surf = _adapter_is_surface(adapter)
+
+            if ad_k in _SKIP_VERIFICATION_ADAPTERS:
+                continue
+
+            if ad_k == "courtlistener" and st_l in ("found", "searched_none_found"):
+                raw_r = v.get("result") if isinstance(v.get("result"), dict) else {}
+                vrows.append(_courtlistener_verification_html(status, raw_r or {}))
+                continue
+
+            if _should_omit_verification_row(adapter, status, result, subject):
+                continue
+
+            brief_plain = ""
+            surface_block = ""
+            if is_surf and isinstance(result, dict) and st_l == "found":
+                surface_block = _format_surface_result(result, subject)
+            elif isinstance(result, dict):
+                brief_plain = _flat_adapter_brief(result)
                 tier = str(result.get("confidence_tier", "") or "").strip()
                 if tier:
-                    brief = f"{brief} ({tier})" if brief else tier
-            if status.lower() == "deferred" and not brief:
-                brief = "deferred (full lookup via dedicated endpoint)"
+                    brief_plain = f"{brief_plain} ({tier})" if brief_plain else tier
+            if not isinstance(result, dict) or not result:
+                det = v.get("detail")
+                if det and not brief_plain and not surface_block:
+                    brief_plain = str(det).strip()
+            if st_l == "deferred" and not brief_plain and not surface_block:
+                brief_plain = "deferred (full lookup via dedicated endpoint)"
+
+            if not _brief_has_reader_value(brief_plain, surface_block, st_l, v):
+                continue
+
+            dash = ""
+            if brief_plain and not surface_block:
+                dash = f" — {_e(brief_plain)}"
+            surf_html = (
+                f'<div class="surface-verification-block">{surface_block}</div>'
+                if surface_block
+                else ""
+            )
             vrows.append(
-                f'<div style="font-size:15px;color:#333;padding:4px 0">'
+                f'<div class="verification-row" style="font-size:15px;color:#333;padding:4px 0">'
                 f'<span style="font-weight:600">{_e(adapter)}</span>: '
                 f'<span style="color:{st_col};font-weight:600">{_e(status)}</span>'
-                f'{f" — {_e(brief)}" if brief else ""}</div>'
+                f"{dash}</div>"
+                f"{surf_html}"
             )
-        ver_html = "".join(vrows) or '<div style="color:#888">No verification rows.</div>'
-        blocks.append(
-            f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:16px;'
-            f'border:1px solid rgba(26,26,26,0.1)">'
-            f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-            f"{badge}"
-            f'<span style="font-size:16px;font-weight:600;color:#111827">{_e(subject)}</span>'
-            f"</div>"
-            f'<p style="font-size:18px;color:#1a1a1a;line-height:1.55;margin:6px 0">{_e(ctext)}</p>'
-            f"{cited_block}"
-            f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
-            f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
-            f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
-            f"</div>"
+        ver_html = "".join(vrows) or (
+            '<div class="verification-row verification-none">'
+            "No independent verification found for this claim."
+            "</div>"
         )
+        if ctype_l == "rumored":
+            src_line = rumor_display_src or "Source not specified in extraction"
+            rum_lang_html = ""
+            if rumor_lang:
+                rum_lang_html = (
+                    f'<div class="rumor-language">Language from article: '
+                    f'<em>“{_e(rumor_lang)}”</em></div>'
+                )
+            blocks.append(
+                f'<div class="claim-card claim-card-rumored inv-paper-card" '
+                f'style="padding:18px 20px;margin-bottom:16px;border:1px solid rgba(255,193,7,0.45)">'
+                f'<div class="claim-header" style="display:flex;align-items:center;gap:10px;'
+                f'flex-wrap:wrap;margin-bottom:8px">'
+                f'<span class="claim-type-badge claim-type-rumored">RUMORED</span>'
+                f'<span class="claim-subject" style="font-size:16px;font-weight:600;color:#111827">'
+                f"{subj_link_html or _e(subject)}</span></div>"
+                f'<div class="claim-text" style="font-size:18px;color:#1a1a1a;line-height:1.55;'
+                f'margin:6px 0">“{claim_link_html or _e(ctext)}”</div>'
+                f'<div class="rumor-source-block"><span class="rumor-label">Source of rumor:</span> '
+                f"<strong>{_e(src_line)}</strong></div>"
+                f"{rum_lang_html}"
+                f"{cited_block}"
+                f'<div class="rumor-disclaimer">'
+                "This claim has not been independently verified. PUBLIC EYE documents that this "
+                "allegation exists and was reported — not that it is true. A dated, signed receipt "
+                "records what was published and when; it does not assert the underlying allegation."
+                "</div>"
+                f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
+                f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
+                f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
+                f"</div>"
+            )
+        else:
+            blocks.append(
+                f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:16px;'
+                f'border:1px solid rgba(26,26,26,0.1)">'
+                f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+                f"{badge}"
+                f'<span style="font-size:16px;font-weight:600;color:#111827">'
+                f"{subj_link_html or _e(subject)}</span>"
+                f"</div>"
+                f'<p style="font-size:18px;color:#1a1a1a;line-height:1.55;margin:6px 0">'
+                f"{claim_link_html or _e(ctext)}</p>"
+                f"{cited_block}"
+                f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
+                f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
+                f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
+                f"</div>"
+            )
     if not blocks:
         return ""
     return (
-        f'<div class="inv-reader-soft" style="margin-bottom:32px">'
+        f'<section id="claims-section" class="claims-section inv-reader-soft" '
+        f'style="margin-bottom:32px">'
         f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
         f'color:#555;margin-bottom:14px">Claims traced</div>'
-        f'{"".join(blocks)}</div>'
+        f'{"".join(blocks)}</section>'
     )
 
 
@@ -284,7 +918,15 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
         mn = str(eco.get("minimized", "") or "")
         klang = _safe_list(eco.get("key_language"))
         tier_b = _pills([tier], "amber") if tier else ""
-        out_txt = ", ".join(str(o) for o in outlets if o)
+        outlet_links: list[str] = []
+        for o in outlets:
+            if not o:
+                continue
+            o_str = str(o).strip()
+            if not o_str:
+                continue
+            outlet_links.append(_outlet_link_html(o_str))
+        outlets_html = ", ".join(outlet_links) if outlet_links else "—"
         kl_txt = ", ".join(f'"{_e(x)}"' for x in klang if x)
         kl_block = ""
         if kl_txt:
@@ -299,7 +941,7 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
             f'<span style="font-size:18px;font-weight:700;color:#111827">{_e(elabel)}</span> {tier_b}'
             f"</div>"
             f'<div style="font-size:15px;color:#444;margin-bottom:8px"><strong>Outlets:</strong> '
-            f"{_e(out_txt) or '—'}</div>"
+            f"{outlets_html}</div>"
             f'<div style="font-size:17px;color:#333;line-height:1.55;margin-bottom:8px">'
             f"<strong>Framing:</strong> {_e(framing)}</div>"
             f'<div style="font-size:16px;color:#555;line-height:1.5"><strong>Emphasizes:</strong> '
@@ -334,11 +976,16 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
         )
     if absent:
         boxes = "".join(
-            f'<div style="display:flex;gap:10px;padding:12px 16px;border-radius:8px;'
-            f'background:rgba(180,83,9,0.09);margin-bottom:10px;'
-            f'border:1px solid rgba(180,83,9,0.25)">'
-            f'<span style="color:#b45315;flex-shrink:0">◈</span>'
-            f'<span style="font-size:18px;color:#5d4037;line-height:1.5">{_e(x)}</span></div>'
+            f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(x))}" '
+            f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
+            f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
+            f'padding:12px 16px;border-radius:8px;margin-bottom:10px;'
+            f'background:rgba(180,83,9,0.09);border:1px solid rgba(180,83,9,0.25)">'
+            f'<span class="absent-icon" style="color:#b45315;flex-shrink:0">◆</span>'
+            f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
+            f"{_e(x)}</span>"
+            f'<span class="absent-search-hint">Search →</span></div>'
+            f"</a>"
             for x in absent
             if x
         )
@@ -365,7 +1012,11 @@ def _named_entities_section_html(entities: list[Any]) -> str:
     ents = [str(e).strip() for e in entities if str(e).strip()]
     if not ents:
         return ""
-    pills = _pills(ents[:40], "gray")
+    pills = "".join(
+        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(e)}" '
+        f'target="_blank" rel="noopener" class="entity-pill entity-link">{_e(e)}</a>'
+        for e in ents[:40]
+    )
     return (
         f'<div class="inv-reader-soft" style="margin-bottom:28px">'
         f'<div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;'
@@ -394,6 +1045,31 @@ def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
     cov_line = _e(adapter)
     if stage_s and adapter == "gdelt":
         cov_line = f"{cov_line} ({_e(stage_s)})"
+
+    comp_html = "0"
+    if count is not None and str(count).strip() not in ("", "—"):
+        ad_l = str(adapter).strip().lower()
+        if ad_l == "gdelt":
+            try:
+                n_g = int(count)
+                if n_g:
+                    comp_html = (
+                        f'<a href="https://www.gdeltproject.org" target="_blank" rel="noopener" '
+                        f'class="entity-ref-link">{n_g} via GDELT</a>'
+                    )
+                else:
+                    comp_html = "0"
+            except (TypeError, ValueError):
+                comp_html = _e(count)
+        else:
+            comp_html = _e(count)
+
+    nc_html = _e(n_claims)
+    if n_claims is not None and str(n_claims).strip() not in ("", "—"):
+        nc_html = (
+            f'<a href="#claims-section" class="internal-link">{_e(n_claims)}</a>'
+        )
+
     return f"""
 <div class="inv-reader-soft" style="margin-bottom:28px;padding:16px 20px;
             background:#fafafa;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
@@ -401,9 +1077,9 @@ def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
               color:#555;margin-bottom:12px">Sources &amp; provenance</div>
   <div style="font-size:16px;color:#333;line-height:1.7">
     <div><strong>Coverage retrieved via:</strong> {cov_line}</div>
-    <div><strong>Comparative articles found:</strong> {_e(count)}</div>
+    <div><strong>Comparative articles found:</strong> {comp_html}</div>
     <div><strong>Adapters checked:</strong> {_e(adapters_line)}</div>
-    <div><strong>Claims extracted:</strong> {_e(n_claims)}</div>
+    <div><strong>Claims extracted:</strong> {nc_html}</div>
     <div><strong>Generated:</strong> {_e(_fmt_generated_at(receipt.get("generated_at")))}</div>
     <div><strong>Perspectives grounded in retrieved sources:</strong> {_e(gtxt)}</div>
   </div>
@@ -664,11 +1340,16 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     b_chain   = pos_b.get("chain",     []) if pos_b else []
 
     nobody_html = "".join(
-        f'<div style="display:flex;gap:10px;padding:10px 14px;border-radius:6px;'
-        f'background:rgba(230,81,0,0.07);margin-bottom:8px;'
-        f'border:1px solid rgba(230,81,0,0.18)">'
-        f'<span style="color:#E65100;flex-shrink:0;margin-top:1px">◈</span>'
-        f'<span style="font-size:18px;color:#5d4037;line-height:1.5">{_e(w)}</span></div>'
+        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(str(w))}" '
+        f'target="_blank" rel="noopener" class="absent-link absent-link-card">'
+        f'<div class="absent-link-row" style="display:flex;align-items:center;gap:10px;'
+        f'padding:10px 14px;border-radius:6px;margin-bottom:8px;'
+        f'background:rgba(230,81,0,0.07);border:1px solid rgba(230,81,0,0.18)">'
+        f'<span style="color:#E65100;flex-shrink:0">◈</span>'
+        f'<span style="flex:1;min-width:0;font-size:18px;color:#5d4037;line-height:1.5">'
+        f"{_e(w)}</span>"
+        f'<span class="absent-search-hint">Search →</span></div>'
+        f"</a>"
         for w in what_nobody[:6]
     )
 
@@ -759,6 +1440,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     coverage_block_html = (
         _coverage_provenance_html(receipt) if rtype == "article_analysis" else ""
     )
+    sources_section_html = _sources_section_html(receipt)
 
     # ── Coalition section ────────────────────────────────────────
     coalition_fight_html = ""
@@ -1085,6 +1767,190 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   details.country-acc[open] > summary .country-chev {{
     transform: rotate(180deg);
   }}
+  .cited-source {{
+    background: #fff8f0;
+    border-left: 3px solid #e67e22;
+    padding: 6px 10px;
+    margin: 8px 0;
+    font-size: 0.9em;
+    color: #333;
+  }}
+  .cited-source a {{
+    color: #0d47a1;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    word-break: break-all;
+  }}
+  .verification-none {{
+    color: #999;
+    font-style: italic;
+    font-size: 0.85em;
+  }}
+  .claim-type-badge.claim-type-rumored {{
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+  .claim-card-rumored {{
+    border-left: 3px solid #ffc107 !important;
+    background: #fffdf7;
+  }}
+  .rumor-source-block {{
+    margin: 10px 0;
+    padding: 8px 12px;
+    background: #fff8e1;
+    border-radius: 4px;
+    font-size: 0.92em;
+  }}
+  .rumor-label {{ color: #856404; margin-right: 6px; font-weight: 500; }}
+  .rumor-language {{ font-size: 0.88em; color: #555; margin: 6px 0; line-height: 1.45; }}
+  .rumor-disclaimer {{
+    font-size: 0.82em;
+    color: #777;
+    font-style: italic;
+    border-top: 1px solid #f0e68c;
+    padding-top: 8px;
+    margin-top: 10px;
+    line-height: 1.5;
+  }}
+  .verification-courtlistener {{
+    border-left: 2px solid #2c3e50;
+    padding-left: 10px;
+    margin: 6px 0;
+  }}
+  .court-result {{ margin-top: 6px; font-size: 0.92em; }}
+  .court-meta {{ color: #888; font-size: 0.82em; margin-top: 4px; }}
+  .court-snippet {{ color: #555; font-style: italic; margin-top: 6px; font-size: 0.86em; line-height: 1.45; }}
+  .verification-courtlistener .court-result a {{
+    color: #2c3e50;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }}
+  .outlet-link {{
+    color: #1a1a1a;
+    text-decoration: underline;
+    text-decoration-color: #ccc;
+  }}
+  .outlet-link:hover {{
+    text-decoration-color: #1a1a1a;
+  }}
+  .entity-pill {{
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #1a1a1a;
+    color: #9e9a93;
+    border: 0.5px solid #222;
+    margin: 2px 3px 2px 0;
+  }}
+  .entity-link {{
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+  }}
+  .entity-link:hover {{
+    background: #1a1a1a;
+    color: #fff;
+  }}
+  .absent-link {{
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    width: 100%;
+    border-radius: 8px;
+    transition: box-shadow 0.15s ease, transform 0.12s ease;
+  }}
+  .absent-link:focus-visible {{
+    outline: 2px solid #c67e22;
+    outline-offset: 2px;
+  }}
+  .absent-link:hover {{
+    box-shadow: 0 2px 8px rgba(26, 26, 26, 0.08);
+  }}
+  .absent-link:hover .absent-link-row {{
+    border-color: rgba(180, 83, 9, 0.45);
+  }}
+  .absent-search-hint {{
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #8d6e63;
+    flex-shrink: 0;
+  }}
+  .surface-field {{ display: block; margin: 2px 0; font-size: 0.9em; }}
+  .surface-substrate {{ color: #555; font-style: italic; }}
+  .surface-tier {{ display: block; font-size: 0.8em; color: #888; margin-top: 4px; }}
+  .surface-absent {{ display: block; font-size: 0.8em; color: #c0392b; }}
+  .surface-verification-block {{
+    margin: 6px 0 10px 12px;
+    padding: 10px 12px;
+    border-left: 2px solid rgba(26, 26, 26, 0.12);
+    font-size: 15px;
+    color: #333;
+    line-height: 1.55;
+  }}
+  .sources-section {{ margin: 2em 0; }}
+  .sources-section .section-label {{
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 10px;
+  }}
+  .source-row {{
+    display: flex;
+    gap: 1em;
+    padding: 0.5em 0;
+    border-bottom: 1px solid #eee;
+    align-items: baseline;
+  }}
+  .source-type {{ font-size: 0.8em; color: #888; min-width: 140px; flex-shrink: 0; }}
+  .source-link {{ color: #1a1a1a; font-size: 0.9em; word-break: break-all; text-decoration: none; }}
+  .source-link:hover {{ text-decoration: underline; }}
+  .claim-subject-link {{
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted #999;
+  }}
+  .claim-subject-link:hover {{ border-bottom-color: #1a1a1a; }}
+  .claim-text-link {{
+    color: inherit;
+    text-decoration: none;
+  }}
+  .claim-text-link:hover {{
+    text-decoration: underline;
+    text-decoration-color: #999;
+  }}
+  .entity-ref-link {{
+    color: #2c3e50;
+    text-decoration: underline;
+    text-decoration-color: #bbb;
+  }}
+  .entity-ref-link:hover {{ text-decoration-color: #2c3e50; }}
+  .internal-link {{
+    color: #1a1a1a;
+    font-weight: 600;
+    text-decoration: underline;
+  }}
+  .internal-link:hover {{ color: #555; }}
+  .court-case-link {{
+    color: #2c3e50;
+    font-weight: 600;
+    text-decoration: underline;
+  }}
+  .entity-pill.entity-link {{
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }}
 </style>
 </head>
 <body class="inv-body">
@@ -1156,6 +2022,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 {reporter_strip}
 
 {coverage_block_html}
+
+{sources_section_html}
 
 <!-- VERIFICATION (reader: one-line access) -->
 <div id="verification" class="inv-reader-soft" style="margin-bottom:28px;padding:16px 18px;background:#fff;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
