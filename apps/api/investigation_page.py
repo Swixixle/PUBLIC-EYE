@@ -216,6 +216,40 @@ def _fmt_generated_at(ts: Any) -> str:
         return s
 
 
+_ECHO_COMPONENT_BASIS: dict[str, str] = {
+    "claim_overlap": "similar wording across source notes",
+    "source_diversity": "outlet and geographic diversity",
+    "coalition_balance": "two-sided balance of sources",
+    "primary_source_distance": "concentration on a few domains",
+    "framing_variation": "similar framing across outlets",
+}
+
+
+def _echo_chamber_basis_plain_language(
+    echo: dict[str, Any],
+    gp_raw: dict[str, Any] | None,
+) -> str:
+    """Plain-language basis for the echo score; avoids opaque labels like 'mixed'."""
+    conf: dict[str, Any] = {}
+    if isinstance(gp_raw, dict):
+        raw = gp_raw.get("confidence_breakdown")
+        conf = raw if isinstance(raw, dict) else {}
+    pet = str(conf.get("primary_evidence_type") or "").strip().lower()
+    if pet and pet != "mixed":
+        return pet.replace("_", " ")
+    components = echo.get("components") if isinstance(echo.get("components"), dict) else {}
+    ranked = sorted(
+        ((k, float(v)) for k, v in components.items() if isinstance(v, (int, float))),
+        key=lambda x: -x[1],
+    )
+    if not ranked:
+        return "source independence and clustering in the cited coverage"
+    parts = [_ECHO_COMPONENT_BASIS.get(k, k.replace("_", " ")) for k, _ in ranked[:2]]
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} and {parts[1]}"
+
+
 def _echo_chamber_standalone_html(
     echo: dict[str, Any],
     gp_raw: dict[str, Any] | None = None,
@@ -244,16 +278,11 @@ def _echo_chamber_standalone_html(
         f'<span style="font-weight:600;color:#111827">{_e(v)}/20</span></div>'
         for k, v in components.items()
     )
-    conf = {}
-    if isinstance(gp_raw, dict):
-        conf = gp_raw.get("confidence_breakdown") if isinstance(gp_raw.get("confidence_breakdown"), dict) else {}
-    evidence_type = str(conf.get("primary_evidence_type") or "").strip()
-    echo_conf_note = ""
-    if evidence_type:
-        echo_conf_note = (
-            f'<div class="echo-conf-note">Analysis grounded in: '
-            f'{_e(evidence_type.replace("_", " "))}</div>'
-        )
+    basis_phrase = _echo_chamber_basis_plain_language(echo, gp_raw)
+    echo_conf_note = (
+        f'<div class="echo-conf-note">Analysis grounded in: '
+        f'{_e(basis_phrase)}</div>'
+    )
     return f"""
 <div class="inv-paper-card inv-reader-soft" style="margin-bottom:28px;padding:20px 22px;
             border:1px solid rgba(26,26,26,0.12)">
