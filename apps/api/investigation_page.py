@@ -1008,21 +1008,44 @@ def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
     )
 
 
-def _named_entities_section_html(entities: list[Any]) -> str:
-    ents = [str(e).strip() for e in entities if str(e).strip()]
-    if not ents:
+def _named_entities_section_html(receipt: dict) -> str:
+    entities = receipt.get("named_entities", [])
+    if not entities:
         return ""
-    pills = "".join(
-        f'<a href="{_GOOGLE_NEWS_SEARCH}{quote_plus(e)}" '
-        f'target="_blank" rel="noopener" class="entity-pill entity-link">{_e(e)}</a>'
-        for e in ents[:40]
-    )
-    return (
-        f'<div class="inv-reader-soft" style="margin-bottom:28px">'
-        f'<div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;'
-        f'color:#777;margin-bottom:10px">Named entities</div>'
-        f'<div style="line-height:1.8">{pills}</div></div>'
-    )
+
+    eye_items = []
+    for entity in entities[:40]:
+        ent = str(entity).strip()
+        if not ent:
+            continue
+        encoded = quote_plus(ent)
+        url = f"https://news.google.com/search?q={encoded}"
+        # Escape entity name for HTML attribute and label
+        safe_name = ent.replace('"', '&quot;').replace("<", "&lt;").replace(">", "&gt;")
+        eye_items.append(
+            f'<a href="{url}" target="_blank" rel="noopener" '
+            f'class="eye-pill" title="{safe_name}">'
+            f'<svg class="eye-svg" viewBox="0 0 44 26" xmlns="http://www.w3.org/2000/svg">'
+            f'<path class="closed-line" d="M4 13 Q22 4 40 13"/>'
+            f'<line class="eye-lash" x1="22" y1="4" x2="22" y2="1"/>'
+            f'<line class="eye-lash" x1="14" y1="6.5" x2="12" y2="4"/>'
+            f'<line class="eye-lash" x1="30" y1="6.5" x2="32" y2="4"/>'
+            f'<path class="open-outline" d="M4 13 Q13 3 22 3 Q31 3 40 13 Q31 23 22 23 Q13 23 4 13 Z"/>'
+            f'<circle class="eye-pupil" cx="22" cy="13" r="5.5"/>'
+            f'<circle class="eye-shine" cx="25" cy="10" r="1.5"/>'
+            f"</svg>"
+            f'<span class="eye-label">{safe_name}</span>'
+            f"</a>"
+        )
+
+    eyes_html = "\n".join(eye_items)
+
+    return f"""
+<section class="named-entities-section">
+  <h3 class="section-label">NAMED ENTITIES</h3>
+  <div class="eye-row">{eyes_html}</div>
+</section>
+"""
 
 
 def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
@@ -1436,7 +1459,7 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
         if (rtype == "article_analysis" or gp_raw)
         else ""
     )
-    named_entities_html = _named_entities_section_html(named_entities_list)
+    named_entities_html = _named_entities_section_html(receipt)
     coverage_block_html = (
         _coverage_provenance_html(receipt) if rtype == "article_analysis" else ""
     )
@@ -1840,26 +1863,109 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   .outlet-link:hover {{
     text-decoration-color: #1a1a1a;
   }}
-  .entity-pill {{
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 500;
-    background: #1a1a1a;
-    color: #9e9a93;
-    border: 0.5px solid #222;
-    margin: 2px 3px 2px 0;
+  .eye-row {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 14px;
+    padding: 0.5rem 0 2rem;
   }}
-  .entity-link {{
-    text-decoration: none;
-    color: inherit;
+
+  .eye-pill {{
+    position: relative;
+    width: 44px;
+    height: 26px;
     cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    flex-shrink: 0;
   }}
-  .entity-link:hover {{
-    background: #1a1a1a;
-    color: #fff;
+
+  .eye-svg {{
+    width: 44px;
+    height: 26px;
+    overflow: visible;
+    display: block;
   }}
+
+  .closed-line {{
+    stroke: #1a1a1a;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    fill: none;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+  }}
+
+  .eye-lash {{
+    stroke: #1a1a1a;
+    stroke-width: 1;
+    stroke-linecap: round;
+    opacity: 1;
+    transition: opacity 0.15s ease;
+  }}
+
+  .open-outline {{
+    fill: #f5f5f0;
+    stroke: #1a1a1a;
+    stroke-width: 1.5;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }}
+
+  .eye-pupil {{
+    fill: #1a1a1a;
+    opacity: 0;
+    transition: opacity 0.2s ease 0.08s;
+  }}
+
+  .eye-shine {{
+    fill: #ffffff;
+    opacity: 0;
+    transition: opacity 0.2s ease 0.12s;
+  }}
+
+  .eye-label {{
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    color: #888;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+    font-family: inherit;
+  }}
+
+  .eye-pill:hover .closed-line,
+  .eye-pill:hover .eye-lash {{
+    opacity: 0;
+  }}
+
+  .eye-pill:hover .open-outline,
+  .eye-pill:hover .eye-pupil,
+  .eye-pill:hover .eye-shine {{
+    opacity: 1;
+  }}
+
+  .eye-pill:hover .eye-label {{
+    opacity: 1;
+  }}
+
+  .named-entities-section {{
+    margin: 2em 0 3em;
+  }}
+
+  .named-entities-section .section-label {{
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 10px;
+  }}
+
   .absent-link {{
     display: block;
     text-decoration: none;
@@ -1947,9 +2053,13 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     font-weight: 600;
     text-decoration: underline;
   }}
-  .entity-pill.entity-link {{
-    cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+
+  @media (prefers-color-scheme: dark) {{
+    .closed-line, .eye-lash, .open-outline {{ stroke: #e0e0e0; }}
+    .open-outline {{ fill: #2a2a2a; }}
+    .eye-pupil {{ fill: #e0e0e0; }}
+    .eye-shine {{ fill: #1a1a1a; }}
+    .eye-label {{ color: #aaa; }}
   }}
 </style>
 </head>
