@@ -127,7 +127,7 @@ def _fmt_secondary_date(ts: Any) -> str:
     return f"{t.strftime('%b')} {t.day}, {t.year}"
 
 
-def _row_volatility(r: dict[str, Any]) -> int:
+def _row_volatility(r: dict[str, Any]) -> int | None:
     coal = r.get("coalition") or {}
     if isinstance(coal, dict) and coal.get("divergence_score") is not None:
         try:
@@ -140,7 +140,7 @@ def _row_volatility(r: dict[str, Any]) -> int:
             return max(0, min(100, int(v)))
         except (TypeError, ValueError):
             pass
-    return 0
+    return None
 
 
 def _one_line_summary(rec: dict[str, Any], coal: dict[str, Any]) -> str:
@@ -256,17 +256,23 @@ def render_front_page(data: dict[str, Any]) -> str:
 
     featured_section = ""
     if lead and not empty:
-        v = int(lead["volatility"])
-        vc = vol_color(v)
+        v_raw = lead.get("volatility")
+        vol_row = ""
+        if v_raw is not None:
+            v = int(v_raw)
+            vc = vol_color(v)
+            vol_row = (
+                f'<div class="fp-featured-vol-row">'
+                f'<span class="fp-featured-vol-pill" style="border-color:{vc};color:{vc}">'
+                f"{v} volatility</span></div>"
+            )
         rid = _e(lead["receipt_id"])
         sum_line = _e(lead.get("summary") or "")
         featured_section = f"""
 <section class="fp-featured" aria-label="Featured investigation">
   <hr class="rule-bold" />
   <div class="fp-featured-inner">
-    <div class="fp-featured-vol-row">
-      <span class="fp-featured-vol-pill" style="border-color:{vc};color:{vc}">{v} volatility</span>
-    </div>
+    {vol_row}
     <h2 class="fp-featured-hed">{_e(lead.get("headline") or "")}</h2>
     {f'<p class="fp-featured-sum">{sum_line}</p>' if sum_line else ''}
     <a class="fp-cta" href="/i/{rid}">Read investigation →</a>
@@ -279,13 +285,19 @@ def render_front_page(data: dict[str, Any]) -> str:
         cards = []
         for s in secondaries:
             sid = _e(s.get("receipt_id"))
-            vc = vol_color(int(s.get("volatility", 0)))
-            vol_n = int(s.get("volatility", 0))
+            vol_n = s.get("volatility")
+            vol_block = ""
+            if vol_n is not None:
+                vn = int(vol_n)
+                vc = vol_color(vn)
+                vol_block = (
+                    f'<div class="fp-sec-vol"><span style="color:{vc}">{vn}</span>'
+                    f'<span class="fp-sec-vol-suffix"> / 100</span>'
+                    f'<span class="fp-sec-vol-label">volatility</span></div>'
+                )
             cards.append(
                 f'<a class="fp-sec-card" href="/i/{sid}">'
-                f'<div class="fp-sec-vol"><span style="color:{vc}">{vol_n}</span>'
-                f'<span class="fp-sec-vol-suffix"> / 100</span>'
-                f'<span class="fp-sec-vol-label">volatility</span></div>'
+                f"{vol_block}"
                 f'<h3 class="fp-sec-hed">{_e(s.get("headline"))}</h3>'
                 f'<div class="fp-sec-meta"><span>Open investigation</span><span>{_e(s.get("date"))}</span></div>'
                 f"</a>"
