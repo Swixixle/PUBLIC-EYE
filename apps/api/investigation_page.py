@@ -16,6 +16,7 @@ Changes from v3:
 from __future__ import annotations
 import html
 from collections import defaultdict
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -90,6 +91,323 @@ def _vol_display_num_color(vol: int) -> str:
     if vol <= 60:
         return "#FF9800"
     return "#ef5350"
+
+
+def _safe_list(val: Any) -> list:
+    return val if isinstance(val, list) else []
+
+
+def _fmt_generated_at(ts: Any) -> str:
+    if not ts:
+        return "—"
+    s = str(ts).strip()
+    try:
+        if s.endswith("Z"):
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        else:
+            dt = datetime.fromisoformat(s)
+        return dt.strftime("%B %d, %Y · %H:%M UTC")
+    except ValueError:
+        return s
+
+
+def _echo_chamber_standalone_html(echo: dict[str, Any]) -> str:
+    """Echo block for article_analysis when no coalition map (score /20 components)."""
+    if not isinstance(echo, dict):
+        return ""
+    try:
+        score = float(echo.get("score", 0))
+    except (TypeError, ValueError):
+        score = 0.0
+    label = str(echo.get("label", "") or "").lower()
+    interp = str(echo.get("interpretation", "") or "")
+    components = echo.get("components") if isinstance(echo.get("components"), dict) else {}
+    rounded = int(round(score))
+    if score < 30:
+        pill_bg, border_c, accent = "#F0FFF4", "#22C55E", "#15803d"
+    elif score <= 60:
+        pill_bg, border_c, accent = "#FFFBF0", "#F59E0B", "#b45309"
+    else:
+        pill_bg, border_c, accent = "#FFF5F5", "#EF4444", "#b91c1c"
+    comp_rows = "".join(
+        f'<div style="display:flex;justify-content:space-between;'
+        f'padding:6px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:14px">'
+        f'<span style="color:#6B7280">{_e(k.replace("_", " ").title())}</span>'
+        f'<span style="font-weight:600;color:#111827">{_e(v)}/20</span></div>'
+        for k, v in components.items()
+    )
+    return f"""
+<div class="inv-paper-card inv-reader-soft" style="margin-bottom:28px;padding:20px 22px;
+            border:1px solid rgba(26,26,26,0.12)">
+  <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
+              color:#555;margin-bottom:12px">Echo chamber score</div>
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;
+                border-radius:20px;background:{pill_bg};border:1px solid {border_c}55">
+      <span style="font-family:'Playfair Display',serif;font-size:32px;font-weight:900;
+                   color:#111827">{rounded}</span>
+      <span style="font-size:14px;color:{accent}">/ 100</span>
+      <span style="font-size:13px;font-weight:600;color:{accent};text-transform:capitalize">
+        — {_e(label or "—")}
+      </span>
+    </div>
+    <a href="/methodology#echo-chamber" style="font-size:13px;color:#9CA3AF">How this is calculated →</a>
+  </div>
+  <p style="font-size:17px;color:#444;line-height:1.65;margin-bottom:16px">{_e(interp)}</p>
+  <div style="border-top:1px solid rgba(0,0,0,0.06);padding-top:12px">
+    <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;
+                color:#9CA3AF;font-weight:600;margin-bottom:8px">Components</div>
+    {comp_rows or '<div style="font-size:14px;color:#888">No component breakdown stored.</div>'}
+  </div>
+</div>"""
+
+
+def _status_color(status: str) -> str:
+    s = (status or "").lower()
+    if s == "found":
+        return "#15803d"
+    if s == "not_found":
+        return "#b45309"
+    if s == "deferred":
+        return "#6b7280"
+    return "#57534e"
+
+
+def _claims_section_html(claims: list[Any]) -> str:
+    if not claims:
+        return ""
+    blocks: list[str] = []
+    for c in claims:
+        if not isinstance(c, dict):
+            continue
+        ctype = str(c.get("claim_type", "") or "").strip()
+        subject = str(c.get("subject", "") or "").strip()
+        ctext = str(c.get("claim", "") or "").strip()
+        cited = c.get("cited_source")
+        cited_s = str(cited).strip() if cited else ""
+        badge = _pills([ctype] if ctype else ["claim"], "blue")
+        cited_block = ""
+        if cited_s:
+            cited_block = (
+                f'<div style="font-size:15px;font-weight:600;color:#0d47a1;margin:10px 0 6px">'
+                f'Article cited: {_e(cited_s)}</div>'
+            )
+        else:
+            cited_block = (
+                '<div style="font-size:15px;color:#6b7280;margin:8px 0 6px">'
+                "Cited source: none cited</div>"
+            )
+        vrows: list[str] = []
+        for v in _safe_list(c.get("verifications")):
+            if not isinstance(v, dict):
+                continue
+            adapter = str(v.get("adapter", "") or "")
+            status = str(v.get("status", "") or "")
+            st_col = _status_color(status)
+            result = v.get("result") if isinstance(v.get("result"), dict) else {}
+            brief = ""
+            if isinstance(result, dict):
+                brief = str(
+                    result.get("what") or result.get("who") or result.get("when") or ""
+                ).strip()
+                tier = str(result.get("confidence_tier", "") or "").strip()
+                if tier:
+                    brief = f"{brief} ({tier})" if brief else tier
+            if status.lower() == "deferred" and not brief:
+                brief = "deferred (full lookup via dedicated endpoint)"
+            vrows.append(
+                f'<div style="font-size:15px;color:#333;padding:4px 0">'
+                f'<span style="font-weight:600">{_e(adapter)}</span>: '
+                f'<span style="color:{st_col};font-weight:600">{_e(status)}</span>'
+                f'{f" — {_e(brief)}" if brief else ""}</div>'
+            )
+        ver_html = "".join(vrows) or '<div style="color:#888">No verification rows.</div>'
+        blocks.append(
+            f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:16px;'
+            f'border:1px solid rgba(26,26,26,0.1)">'
+            f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+            f"{badge}"
+            f'<span style="font-size:16px;font-weight:600;color:#111827">{_e(subject)}</span>'
+            f"</div>"
+            f'<p style="font-size:18px;color:#1a1a1a;line-height:1.55;margin:6px 0">{_e(ctext)}</p>'
+            f"{cited_block}"
+            f'<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,0.06)">'
+            f'<div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;'
+            f'color:#6b7280;margin-bottom:6px">Verification</div>{ver_html}</div>'
+            f"</div>"
+        )
+    if not blocks:
+        return ""
+    return (
+        f'<div class="inv-reader-soft" style="margin-bottom:32px">'
+        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+        f'color:#555;margin-bottom:14px">Claims traced</div>'
+        f'{"".join(blocks)}</div>'
+    )
+
+
+def _global_perspectives_section_html(gp: dict[str, Any]) -> str:
+    if not isinstance(gp, dict):
+        return ""
+    ecosystems = _safe_list(gp.get("ecosystems"))
+    div_pts = _safe_list(gp.get("divergence_points"))
+    absent = _safe_list(gp.get("absent_from_all"))
+    consensus = _safe_list(gp.get("consensus_elements"))
+    claim_one = str(gp.get("claim", "") or "").strip()
+    conf_note = str(gp.get("confidence_note", "") or "").strip()
+
+    has_any = bool(ecosystems) or bool(div_pts) or bool(absent) or bool(consensus) or bool(claim_one)
+    if not has_any:
+        return (
+            '<div class="inv-reader-soft" style="margin-bottom:32px">'
+            '<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+            'color:#555;margin-bottom:12px">Global perspectives</div>'
+            '<div class="inv-paper-card" style="padding:18px 22px;font-size:17px;color:#555">'
+            "Global perspective mapping is running — check back shortly."
+            "</div></div>"
+        )
+
+    parts: list[str] = []
+    if claim_one:
+        parts.append(
+            f'<p style="font-size:16px;color:#444;line-height:1.6;margin-bottom:18px;font-style:italic">'
+            f'{_e(claim_one)}</p>'
+        )
+    for eco in ecosystems:
+        if not isinstance(eco, dict):
+            continue
+        elabel = str(eco.get("label", "") or "")
+        tier = str(eco.get("confidence_tier", "") or "")
+        outlets = _safe_list(eco.get("outlets"))
+        framing = str(eco.get("framing", "") or "")
+        emph = str(eco.get("emphasized", "") or "")
+        mn = str(eco.get("minimized", "") or "")
+        klang = _safe_list(eco.get("key_language"))
+        tier_b = _pills([tier], "amber") if tier else ""
+        out_txt = ", ".join(str(o) for o in outlets if o)
+        kl_txt = ", ".join(f'"{_e(x)}"' for x in klang if x)
+        kl_block = ""
+        if kl_txt:
+            kl_block = (
+                f'<div style="font-size:15px;color:#444;margin-top:10px">'
+                f"<strong>Key language:</strong> {kl_txt}</div>"
+            )
+        parts.append(
+            f'<div class="inv-paper-card" style="padding:18px 20px;margin-bottom:14px;'
+            f'border:1px solid rgba(26,26,26,0.1)">'
+            f'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+            f'<span style="font-size:18px;font-weight:700;color:#111827">{_e(elabel)}</span> {tier_b}'
+            f"</div>"
+            f'<div style="font-size:15px;color:#444;margin-bottom:8px"><strong>Outlets:</strong> '
+            f"{_e(out_txt) or '—'}</div>"
+            f'<div style="font-size:17px;color:#333;line-height:1.55;margin-bottom:8px">'
+            f"<strong>Framing:</strong> {_e(framing)}</div>"
+            f'<div style="font-size:16px;color:#555;line-height:1.5"><strong>Emphasizes:</strong> '
+            f"{_e(emph)}</div>"
+            f'<div style="font-size:16px;color:#555;line-height:1.5;margin-top:6px">'
+            f"<strong>Minimizes:</strong> {_e(mn)}</div>"
+            f"{kl_block}</div>"
+        )
+    if consensus:
+        li = "".join(
+            f'<li style="margin:8px 0;font-size:17px;color:#333;line-height:1.5">{_e(x)}</li>'
+            for x in consensus
+            if x
+        )
+        parts.append(
+            '<div style="margin:20px 0 16px">'
+            '<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+            'color:#555;margin-bottom:10px">What all sources agree happened</div>'
+            f'<ul style="margin:0;padding-left:20px">{li}</ul></div>'
+        )
+    if div_pts:
+        li = "".join(
+            f'<li style="margin:8px 0;font-size:17px;color:#333;line-height:1.5">{_e(x)}</li>'
+            for x in div_pts
+            if x
+        )
+        parts.append(
+            '<div style="margin:20px 0 16px">'
+            '<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+            'color:#b45309;margin-bottom:10px">Where coverage splits</div>'
+            f'<ul style="margin:0;padding-left:20px">{li}</ul></div>'
+        )
+    if absent:
+        boxes = "".join(
+            f'<div style="display:flex;gap:10px;padding:12px 16px;border-radius:8px;'
+            f'background:rgba(180,83,9,0.09);margin-bottom:10px;'
+            f'border:1px solid rgba(180,83,9,0.25)">'
+            f'<span style="color:#b45315;flex-shrink:0">◈</span>'
+            f'<span style="font-size:18px;color:#5d4037;line-height:1.5">{_e(x)}</span></div>'
+            for x in absent
+            if x
+        )
+        parts.append(
+            '<div style="margin:24px 0 16px">'
+            '<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+            'color:#b45309;margin-bottom:12px;font-weight:700">What nobody is covering</div>'
+            f"{boxes}</div>"
+        )
+    if conf_note:
+        parts.append(
+            f'<p style="font-size:14px;color:#6b7280;line-height:1.55;margin-top:16px">'
+            f'{_e(conf_note)}</p>'
+        )
+    return (
+        f'<div class="inv-reader-soft" style="margin-bottom:32px">'
+        f'<div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;'
+        f'color:#555;margin-bottom:14px">Global perspectives</div>'
+        f'{"".join(parts)}</div>'
+    )
+
+
+def _named_entities_section_html(entities: list[Any]) -> str:
+    ents = [str(e).strip() for e in entities if str(e).strip()]
+    if not ents:
+        return ""
+    pills = _pills(ents[:40], "gray")
+    return (
+        f'<div class="inv-reader-soft" style="margin-bottom:28px">'
+        f'<div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;'
+        f'color:#777;margin-bottom:10px">Named entities</div>'
+        f'<div style="line-height:1.8">{pills}</div></div>'
+    )
+
+
+def _coverage_provenance_html(receipt: dict[str, Any]) -> str:
+    cov = receipt.get("coverage_result") if isinstance(receipt.get("coverage_result"), dict) else {}
+    adapter = str(cov.get("source_adapter", "") or "—")
+    stage = cov.get("gdelt_stage")
+    stage_s = str(stage) if stage else ""
+    count = cov.get("comparative_article_count")
+    if count is None:
+        count = len(_safe_list(receipt.get("sources")))
+    sc = receipt.get("sources_checked")
+    adapters_line = ", ".join(str(x) for x in sc) if isinstance(sc, list) else "—"
+    n_claims = receipt.get("claims_extracted", "—")
+    grounded = receipt.get("perspectives_grounded")
+    if grounded is None:
+        sp = receipt.get("source_provenance")
+        if isinstance(sp, dict):
+            grounded = bool(sp.get("coverage_found"))
+    gtxt = "yes" if grounded else "no"
+    cov_line = _e(adapter)
+    if stage_s and adapter == "gdelt":
+        cov_line = f"{cov_line} ({_e(stage_s)})"
+    return f"""
+<div class="inv-reader-soft" style="margin-bottom:28px;padding:16px 20px;
+            background:#fafafa;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
+  <div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;
+              color:#555;margin-bottom:12px">Sources &amp; provenance</div>
+  <div style="font-size:16px;color:#333;line-height:1.7">
+    <div><strong>Coverage retrieved via:</strong> {cov_line}</div>
+    <div><strong>Comparative articles found:</strong> {_e(count)}</div>
+    <div><strong>Adapters checked:</strong> {_e(adapters_line)}</div>
+    <div><strong>Claims extracted:</strong> {_e(n_claims)}</div>
+    <div><strong>Generated:</strong> {_e(_fmt_generated_at(receipt.get("generated_at")))}</div>
+    <div><strong>Perspectives grounded in retrieved sources:</strong> {_e(gtxt)}</div>
+  </div>
+</div>"""
 
 
 def _pills(items: list, color: str) -> str:
@@ -405,6 +723,43 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
   </div>
 </div>"""
 
+    gp_raw = receipt.get("global_perspectives") if isinstance(receipt.get("global_perspectives"), dict) else {}
+    claims_verified_list = _safe_list(receipt.get("claims_verified"))
+    named_entities_list = _safe_list(receipt.get("named_entities"))
+    eco_n = _safe_list(gp_raw.get("ecosystems"))
+    div_n = _safe_list(gp_raw.get("divergence_points"))
+    absent_n = _safe_list(gp_raw.get("absent_from_all"))
+    consensus_n = _safe_list(gp_raw.get("consensus_elements"))
+    has_gp_signal = bool(eco_n) or bool(div_n) or bool(absent_n) or bool(consensus_n) or bool(
+        str(gp_raw.get("claim", "") or "").strip()
+    )
+
+    echo_standalone_html = ""
+    if not coalition:
+        ech = receipt.get("echo_chamber")
+        if isinstance(ech, dict) and ech.get("score") is not None:
+            echo_standalone_html = _echo_chamber_standalone_html(ech)
+        elif rtype == "article_analysis":
+            base_sources = receipt.get("sources")
+            if isinstance(base_sources, list) and base_sources:
+                echo_standalone_html = _echo_chamber_standalone_html(
+                    compute_echo_chamber_score(
+                        merge_sources_for_echo(base_sources, None),
+                        None,
+                    )
+                )
+
+    claims_section_html = _claims_section_html(claims_verified_list)
+    perspectives_block_html = (
+        _global_perspectives_section_html(gp_raw)
+        if (rtype == "article_analysis" or gp_raw)
+        else ""
+    )
+    named_entities_html = _named_entities_section_html(named_entities_list)
+    coverage_block_html = (
+        _coverage_provenance_html(receipt) if rtype == "article_analysis" else ""
+    )
+
     # ── Coalition section ────────────────────────────────────────
     coalition_fight_html = ""
     coalition_tail_html = ""
@@ -650,7 +1005,10 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
             + coalition_tail_html
         )
     else:
-        coalition_section = no_coalition_html
+        show_coalition_placeholder = (
+            not has_gp_signal and not claims_verified_list and not echo_standalone_html
+        )
+        coalition_section = no_coalition_html if show_coalition_placeholder else ""
 
     reporter_strip = f"""
 <div class="reporter-only inv-reporter-tools">
@@ -774,10 +1132,18 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 
 <div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:28px"></div>
 
+{echo_standalone_html}
+
 {coalition_section}
 
 <!-- SUMMARY (after the fight) -->
 {f'<div class="inv-paper-card inv-reader-soft" style="margin-bottom:32px;padding:18px 22px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:8px">Summary</div><p style="font-size:18px;color:#333;line-height:1.7">{_e(str(narrative)[:400])}{"…" if len(str(narrative))>400 else ""}</p></div>' if narrative else ""}
+
+{claims_section_html}
+
+{perspectives_block_html}
+
+{named_entities_html}
 
 <!-- WHAT NO ONE IS REALLY TALKING ABOUT -->
 {f'<div class="inv-reader-soft" style="margin-bottom:32px"><div style="font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#555;margin-bottom:12px">What no one is really talking about</div>{nobody_html}</div>' if nobody_html else ""}
@@ -788,6 +1154,8 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
 <div style="height:1px;background:rgba(26,26,26,0.2);margin-bottom:32px"></div>
 
 {reporter_strip}
+
+{coverage_block_html}
 
 <!-- VERIFICATION (reader: one-line access) -->
 <div id="verification" class="inv-reader-soft" style="margin-bottom:28px;padding:16px 18px;background:#fff;border:1px solid rgba(26,26,26,0.12);border-radius:6px">
