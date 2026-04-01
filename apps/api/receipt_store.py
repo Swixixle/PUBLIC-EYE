@@ -600,6 +600,60 @@ def list_recent_article_investigations(
         conn.close()
 
 
+def get_homepage_stats() -> dict[str, int]:
+    """
+    Live counts for the homepage stats bar (read-only, no joins).
+    Uses frame_receipts + JSONB payload; returns zeros if DB unavailable.
+    """
+    zero = {"investigations": 0, "claims_traced": 0, "receipts_signed": 0}
+    try:
+        conn = _get_conn()
+    except Exception:
+        return zero
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM frame_receipts
+                WHERE receipt_type = %s
+                """,
+                ("article_analysis",),
+            )
+            investigations = int(cur.fetchone()[0] or 0)
+
+            cur.execute(
+                """
+                SELECT COALESCE(SUM((payload->>'claims_extracted')::bigint), 0)
+                FROM frame_receipts
+                WHERE receipt_type = %s
+                  AND payload ? 'claims_extracted'
+                  AND (payload->>'claims_extracted') ~ '^[0-9]+$'
+                """,
+                ("article_analysis",),
+            )
+            claims_traced = int(cur.fetchone()[0] or 0)
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM frame_receipts
+                WHERE receipt_type = %s
+                  AND payload->>'signed' = 'true'
+                """,
+                ("article_analysis",),
+            )
+            receipts_signed = int(cur.fetchone()[0] or 0)
+
+        return {
+            "investigations": investigations,
+            "claims_traced": claims_traced,
+            "receipts_signed": receipts_signed,
+        }
+    except Exception:
+        return zero
+    finally:
+        conn.close()
+
+
 def list_recent_receipts(limit: int = 20) -> list[dict[str, Any]]:
     """List recent receipts for a feed/history view (metadata only)."""
     conn = _get_conn()

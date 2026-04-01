@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from receipt_store import list_recent_article_investigations
+from receipt_store import get_homepage_stats, list_recent_article_investigations
 
 
 def _e(s: Any) -> str:
@@ -152,10 +152,44 @@ def _one_line_summary(rec: dict[str, Any], coal: dict[str, Any]) -> str:
     return ""
 
 
+def _stats_bar_html(stats: dict[str, Any] | None) -> str:
+    if not stats:
+        return ""
+    investigations = int(stats.get("investigations", 0))
+    claims = int(stats.get("claims_traced", 0))
+    signed = int(stats.get("receipts_signed", 0))
+    if investigations == 0 and claims == 0:
+        return ""
+
+    def fmt(n: int) -> str:
+        return f"{n:,}"
+
+    return f"""
+<div class="stats-bar" role="region" aria-label="Database activity">
+    <div class="stat-item">
+        <span class="stat-number">{fmt(investigations)}</span>
+        <span class="stat-label">investigations</span>
+    </div>
+    <div class="stat-divider" aria-hidden="true">·</div>
+    <div class="stat-item">
+        <span class="stat-number">{fmt(claims)}</span>
+        <span class="stat-label">claims traced</span>
+    </div>
+    <div class="stat-divider" aria-hidden="true">·</div>
+    <div class="stat-item">
+        <span class="stat-number">{fmt(signed)}</span>
+        <span class="stat-label">signed receipts</span>
+    </div>
+</div>
+"""
+
+
 def build_front_page_payload() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     generated = now.isoformat()
     edition = now.strftime("%A, %B %d, %Y")
+
+    stats = get_homepage_stats()
 
     try:
         rows = list_recent_article_investigations(limit=24)
@@ -169,6 +203,7 @@ def build_front_page_payload() -> dict[str, Any]:
             "secondary_stories": [],
             "edition_date": edition,
             "empty": True,
+            "stats": stats,
         }
 
     lead_row = rows[0]
@@ -205,6 +240,7 @@ def build_front_page_payload() -> dict[str, Any]:
         "secondary_stories": secondary,
         "edition_date": edition,
         "empty": False,
+        "stats": stats,
     }
 
 
@@ -212,6 +248,7 @@ def render_front_page(data: dict[str, Any]) -> str:
     lead = data.get("lead_story")
     secondaries = data.get("secondary_stories") or []
     empty = bool(data.get("empty") or lead is None)
+    stats_bar_html = _stats_bar_html(data.get("stats"))
 
     featured_section = ""
     if lead and not empty:
@@ -575,6 +612,56 @@ body.fp-body {{
   border-top: 1px solid rgba(26,26,26,0.3);
 }}
 
+.stats-bar {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 1rem 0 0.5rem;
+    margin-bottom: 2rem;
+    border-top: 1px solid #e0ddd6;
+    border-bottom: 1px solid #e0ddd6;
+}}
+
+.stat-item {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}}
+
+.stat-number {{
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}}
+
+.stat-label {{
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #999;
+}}
+
+.stat-divider {{
+    color: #ccc;
+    font-size: 1.2rem;
+    line-height: 1;
+}}
+
+@media (prefers-color-scheme: dark) {{
+    .stats-bar {{ border-color: #333; }}
+    .stat-number {{ color: #e0e0e0; }}
+    .stat-label {{ color: #888; }}
+}}
+
+@media (max-width: 480px) {{
+    .stat-number {{ font-size: 1.1rem; }}
+    .stat-label {{ font-size: 0.6rem; }}
+}}
+
 .fp-secondary {{ margin-bottom: 24px; }}
 .fp-edition-empty {{ font-size: 15px; color: #555; margin-top: 8px; }}
 .fp-sec-grid {{
@@ -679,6 +766,7 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
   </div>
 </section>
 
+{stats_bar_html}
 {featured_section}
 {secondary_html}
 

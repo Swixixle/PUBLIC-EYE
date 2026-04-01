@@ -979,6 +979,11 @@ async def root(
             "secondary_stories": [],
             "edition_date": now.strftime("%A, %B %d, %Y"),
             "empty": True,
+            "stats": {
+                "investigations": 0,
+                "claims_traced": 0,
+                "receipts_signed": 0,
+            },
         }
     return HTMLResponse(render_front_page(data))
 

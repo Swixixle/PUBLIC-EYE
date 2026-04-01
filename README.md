@@ -32,6 +32,27 @@
 
 ---
 
+## How it was built and what broke along the way
+
+This is a real system that has been stress-tested, not a demo. These are the actual failure modes encountered during development and what was done about them.
+
+**GDELT returned zero results on most initial queries.** The first query strategy used the article author's name as a search term. GDELT indexes article content, not bylines — author-name queries almost always come back empty. The fix was a staged waterfall: headline keywords at 7 days, then 30 days, then core entities at 30 and 90 days, then NewsAPI as a final fallback. The pipeline now logs which stage succeeded on every request so production failures are diagnosable.
+
+**The investigation page rendered nothing for weeks.** The analysis pipeline was generating complete signed receipts with 14+ traced claims, echo chamber scores, and global perspectives — but the investigation page template was only reading two fields from the receipt. Everything else was sitting in the database, signed and correct, invisible. This was a frontend rendering bug, not a pipeline bug.
+
+**Verification rows were noise.** Early versions showed `actor_ledger: not_found — structural_heuristic` on every claim. This is technically accurate — the actor ledger runs a structural heuristic — but it communicates nothing useful to a reader. Those rows are now filtered. A claim with no meaningful verification says "No independent verification found" instead of pretending structural heuristics are evidence.
+
+**The CourtListener adapter was deferred on every claim.** The adapter existed and was wired, but always returned `deferred` instead of running. It now runs on `rumored` claims specifically — allegations sourced to anonymous officials or secondary reports — where court record matches are most meaningful.
+
+**Where it still breaks:**
+
+- Low-coverage stories (regional news, non-English sources) often exhaust all GDELT stages and fall back to NewsAPI or produce partial receipts
+- Entity resolution on ambiguous names sometimes picks the wrong person
+- Audio transcription (YouTube, podcasts) fetches and transcribes correctly but the full investigation pipeline on transcript content is not yet confirmed end-to-end for long-form audio
+- Cold starts on Render's free tier add 30–60 seconds to the first request after inactivity
+
+**What a partial receipt means:** If comparative coverage cannot be found, the pipeline still produces a signed receipt — but with `volatility_score: null` and a note explaining why. A partial receipt is better than a failed request. The signature still proves the output is unaltered.
+
 ## The investigation page
 
 Every analysis produces a permalink at `/i/{receipt_id}`. That page shows:
@@ -165,12 +186,15 @@ Pure Python JCS implementation: `apps/api/jcs_canonicalize.py` — no Node subpr
 ## Stack
 
 | Layer | Tech |
-|-------|------|
-| API | Python, FastAPI, PostgreSQL, Ed25519 + JCS signing |
-| Frontend | Vite + React (Netlify) |
-| Investigation pages | Server-rendered HTML from the API — no JS framework required |
-| LLM | Anthropic Claude, with fallback to Groq / Gemini / OpenAI |
-| Deployment | Render (API) + Netlify (frontend) |
+| --- | --- |
+| API | Python 3.11, FastAPI, PostgreSQL |
+| Signing | Ed25519 + RFC 8785 JCS canonicalization |
+| Coverage | GDELT (4-stage waterfall) → NewsAPI fallback |
+| Legal records | CourtListener (activated on RUMORED claims) |
+| LLM | Anthropic Claude, fallback to Groq / Gemini / OpenAI |
+| Frontend | Server-rendered HTML from FastAPI (no JS framework) |
+| Deployment | Render (API) + Netlify (web frontend) |
+| Commit count | 182+ across active development |
 
 ---
 
