@@ -817,7 +817,7 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
         class="fp-search-input"
         type="text"
         id="fp-query"
-        placeholder="Paste a URL, name, or topic..."
+        placeholder="Paste a URL here..."
         autocomplete="off"
         aria-label="Article URL, name, or topic"
       />
