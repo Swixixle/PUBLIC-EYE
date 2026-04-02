@@ -1523,18 +1523,13 @@ def _named_entities_section_html(receipt: dict) -> str:
     if not entities:
         return ""
 
-    eye_items = []
-    for entity in entities[:40]:
-        ent = str(entity).strip()
-        if not ent:
-            continue
+    def _pill(ent: str) -> str:
         encoded = quote_plus(ent)
         url = f"https://news.google.com/search?q={encoded}"
-        # Escape entity name for HTML attribute and label
         safe_name = ent.replace('"', '&quot;').replace("<", "&lt;").replace(">", "&gt;")
-        eye_items.append(
+        return (
             f'<a href="{url}" target="_blank" rel="noopener" '
-            f'class="eye-pill" title="{safe_name}">'
+            f'class="eye-pill watcher-pill" title="{safe_name}">'
             f'<svg class="eye-svg" viewBox="0 0 44 26" xmlns="http://www.w3.org/2000/svg">'
             f'<path class="closed-line" d="M4 13 Q22 4 40 13"/>'
             f'<line class="eye-lash" x1="22" y1="4" x2="22" y2="1"/>'
@@ -1549,12 +1544,22 @@ def _named_entities_section_html(receipt: dict) -> str:
             f"</a>"
         )
 
-    eyes_html = "\n".join(eye_items)
+    cleaned = [str(e).strip() for e in entities[:40] if str(e).strip()]
+    mid = (len(cleaned) + 1) // 2
+    row_a = cleaned[:mid]
+    row_b = cleaned[mid:]
+
+    top_html = "\n".join(_pill(e) for e in row_a)
+    bot_html = "\n".join(_pill(e) for e in row_b)
+    divider = '<div class="watcher-rule"></div>' if row_b else ""
+    bottom_row = f'<div class="eye-row watcher-row-b">{bot_html}</div>' if row_b else ""
 
     return f"""
 <section class="named-entities-section">
   <h3 class="section-label">NAMED ENTITIES</h3>
-  <div class="eye-row">{eyes_html}</div>
+  <div class="eye-row watcher-row-a">{top_html}</div>
+  {divider}
+  {bottom_row}
 </section>
 """
 
@@ -3237,6 +3242,39 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     padding: 0.5rem 0 2rem;
   }}
 
+  /* Watcher eyes: always open, labels always visible */
+  .watcher-pill .closed-line,
+  .watcher-pill .eye-lash {{
+    opacity: 0 !important;
+  }}
+
+  .watcher-pill .open-outline,
+  .watcher-pill .eye-pupil,
+  .watcher-pill .eye-shine {{
+    opacity: 1 !important;
+    transition: none;
+  }}
+
+  .watcher-pill .eye-label {{
+    opacity: 1 !important;
+  }}
+
+  /* Divider between the two watcher rows */
+  .watcher-rule {{
+    width: 100%;
+    height: 1px;
+    background: rgba(26,26,26,0.1);
+    margin: 6px 0;
+  }}
+
+  .watcher-row-a {{
+    padding-bottom: 0.5rem;
+  }}
+
+  .watcher-row-b {{
+    padding: 0.5rem 0 2rem;
+  }}
+
   .eye-pill {{
     position: relative;
     width: 44px;
@@ -4268,37 +4306,46 @@ function toggleChain(id) {{
 </script>
 <script>
 (function() {{
-  // --- Touch device detection: labels always visible, navigate on first tap ---
+  // --- Touch device detection ---
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {{
     document.body.classList.add('touch-device');
   }}
 
-  // --- Eye-pill pupil tracking ---
-  // ViewBox: 44 x 26. Center: (22, 13). Open outline spans x 4–40, y 3–23.
-  // Pupil r=5.5. Max travel ~3 SVG units from center.
+  // --- Pupil tracking constants ---
+  // ViewBox: 44 x 26. Center: (22, 13). Max travel: 3 SVG units.
   var MAX_TRAVEL = 3;
   var CX = 22, CY = 13;
   var SHINE_OX = 3, SHINE_OY = -3;
 
-  function screenToSvgPill(svgEl, clientX, clientY) {{
-    var rect = svgEl.getBoundingClientRect();
-    return {{
-      x: (clientX - rect.left) * (44 / rect.width),
-      y: (clientY - rect.top)  * (26 / rect.height)
-    }};
-  }}
-
-  function movePillPupil(pill, svgX, svgY) {{
+  function movePillPupilToward(pill, clientX, clientY) {{
     var pupil = pill.querySelector('.pill-pupil');
     var shine = pill.querySelector('.pill-shine');
     if (!pupil || !shine) return;
-    var dx = svgX - CX;
-    var dy = svgY - CY;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    var travel = Math.min(dist / 4, MAX_TRAVEL);
+    var svg = pill.querySelector('.eye-svg');
+    if (!svg) return;
+
+    // Get the eye's center in screen coords
+    var rect = svg.getBoundingClientRect();
+    var eyeCX = rect.left + rect.width / 2;
+    var eyeCY = rect.top  + rect.height / 2;
+
+    // Angle from eye center toward cursor
+    var dx = clientX - eyeCX;
+    var dy = clientY - eyeCY;
     var angle = Math.atan2(dy, dx);
-    var nx = CX + Math.cos(angle) * travel;
-    var ny = CY + Math.sin(angle) * travel;
+
+    // Travel is always near-max so the eye clearly looks toward you
+    // Slight dampening at very close range so pupil doesn't snap to edge
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var travel = dist < 40 ? MAX_TRAVEL * (dist / 40) : MAX_TRAVEL;
+
+    // Convert travel back to SVG space
+    var svgScale = 44 / rect.width;
+    var tSvg = travel * svgScale;
+    tSvg = Math.min(tSvg, MAX_TRAVEL);
+
+    var nx = CX + Math.cos(angle) * tSvg;
+    var ny = CY + Math.sin(angle) * tSvg;
     pupil.setAttribute('cx', nx.toFixed(2));
     pupil.setAttribute('cy', ny.toFixed(2));
     shine.setAttribute('cx', (nx + SHINE_OX).toFixed(2));
@@ -4313,14 +4360,17 @@ function toggleChain(id) {{
   }}
 
   document.addEventListener('mousemove', function(e) {{
-    var pills = document.querySelectorAll('.eye-pill');
-    pills.forEach(function(pill) {{
+    // WATCHER PILLS: always tracking, no hover required
+    var watchers = document.querySelectorAll('.watcher-pill');
+    watchers.forEach(function(pill) {{
+      movePillPupilToward(pill, e.clientX, e.clientY);
+    }});
+
+    // REGULAR PILLS (non-watcher): only track on hover
+    var regularPills = document.querySelectorAll('.eye-pill:not(.watcher-pill)');
+    regularPills.forEach(function(pill) {{
       if (pill.matches(':hover')) {{
-        var svg = pill.querySelector('.eye-svg');
-        if (svg) {{
-          var pt = screenToSvgPill(svg, e.clientX, e.clientY);
-          movePillPupil(pill, pt.x, pt.y);
-        }}
+        movePillPupilToward(pill, e.clientX, e.clientY);
       }} else {{
         resetPillPupil(pill);
       }}
