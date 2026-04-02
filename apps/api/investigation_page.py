@@ -1541,8 +1541,8 @@ def _named_entities_section_html(receipt: dict) -> str:
             f'<line class="eye-lash" x1="14" y1="6.5" x2="12" y2="4"/>'
             f'<line class="eye-lash" x1="30" y1="6.5" x2="32" y2="4"/>'
             f'<path class="open-outline" d="M4 13 Q13 3 22 3 Q31 3 40 13 Q31 23 22 23 Q13 23 4 13 Z"/>'
-            f'<circle class="eye-pupil" cx="22" cy="13" r="5.5"/>'
-            f'<circle class="eye-shine" cx="25" cy="10" r="1.5"/>'
+            f'<circle class="eye-pupil pill-pupil" cx="22" cy="13" r="5.5"/>'
+            f'<circle class="eye-shine pill-shine" cx="25" cy="10" r="1.5"/>'
             f'<path class="eye-twinkle" d="M 31 4 l1.5 3 l3 1.5 l-3 1.5 l-1.5 3 l-1.5-3 l-3-1.5 l3-1.5 z"/>'
             f"</svg>"
             f'<span class="eye-label">{safe_name}</span>'
@@ -3284,6 +3284,23 @@ def render_investigation_page(receipt: dict, coalition: dict | None) -> str:
     font-family: inherit;
   }}
 
+  /* On touch devices labels are always visible — no hover required to know who's who */
+  .touch-device .eye-label {{
+    opacity: 1;
+  }}
+
+  /* On touch devices eyes are always open — navigates on first tap */
+  .touch-device .eye-pill .closed-line,
+  .touch-device .eye-pill .eye-lash {{
+    opacity: 0;
+  }}
+
+  .touch-device .eye-pill .open-outline,
+  .touch-device .eye-pill .eye-pupil,
+  .touch-device .eye-pill .eye-shine {{
+    opacity: 1;
+  }}
+
   .eye-pill:hover .closed-line,
   .eye-pill:hover .eye-lash {{
     opacity: 0;
@@ -4201,6 +4218,68 @@ function toggleChain(id) {{
         .catch(function() {{ mount.innerHTML = '<span style="color:#888">Could not load actors.</span>'; }});
     }}
   }}
+}})();
+</script>
+<script>
+(function() {{
+  // --- Touch device detection: labels always visible, navigate on first tap ---
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {{
+    document.body.classList.add('touch-device');
+  }}
+
+  // --- Eye-pill pupil tracking ---
+  // ViewBox: 44 x 26. Center: (22, 13). Open outline spans x 4–40, y 3–23.
+  // Pupil r=5.5. Max travel ~3 SVG units from center.
+  var MAX_TRAVEL = 3;
+  var CX = 22, CY = 13;
+  var SHINE_OX = 3, SHINE_OY = -3;
+
+  function screenToSvgPill(svgEl, clientX, clientY) {{
+    var rect = svgEl.getBoundingClientRect();
+    return {{
+      x: (clientX - rect.left) * (44 / rect.width),
+      y: (clientY - rect.top)  * (26 / rect.height)
+    }};
+  }}
+
+  function movePillPupil(pill, svgX, svgY) {{
+    var pupil = pill.querySelector('.pill-pupil');
+    var shine = pill.querySelector('.pill-shine');
+    if (!pupil || !shine) return;
+    var dx = svgX - CX;
+    var dy = svgY - CY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var travel = Math.min(dist / 4, MAX_TRAVEL);
+    var angle = Math.atan2(dy, dx);
+    var nx = CX + Math.cos(angle) * travel;
+    var ny = CY + Math.sin(angle) * travel;
+    pupil.setAttribute('cx', nx.toFixed(2));
+    pupil.setAttribute('cy', ny.toFixed(2));
+    shine.setAttribute('cx', (nx + SHINE_OX).toFixed(2));
+    shine.setAttribute('cy', (ny + SHINE_OY).toFixed(2));
+  }}
+
+  function resetPillPupil(pill) {{
+    var pupil = pill.querySelector('.pill-pupil');
+    var shine = pill.querySelector('.pill-shine');
+    if (pupil) {{ pupil.setAttribute('cx', CX); pupil.setAttribute('cy', CY); }}
+    if (shine) {{ shine.setAttribute('cx', CX + SHINE_OX); shine.setAttribute('cy', CY + SHINE_OY); }}
+  }}
+
+  document.addEventListener('mousemove', function(e) {{
+    var pills = document.querySelectorAll('.eye-pill');
+    pills.forEach(function(pill) {{
+      if (pill.matches(':hover')) {{
+        var svg = pill.querySelector('.eye-svg');
+        if (svg) {{
+          var pt = screenToSvgPill(svg, e.clientX, e.clientY);
+          movePillPupil(pill, pt.x, pt.y);
+        }}
+      }} else {{
+        resetPillPupil(pill);
+      }}
+    }});
+  }});
 }})();
 </script>
 

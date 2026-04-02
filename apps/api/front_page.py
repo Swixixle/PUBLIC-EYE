@@ -485,6 +485,11 @@ body.fp-body {{
   animation: fp-twinkle-pop 0.5s ease 0.3s forwards;
 }}
 
+.eye-group.eye-typing .eye-twinkle-main {{
+  opacity: 1;
+  animation: fp-twinkle-pop 0.5s ease 0.3s forwards;
+}}
+
 @keyframes fp-twinkle-pop {{
   0%   {{ opacity: 0; transform: scale(0) rotate(0deg); }}
   60%  {{ opacity: 1; transform: scale(1.3) rotate(15deg); }}
@@ -492,14 +497,20 @@ body.fp-body {{
 }}
 
 .eye-group:hover .eye-closed-arc,
-.eye-group:hover .eye-lash-main {{
+.eye-group:hover .eye-lash-main,
+.eye-group.eye-typing .eye-closed-arc,
+.eye-group.eye-typing .eye-lash-main {{
   opacity: 0;
 }}
 
 .eye-group:hover .eye-open-shape,
 .eye-group:hover .eye-iris,
 .eye-group:hover .eye-pupil-main,
-.eye-group:hover .eye-shine-main {{
+.eye-group:hover .eye-shine-main,
+.eye-group.eye-typing .eye-open-shape,
+.eye-group.eye-typing .eye-iris,
+.eye-group.eye-typing .eye-pupil-main,
+.eye-group.eye-typing .eye-shine-main {{
   opacity: 1;
 }}
 
@@ -507,6 +518,11 @@ body.fp-body {{
   opacity: 1;
   transform: translateY(0);
   pointer-events: all;
+}}
+
+.eye-group.eye-typing .search-reveal {{
+  opacity: 1;
+  pointer-events: auto;
 }}
 
 .search-reveal {{
@@ -790,8 +806,8 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
         <line class="eye-lash-main" x1="280" y1="52" x2="292" y2="40"/>
         <path class="eye-open-shape" d="M10 90 Q95 10 190 10 Q285 10 370 90 Q285 170 190 170 Q95 170 10 90 Z"/>
         <circle class="eye-iris" cx="190" cy="90" r="52"/>
-        <circle class="eye-pupil-main" cx="190" cy="90" r="34"/>
-        <circle class="eye-shine-main" cx="208" cy="72" r="9"/>
+        <circle id="main-pupil" class="eye-pupil-main" cx="190" cy="90" r="34"/>
+        <circle id="main-shine" class="eye-shine-main" cx="208" cy="72" r="9"/>
         <path class="eye-twinkle-main" d="M 310 45 l3 7 l7 3 l-7 3 l-3 7 l-3-7 l-7-3 l7-3 z"/>
       </svg>
     </div>
@@ -851,11 +867,72 @@ function fpSubmit() {{
 
 document.addEventListener('DOMContentLoaded', function() {{
   var input = document.getElementById('fp-query');
-  if (input) {{
+  var eyeGroup = document.querySelector('.eye-group');
+
+  // --- Eye stays open while typing ---
+  if (input && eyeGroup) {{
+    input.addEventListener('input', function() {{
+      eyeGroup.classList.toggle('eye-typing', input.value.length > 0);
+    }});
+    input.addEventListener('focus', function() {{
+      eyeGroup.classList.add('eye-typing');
+    }});
+    input.addEventListener('blur', function() {{
+      if (!input.value.length) eyeGroup.classList.remove('eye-typing');
+    }});
     input.addEventListener('keydown', function(e) {{
       if (e.key === 'Enter') fpSubmit();
     }});
   }}
+
+  // --- Main eye pupil tracks the cursor ---
+  // ViewBox: 380 x 180. Iris center: (190, 90) r=52. Pupil r=34. Max travel: 18 SVG units.
+  var eyeSvg = document.querySelector('.eye-svg-main');
+  var pupil  = document.getElementById('main-pupil');
+  var shine  = document.getElementById('main-shine');
+  var IRIS_R = 52, PUPIL_R = 34, MAX_TRAVEL = IRIS_R - PUPIL_R; // 18
+  var SHINE_OFFSET_X = 18, SHINE_OFFSET_Y = -18; // shine stays relative to pupil
+  var CX = 190, CY = 90;
+
+  function movePupil(svgX, svgY) {{
+    var dx = svgX - CX;
+    var dy = svgY - CY;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var travel = Math.min(dist / 3, MAX_TRAVEL); // dampen — full travel needs cursor 3x iris away
+    var angle = Math.atan2(dy, dx);
+    var nx = CX + Math.cos(angle) * travel;
+    var ny = CY + Math.sin(angle) * travel;
+    pupil.setAttribute('cx', nx.toFixed(2));
+    pupil.setAttribute('cy', ny.toFixed(2));
+    shine.setAttribute('cx', (nx + SHINE_OFFSET_X).toFixed(2));
+    shine.setAttribute('cy', (ny + SHINE_OFFSET_Y).toFixed(2));
+  }}
+
+  function screenToSvg(svgEl, clientX, clientY) {{
+    var rect = svgEl.getBoundingClientRect();
+    var scaleX = 380 / rect.width;
+    var scaleY = 180 / rect.height;
+    return {{
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    }};
+  }}
+
+  // Track on document-wide mousemove when eye is open (hover OR typing)
+  document.addEventListener('mousemove', function(e) {{
+    if (!eyeSvg || !pupil) return;
+    var isOpen = (eyeGroup && (eyeGroup.matches(':hover') || eyeGroup.classList.contains('eye-typing')));
+    if (!isOpen) {{
+      // Reset to center when eye is closed
+      pupil.setAttribute('cx', CX);
+      pupil.setAttribute('cy', CY);
+      shine.setAttribute('cx', CX + SHINE_OFFSET_X);
+      shine.setAttribute('cy', CY + SHINE_OFFSET_Y);
+      return;
+    }}
+    var pt = screenToSvg(eyeSvg, e.clientX, e.clientY);
+    movePupil(pt.x, pt.y);
+  }});
 
   var dateEl = document.getElementById('today-date');
   if (dateEl) {{
