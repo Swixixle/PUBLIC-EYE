@@ -314,10 +314,15 @@ a {
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;
+  outline: none;
 }
 
 .pe-analyze-bar input::placeholder {
   color: var(--text-muted);
+}
+
+.pe-analyze-bar input:focus {
+  border-color: var(--accent-cyan);
 }
 
 /* Investigation page */
@@ -624,6 +629,32 @@ a {
   padding: 24px;
 }
 
+/* Animated eye graphic */
+.pe-eye-graphic {
+  width: 80px;
+  height: 40px;
+  color: var(--accent-cyan);
+  margin-bottom: 20px;
+  animation: peBlink 3.6s ease-in-out infinite;
+}
+
+.pe-eye-pupil {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: peScanEye 2.4s ease-in-out infinite;
+}
+
+@keyframes peScanEye {
+  0%   { transform: translateX(-9px); }
+  50%  { transform: translateX(9px); }
+  100% { transform: translateX(-9px); }
+}
+
+@keyframes peBlink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.06); } /* near-zero to simulate eyelid closing */
+}
+
 .pe-overlay-wordmark {
   font-family: var(--font-display);
   font-size: 1.5rem;
@@ -702,6 +733,15 @@ a {
   color: var(--text-primary);
   font-family: var(--font-body);
   font-size: 14px;
+  outline: none;
+}
+
+.pe-analyze-page-form input::placeholder {
+  color: var(--text-muted);
+}
+
+.pe-analyze-page-form input:focus {
+  border-color: var(--accent-cyan);
 }
 
 .pe-form-row {
