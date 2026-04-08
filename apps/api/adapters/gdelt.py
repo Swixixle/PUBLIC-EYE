@@ -45,18 +45,113 @@ def _safe_phrase(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+_GDELT_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "for",
+        "with",
+        "and",
+        "or",
+        "that",
+        "this",
+        "its",
+        "it",
+        "as",
+        "from",
+        "has",
+        "have",
+        "been",
+        "be",
+        "will",
+        "would",
+        "could",
+        "plans",
+        "said",
+        "says",
+    }
+)
+
+
+def _strip_possessive_suffix(token: str) -> str:
+    """Remove trailing possessive ``'s`` / ``'S`` (ASCII or curly apostrophe)."""
+    if len(token) < 3:
+        return token
+    for suf in ("'s", "'S", "\u2019s", "\u2019S"):
+        if token.endswith(suf):
+            return token[: -len(suf)]
+    return token
+
+
+def _clean_gdelt_token(token: str) -> str:
+    t = _strip_possessive_suffix(token)
+    return re.sub(r"[^\w\-]", "", t, flags=re.UNICODE).strip()
+
+
+def _tokens_meaningful(text: str, *, max_tokens: int | None) -> list[str]:
+    """
+    Order-preserving tokens: possessives stripped, punctuation cleaned, English stopwords removed.
+    ``max_tokens`` caps how many non-stopword tokens are kept (``None`` = no cap).
+    """
+    t = _safe_phrase(text)
+    if not t:
+        return []
+    out: list[str] = []
+    for raw in t.split():
+        w = _clean_gdelt_token(raw)
+        if not w:
+            continue
+        if w.lower() in _GDELT_STOPWORDS:
+            continue
+        out.append(w)
+        if max_tokens is not None and len(out) >= max_tokens:
+            break
+    return out
+
+
 def _echo_query_keywords(claim_text: str) -> str:
-    """First six words, punctuation stripped — broad keyword query for GDELT (no quotes)."""
+    """Up to six non-stopword keywords for GDELT (no quotes); fallback if all tokens were stopwords."""
+    meaningful = _tokens_meaningful(claim_text, max_tokens=6)
+    if meaningful:
+        return " ".join(meaningful)
     t = _safe_phrase(claim_text)
     if not t:
         return ""
-    words = t.split()[:6]
-    cleaned: list[str] = []
-    for w in words:
-        w2 = re.sub(r"[^\w\-]", "", w, flags=re.UNICODE)
-        if w2:
-            cleaned.append(w2)
-    return " ".join(cleaned).strip()
+    fallback: list[str] = []
+    for raw in t.split():
+        w = _clean_gdelt_token(raw)
+        if w:
+            fallback.append(w)
+        if len(fallback) >= 6:
+            break
+    return " ".join(fallback).strip()
+
+
+def _byline_query_name(journalist_name: str) -> str:
+    """Journalist name for GDELT ``query``: stopwords stripped, possessives cleaned, then joined."""
+    meaningful = _tokens_meaningful(journalist_name, max_tokens=20)
+    if meaningful:
+        return " ".join(meaningful)
+    t = _safe_phrase(journalist_name)
+    if not t:
+        return ""
+    fb: list[str] = []
+    for raw in t.split():
+        w = _clean_gdelt_token(raw)
+        if w:
+            fb.append(w)
+    return " ".join(fb[:20]).strip()
 
 
 def _normalize_domain(publication: str) -> str:
@@ -211,8 +306,9 @@ async def search_byline_corpus(
 
     GDELT accepts ``domain:`` inside the ``query`` string only (no separate URL param).
     ``sourced:`` is not supported — use ``"{name}" domain:{domain}``, then name-only fallback.
+    Name tokens use the same English stopword / possessive cleanup as narrative echo queries.
     """
-    name = _safe_phrase(journalist_name)
+    name = _byline_query_name(journalist_name)
     dom = _normalize_domain(publication)
     if not name:
         return []
@@ -237,8 +333,9 @@ async def get_narrative_echo_score(
     """
     Coverage concentration: echo_score = unique_domains / total_articles (0 if none).
 
-    Query uses the first six words of ``claim_text``, punctuation removed, **unquoted**
-    for broader GDELT matching. Lower echo_score ⇒ more repeated domains per article.
+    Query uses up to six **non-stopword** tokens from ``claim_text`` (possessives stripped,
+    punctuation removed), **unquoted** for broader GDELT matching.
+    Lower echo_score ⇒ more repeated domains per article.
     """
     phrase = _echo_query_keywords(claim_text)
     if len(phrase) < 3:
