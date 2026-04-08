@@ -5,6 +5,7 @@ import BlindSpots from "../components/BlindSpots.jsx";
 import CoalitionMap from "../components/CoalitionMap.jsx";
 import CoalitionMapSkeleton from "../components/CoalitionMapSkeleton.jsx";
 import Header from "../components/Header.jsx";
+import JournalistDossierCard from "../components/JournalistDossierCard.jsx";
 import PerspectiveClusters from "../components/PerspectiveClusters.jsx";
 import RecordSurface from "../components/RecordSurface.jsx";
 import SourcesAndActors from "../components/SourcesAndActors.jsx";
@@ -143,6 +144,12 @@ export default function Investigation({ onToast }) {
             </ul>
 
             <RecordSurface receipt={receipt} />
+
+            <JournalistDossierCard
+              journalist={receipt.journalist_receipt}
+              layerB={receipt.journalist_receipt?.layer_b}
+              layerC={receipt.journalist_receipt?.layer_c}
+            />
 
             {v.globalPerspectives ? (
               <div className="pe-beat-3">
