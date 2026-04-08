@@ -31,6 +31,15 @@ _DEFERRED_NOISE_ADAPTER_KEYS = frozenset({"courtlistener", "congress", "fec"})
 _SKIP_VERIFICATION_ADAPTERS = frozenset({"actor_ledger"})
 _GOOGLE_NEWS_SEARCH = "https://news.google.com/search?q="
 _WIKI_SEARCH = "https://en.wikipedia.org/wiki/Special:Search?search="
+# Layer B citation pills — domains commonly cited as think tanks / advocacy research orgs
+_THINK_TANK_DOMAIN_SUFFIXES: tuple[str, ...] = (
+    "hoover.org",
+    "heritage.org",
+    "cato.org",
+    "brookings.org",
+    "brookings.edu",
+    "aei.org",
+)
 
 REVISION_TYPES: dict[str, tuple[str, str, str]] = {
     "REVERSED": ("REVERSED", "#b71c1c", "#ffebee"),
@@ -1728,6 +1737,16 @@ def _layer_b_display_body(rec: dict) -> str | None:
     return text
 
 
+def _host_is_think_tank(host: str) -> bool:
+    h = (host or "").lower()
+    if h.startswith("www."):
+        h = h[4:]
+    for suf in _THINK_TANK_DOMAIN_SUFFIXES:
+        if h == suf or h.endswith("." + suf):
+            return True
+    return False
+
+
 def _citation_pills_html(cites: Any, *, max_n: int = 12) -> str:
     if not isinstance(cites, list) or not cites:
         return ""
@@ -1742,6 +1761,7 @@ def _citation_pills_html(cites: Any, *, max_n: int = 12) -> str:
                 host = host[4:]
             label = host or su[:40]
         except Exception:  # noqa: BLE001
+            host = ""
             label = su[:48]
         pill_style = (
             "font-size:11px;padding:3px 10px;border-radius:999px;"
@@ -1749,13 +1769,22 @@ def _citation_pills_html(cites: Any, *, max_n: int = 12) -> str:
             "display:inline-block;max-width:220px;overflow:hidden;"
             "text-overflow:ellipsis;white-space:nowrap"
         )
+        tt = ""
+        if _host_is_think_tank(host):
+            tt = (
+                '<span style="font-size:10px;font-weight:600;color:#6b4f2e;'
+                "letter-spacing:0.06em;text-transform:uppercase;white-space:nowrap"
+                '">think tank</span>'
+            )
         pills.append(
+            '<span style="display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;max-width:100%">'
             f'<a href="{_e(su)}" target="_blank" rel="noopener" style="{pill_style}">{_e(label)}</a>'
+            f"{tt}</span>"
         )
     if not pills:
         return ""
     return (
-        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center">'
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center">'
         + "".join(pills)
         + "</div>"
     )
@@ -1830,12 +1859,39 @@ def _journalist_receipt_section_html(receipt: dict) -> str:
         for row in fec[:8]:
             if not isinstance(row, dict):
                 continue
-            amt = row.get("contribution_receipt_amount")
-            cn = str(row.get("contributor_name") or "").strip()
-            line = _e(cn or "Contribution")
-            if amt is not None:
-                line += f" — {_e(str(amt))}"
-            rows.append(f"<li>{line}</li>")
+            amt_raw = row.get("amount")
+            if amt_raw is None:
+                amt_raw = row.get("contribution_receipt_amount")
+            amt_s = ""
+            if amt_raw is not None:
+                try:
+                    amt_s = f"${float(amt_raw):,.2f}"
+                except (TypeError, ValueError):
+                    amt_s = str(amt_raw).strip()
+            cm = row.get("recipient_committee")
+            if not cm and isinstance(row.get("committee"), dict):
+                cm = (row.get("committee") or {}).get("name")
+            if cm is None:
+                cm = row.get("committee_name")
+            committee = str(cm or "").strip()
+            dt_raw = row.get("contribution_date") or row.get("contribution_receipt_date")
+            dt = str(dt_raw or "").strip()
+            if "T" in dt and len(dt) > 10:
+                dt = dt.split("T", 1)[0]
+            cn = str(
+                row.get("contributor_name_reported") or row.get("contributor_name") or "",
+            ).strip()
+            parts: list[str] = []
+            if amt_s:
+                parts.append(amt_s)
+            if committee:
+                parts.append(f"to {_e(committee)}")
+            if dt:
+                parts.append(_e(dt))
+            if cn:
+                parts.append(f"contributor: {_e(cn)}")
+            line_inner = " · ".join(parts) if parts else "Schedule A row (see fec.gov for details)"
+            rows.append(f'<li style="margin-bottom:6px">{line_inner}</li>')
         if rows:
             fec_html = (
                 '<div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(26,26,26,0.08)">'
