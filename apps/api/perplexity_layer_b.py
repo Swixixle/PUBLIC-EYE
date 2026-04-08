@@ -22,6 +22,17 @@ PERPLEXITY_CHAT_URL = "https://api.perplexity.ai/chat/completions"
 MODEL_SONAR = "sonar"
 MODEL_SONAR_PRO = "sonar-pro"
 QUERY_TIMEOUT_S = 45.0
+PERPLEXITY_MAX_TOKENS = 800
+
+JOURNALIST_SYSTEM = (
+    "You are a research assistant for an investigative journalism accountability tool. "
+    "Return ONLY concrete, factual findings with citations. "
+    "CRITICAL: If you find nothing relevant, return exactly the string NO_FINDINGS and nothing else. "
+    "Do NOT explain what you searched for, do NOT suggest where to look, "
+    "do NOT describe what the results contained or did not contain. "
+    "Do NOT use phrases like 'I cannot', 'I was unable', 'the search results do not', 'you would need to'. "
+    "Only report what you actually found. Keep responses under 300 words."
+)
 
 
 def _api_key() -> str:
@@ -94,6 +105,7 @@ async def _query(
     field: str,
     model: str = MODEL_SONAR,
     timeout_s: float = QUERY_TIMEOUT_S,
+    system: str | None = None,
 ) -> PerplexityResult:
     """One Perplexity chat completion with ``return_citations: True``."""
     t0 = time.monotonic()
@@ -101,9 +113,15 @@ async def _query(
     if not key:
         return _fail(field, model, "PERPLEXITY_API_KEY not set", latency_ms=(time.monotonic() - t0) * 1000)
 
+    messages: list[dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
     payload: dict[str, Any] = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
+        "max_tokens": PERPLEXITY_MAX_TOKENS,
         "return_citations": True,
     }
 
@@ -155,6 +173,17 @@ async def _query(
     )
 
 
+def _coerce_no_findings(res: PerplexityResult) -> None:
+    """Literal NO_FINDINGS → failed row so HTML and clients hide the field."""
+    if not res.ok or not isinstance(res.text, str):
+        return
+    if res.text.strip().casefold() == "no_findings":
+        res.ok = False
+        res.detail = "no_findings"
+        res.text = None
+        res.citations = []
+
+
 async def query_prior_coverage(
     display_name: str,
     publication: str,
@@ -163,36 +192,64 @@ async def query_prior_coverage(
     pub = (publication or "").strip() or "unknown publication"
     topic = (article_topic or "").strip() or "general beats"
     prompt = (
-        f"Summarize prior news coverage and beat history for journalist {display_name!r} "
-        f"associated with {pub!r}, especially regarding topic: {topic}. "
-        "Use reputable outlets; cite URLs in the response context."
+        f"Find articles written by {display_name} at {pub} about {topic}. "
+        f"List article titles, dates, and URLs. Focus on the last 5 years. "
+        f"Note if this journalist has covered this topic repeatedly or from a consistent angle."
     )
-    return await _query(prompt, field="prior_coverage", model=MODEL_SONAR)
+    return await _query(
+        prompt,
+        field="prior_coverage",
+        model=MODEL_SONAR,
+        system=JOURNALIST_SYSTEM,
+    )
 
 
 async def query_prior_positions(
     display_name: str,
     publication: str,
+    article_topic: str | None,
 ) -> PerplexityResult:
     pub = (publication or "").strip() or "unknown publication"
+    topic = (article_topic or "").strip() or "public issues"
     prompt = (
-        f"Find op-eds, interviews, podcasts, or public statements where {display_name!r} "
-        f"(linked to {pub!r}) stated opinions or positions on public issues. "
-        "Cite sources with URLs."
+        f"Find public statements, op-eds, interviews, or commentary where journalist {display_name} "
+        f"expressed a personal opinion or position on {topic}. "
+        f"Include dates and source URLs. Note any apparent changes in position over time. "
+        f"Only include direct quotes or clearly attributed statements."
     )
-    return await _query(prompt, field="prior_positions", model=MODEL_SONAR)
+    return await _query(
+        prompt,
+        field="prior_positions",
+        model=MODEL_SONAR,
+        system=JOURNALIST_SYSTEM,
+    )
 
 
 async def query_affiliations(
     display_name: str,
     publication: str,
 ) -> PerplexityResult:
-    pub = (publication or "").strip() or "unknown publication"
+    """
+    Institutional ties, controversies, defenses, appearances, awards — one deep query.
+    Publication grounds context for wire / international journalists without US-only footprints.
+    """
+    pub = (publication or "").strip()
+    pub_context = f" at {pub}" if pub else ""
     prompt = (
-        f"List fellowships, think tank affiliations, advisory boards, or paid speaking roles "
-        f"for {display_name!r} in connection with {pub!r}. Cite sources with URLs."
+        f"Find any of the following about journalist {display_name}{pub_context}: "
+        f"(1) fellowships, think tank affiliations, board memberships, or advisory roles; "
+        f"(2) public controversies or criticism of their reporting from media critics or journalism reviews; "
+        f"(3) public defenses of their reporting or editorial decisions; "
+        f"(4) appearances at journalism conferences, universities, or panels; "
+        f"(5) awards, grants, or institutional recognition. "
+        f"Report only what you find with citations. Skip any category where you find nothing."
     )
-    return await _query(prompt, field="affiliations", model=MODEL_SONAR)
+    return await _query(
+        prompt,
+        field="affiliations",
+        model=MODEL_SONAR_PRO,
+        system=JOURNALIST_SYSTEM,
+    )
 
 
 async def query_recant_candidates(
@@ -203,11 +260,17 @@ async def query_recant_candidates(
     pub = (publication or "").strip() or "unknown publication"
     topic = (article_topic or "").strip() or "their work"
     prompt = (
-        f"Search for corrections, retractions, criticism, or notable reversals of position "
-        f"involving {display_name!r} at/near {pub!r}, related to {topic}. "
-        "Flag items that look like recant or correction candidates. Cite URLs."
+        f"Has journalist {display_name} or their outlet issued corrections or retractions "
+        f"related to {topic}? Have they faced documented public criticism, editor's notes, "
+        f"or fact-checks of their reporting on this topic? "
+        f"List only specific documented instances with dates and URLs."
     )
-    return await _query(prompt, field="recant_candidates", model=MODEL_SONAR_PRO)
+    return await _query(
+        prompt,
+        field="recant_candidates",
+        model=MODEL_SONAR_PRO,
+        system=JOURNALIST_SYSTEM,
+    )
 
 
 async def query_source_audit(
@@ -215,14 +278,22 @@ async def query_source_audit(
     *,
     journalist_name: str,
     publication: str,
+    article_topic: str | None = None,
 ) -> PerplexityResult:
     pub = (publication or "").strip() or "unknown publication"
+    topic = (article_topic or "").strip() or "the story"
     prompt = (
-        f"Background check on {source_person_name!r} as a quoted source in a story by "
-        f"{journalist_name!r} ({pub}). Public controversies, FEC-relevant political giving "
-        f"mentions, or reliability notes — cite URLs. Do not equate with {journalist_name!r}."
+        f"What financial relationships, funding sources, or institutional ties does "
+        f"{source_person_name} have relevant to {topic}? "
+        f"Include employer, funding, lobbying activity, and any conflicts of interest. "
+        f"Cite sources. Do not equate with journalist {journalist_name} ({pub})."
     )
-    return await _query(prompt, field="source_audit", model=MODEL_SONAR)
+    return await _query(
+        prompt,
+        field="source_audit",
+        model=MODEL_SONAR,
+        system=JOURNALIST_SYSTEM,
+    )
 
 
 async def query_outlet_ownership(
@@ -276,11 +347,13 @@ async def build_journalist_layer_b(
 
     core = await asyncio.gather(
         query_prior_coverage(name, publication, article_topic),
-        query_prior_positions(name, publication),
+        query_prior_positions(name, publication, article_topic),
         query_affiliations(name, publication),
         query_recant_candidates(name, publication, article_topic),
     )
     prior_r, pos_r, aff_r, rec_r = core
+    for r in (prior_r, pos_r, aff_r, rec_r):
+        _coerce_no_findings(r)
 
     audit_names: list[str] = []
     for row in quoted_sources or []:
@@ -302,11 +375,13 @@ async def build_journalist_layer_b(
                 nm,
                 journalist_name=name,
                 publication=publication,
+                article_topic=article_topic,
             )
             for nm in audit_names
         ]
         raw_audits = await asyncio.gather(*tasks)
         for nm, ar in zip(audit_names, raw_audits):
+            _coerce_no_findings(ar)
             audit_results.append({"source_name": nm, **ar.to_record()})
 
     wall_ms = round((time.monotonic() - t0) * 1000, 1)
