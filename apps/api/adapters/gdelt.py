@@ -2,15 +2,18 @@
 GDELT 2.0 adapter — narrative propagation and outlet framing (public API, no key).
 
 DOC API: https://api.gdeltproject.org/api/v2/doc/doc
-The service may rate-limit (often ~1 request / 5s); callers should throttle in bulk.
+All HTTP calls are serialized with a module-level lock and a minimum 6s gap after
+each completed request (GDELT often returns ``Please limit requests to one every 5 seconds``).
 
 GKG HTTP endpoint availability varies; ``get_outlet_framing`` falls back to DOC + ToneChart.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
+import time
 from collections import Counter
 from typing import Any
 
@@ -22,6 +25,10 @@ _LOG = logging.getLogger(__name__)
 
 DOC_API = "https://api.gdeltproject.org/api/v2/doc/doc"
 GKG_API = "https://api.gdeltproject.org/api/v2/gkg/gkg"
+
+_GDELT_MIN_GAP_S = 6.0
+_gdelt_lock = asyncio.Lock()
+_last_gdelt_request_end_mono: float = 0.0
 
 __all__ = [
     "DOC_API",
@@ -69,40 +76,62 @@ def _parse_artlist_payload(data: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+async def _gdelt_http_get(url: str, params: dict[str, Any]) -> httpx.Response | None:
+    """Single throttled GET for DOC/GKG — hold lock through request; gap after each completion."""
+    global _last_gdelt_request_end_mono
+    async with _gdelt_lock:
+        now = time.monotonic()
+        if _last_gdelt_request_end_mono > 0.0:
+            rem = _GDELT_MIN_GAP_S - (now - _last_gdelt_request_end_mono)
+            if rem > 0:
+                await asyncio.sleep(rem)
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r = await client.get(url, params=params)
+            return r
+        except Exception as exc:  # noqa: BLE001
+            _LOG.debug("GDELT HTTP GET failed (%s): %s", url, exc)
+            return None
+        finally:
+            _last_gdelt_request_end_mono = time.monotonic()
+
+
 async def _doc_get_json(params: dict[str, Any]) -> dict[str, Any] | None:
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(DOC_API, params=params)
-            if r.status_code != 200:
-                return None
-            ct = (r.headers.get("content-type") or "").lower()
-            if "html" in ct and "json" not in ct:
-                return None
-            txt = (r.text or "").strip()
-            if txt.startswith("<!DOCTYPE") or txt.startswith("<html"):
-                return None
-            if txt.startswith("Please limit requests"):
-                return None
-            if "no longer supported" in txt.lower():
-                return None
-            return r.json()
+        r = await _gdelt_http_get(DOC_API, params)
+        if r is None:
+            return None
+        if r.status_code != 200:
+            return None
+        ct = (r.headers.get("content-type") or "").lower()
+        if "html" in ct and "json" not in ct:
+            return None
+        txt = (r.text or "").strip()
+        if txt.startswith("<!DOCTYPE") or txt.startswith("<html"):
+            return None
+        if txt.startswith("Please limit requests"):
+            return None
+        if "no longer supported" in txt.lower():
+            return None
+        return r.json()
     except Exception as exc:  # noqa: BLE001
-        _LOG.debug("GDELT DOC request failed: %s", exc)
+        _LOG.debug("GDELT DOC JSON parse failed: %s", exc)
         return None
 
 
 async def _gkg_get_json(params: dict[str, Any]) -> dict[str, Any] | None:
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(GKG_API, params=params)
-            if r.status_code != 200:
-                return None
-            ct = (r.headers.get("content-type") or "").lower()
-            if "json" not in ct:
-                return None
-            return r.json()
+        r = await _gdelt_http_get(GKG_API, params)
+        if r is None:
+            return None
+        if r.status_code != 200:
+            return None
+        ct = (r.headers.get("content-type") or "").lower()
+        if "json" not in ct:
+            return None
+        return r.json()
     except Exception as exc:  # noqa: BLE001
-        _LOG.debug("GDELT GKG request failed: %s", exc)
+        _LOG.debug("GDELT GKG JSON parse failed: %s", exc)
         return None
 
 
