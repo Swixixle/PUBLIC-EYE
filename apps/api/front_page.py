@@ -446,23 +446,31 @@ body.fp-body {{
 }}
 
 .eye-open-shape {{
-  fill: #f0ede6;
+  fill: var(--paper);
   stroke: #111111;
   stroke-width: 3;
   opacity: 0;
   transition: opacity 0.3s ease 0.05s;
 }}
 
-.eye-iris {{
-  fill: none;
-  stroke: #111111;
-  stroke-width: 1.5;
+.eye-sclera {{
+  fill: #fbfaf7;
   opacity: 0;
-  transition: opacity 0.25s ease 0.15s;
+  transition: opacity 0.28s ease 0.06s;
+}}
+
+.eye-iris-fill {{
+  opacity: 0;
+  transition: opacity 0.25s ease 0.12s;
+}}
+
+.eye-limbal {{
+  opacity: 0;
+  transition: opacity 0.25s ease 0.14s;
 }}
 
 .eye-pupil-main {{
-  fill: #111111;
+  fill: #0a0a0a;
   opacity: 0;
   transition: opacity 0.25s ease 0.18s;
 }}
@@ -470,7 +478,7 @@ body.fp-body {{
 .eye-shine-main {{
   fill: #ffffff;
   opacity: 0;
-  transition: opacity 0.2s ease 0.25s;
+  transition: opacity 0.2s ease 0.22s;
 }}
 
 .eye-twinkle-main {{
@@ -504,14 +512,23 @@ body.fp-body {{
 }}
 
 .eye-group:hover .eye-open-shape,
-.eye-group:hover .eye-iris,
+.eye-group:hover .eye-sclera,
+.eye-group:hover .eye-iris-fill,
+.eye-group:hover .eye-limbal,
 .eye-group:hover .eye-pupil-main,
 .eye-group:hover .eye-shine-main,
 .eye-group.eye-typing .eye-open-shape,
-.eye-group.eye-typing .eye-iris,
+.eye-group.eye-typing .eye-sclera,
+.eye-group.eye-typing .eye-iris-fill,
+.eye-group.eye-typing .eye-limbal,
 .eye-group.eye-typing .eye-pupil-main,
 .eye-group.eye-typing .eye-shine-main {{
   opacity: 1;
+}}
+
+.eye-group:hover .eye-shine-main,
+.eye-group.eye-typing .eye-shine-main {{
+  opacity: 0.92;
 }}
 
 .eye-group:hover .search-reveal {{
@@ -533,8 +550,8 @@ body.fp-body {{
   pointer-events: none;
   transition: opacity 0.25s ease 0.15s, transform 0.25s ease 0.15s;
   display: flex;
-  border: 1.5px solid #1a1a1a;
-  background: #ffffff;
+  border: 1px solid #000000;
+  background: var(--paper);
   border-radius: 2px;
   overflow: hidden;
 }}
@@ -544,7 +561,7 @@ body.fp-body {{
   border: none;
   padding: 10px 14px;
   font-size: 12px;
-  background: transparent;
+  background: var(--paper);
   color: #1a1a1a;
   outline: none;
   font-family: inherit;
@@ -608,12 +625,12 @@ body.fp-body {{
 
 @media (prefers-color-scheme: dark) {{
   .eye-closed-arc, .eye-lash-main {{ stroke: #e0e0e0; }}
-  .eye-open-shape {{ fill: #2a2a2a; stroke: #e0e0e0; }}
-  .eye-iris {{ stroke: #e0e0e0; }}
-  .eye-pupil-main {{ fill: #e0e0e0; }}
-  .eye-shine-main {{ fill: #1a1a1a; }}
+  .eye-open-shape {{ fill: #1e1e1e; stroke: #e0e0e0; }}
+  .eye-sclera {{ fill: #e8e4dc; }}
+  .eye-pupil-main {{ fill: #050505; }}
+  .eye-shine-main {{ fill: #f5f5f5; }}
   .search-reveal {{ border-color: #e0e0e0; background: #1a1a1a; }}
-  .fp-search-input {{ color: #e0e0e0; }}
+  .fp-search-input {{ background: #1a1a1a; color: #e0e0e0; }}
   .fp-search-input::placeholder {{ color: #666; }}
   .fp-search-btn {{ background: #e0e0e0; color: #1a1a1a; }}
   .fp-search-btn:hover {{ background: #ccc; }}
@@ -798,6 +815,17 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
     <p class="eye-hint">hover to investigate</p>
     <div class="eye-container" id="main-eye">
       <svg class="eye-svg-main" viewBox="0 0 380 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <clipPath id="fp-eye-opening">
+            <path d="M10 90 Q95 10 190 10 Q285 10 370 90 Q285 170 190 170 Q95 170 10 90 Z"/>
+          </clipPath>
+          <radialGradient id="fp-iris-radial" cx="34%" cy="30%" r="69%" fx="28%" fy="24%">
+            <stop offset="0%" stop-color="#c5f0e0"/>
+            <stop offset="38%" stop-color="#3fa078"/>
+            <stop offset="72%" stop-color="#1a5a42"/>
+            <stop offset="100%" stop-color="#071a14"/>
+          </radialGradient>
+        </defs>
         <path class="eye-closed-arc" d="M10 90 Q95 20 190 20 Q285 20 370 90"/>
         <line class="eye-lash-main" x1="190" y1="20" x2="190" y2="4"/>
         <line class="eye-lash-main" x1="140" y1="30" x2="132" y2="15"/>
@@ -805,9 +833,13 @@ body.fp-reporter-mode .reader-focus {{ display: none !important; }}
         <line class="eye-lash-main" x1="100" y1="52" x2="88" y2="40"/>
         <line class="eye-lash-main" x1="280" y1="52" x2="292" y2="40"/>
         <path class="eye-open-shape" d="M10 90 Q95 10 190 10 Q285 10 370 90 Q285 170 190 170 Q95 170 10 90 Z"/>
-        <circle class="eye-iris" cx="190" cy="90" r="52"/>
-        <circle id="main-pupil" class="eye-pupil-main" cx="190" cy="90" r="34"/>
-        <circle id="main-shine" class="eye-shine-main" cx="208" cy="72" r="9"/>
+        <g clip-path="url(#fp-eye-opening)">
+          <ellipse class="eye-sclera" cx="190" cy="90" rx="128" ry="62"/>
+          <circle class="eye-iris-fill" cx="190" cy="90" r="50" fill="url(#fp-iris-radial)"/>
+          <circle class="eye-limbal" cx="190" cy="90" r="50" fill="none" stroke="#020a08" stroke-width="1.35" stroke-opacity="0.55"/>
+          <circle id="main-pupil" class="eye-pupil-main" cx="187" cy="86" r="16"/>
+          <ellipse id="main-shine" class="eye-shine-main" cx="181" cy="80" rx="5.2" ry="3.6"/>
+        </g>
         <path class="eye-twinkle-main" d="M 310 45 l3 7 l7 3 l-7 3 l-3 7 l-3-7 l-7-3 l7-3 z"/>
       </svg>
     </div>
@@ -886,19 +918,20 @@ document.addEventListener('DOMContentLoaded', function() {{
   }}
 
   // --- Main eye pupil tracks the cursor ---
-  // ViewBox: 380 x 180. Iris center: (190, 90) r=52. Pupil r=34. Max travel: 18 SVG units.
+  // Iris center (190,90) r=50; pupil r=16; max radial offset 34. Corneal highlight follows pupil (upper-left).
   var eyeSvg = document.querySelector('.eye-svg-main');
   var pupil  = document.getElementById('main-pupil');
   var shine  = document.getElementById('main-shine');
-  var IRIS_R = 52, PUPIL_R = 34, MAX_TRAVEL = IRIS_R - PUPIL_R; // 18
-  var SHINE_OFFSET_X = 18, SHINE_OFFSET_Y = -18; // shine stays relative to pupil
+  var IRIS_R = 50, PUPIL_R = 16, MAX_TRAVEL = IRIS_R - PUPIL_R;
+  var SHINE_OFFSET_X = -5, SHINE_OFFSET_Y = -6;
   var CX = 190, CY = 90;
+  var REST_PUPIL_X = 187, REST_PUPIL_Y = 86;
 
   function movePupil(svgX, svgY) {{
     var dx = svgX - CX;
     var dy = svgY - CY;
     var dist = Math.sqrt(dx * dx + dy * dy);
-    var travel = Math.min(dist / 3, MAX_TRAVEL); // dampen — full travel needs cursor 3x iris away
+    var travel = Math.min(dist / 3, MAX_TRAVEL);
     var angle = Math.atan2(dy, dx);
     var nx = CX + Math.cos(angle) * travel;
     var ny = CY + Math.sin(angle) * travel;
@@ -923,11 +956,10 @@ document.addEventListener('DOMContentLoaded', function() {{
     if (!eyeSvg || !pupil) return;
     var isOpen = (eyeGroup && (eyeGroup.matches(':hover') || eyeGroup.classList.contains('eye-typing')));
     if (!isOpen) {{
-      // Reset to center when eye is closed
-      pupil.setAttribute('cx', CX);
-      pupil.setAttribute('cy', CY);
-      shine.setAttribute('cx', CX + SHINE_OFFSET_X);
-      shine.setAttribute('cy', CY + SHINE_OFFSET_Y);
+      pupil.setAttribute('cx', REST_PUPIL_X);
+      pupil.setAttribute('cy', REST_PUPIL_Y);
+      shine.setAttribute('cx', (REST_PUPIL_X + SHINE_OFFSET_X).toFixed(2));
+      shine.setAttribute('cy', (REST_PUPIL_Y + SHINE_OFFSET_Y).toFixed(2));
       return;
     }}
     var pt = screenToSvg(eyeSvg, e.clientX, e.clientY);
