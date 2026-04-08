@@ -1,6 +1,7 @@
 """
 First-class journalist and outlet investigations for PUBLIC EYE slim pipeline.
-No GDELT, NewsAPI, Meta Ad Library, or proportionality — public-record adapters only.
+GDELT (byline corpus + narrative echo) augments the journalist receipt; no NewsAPI,
+Meta Ad Library, or proportionality — public-record adapters otherwise.
 
 - AdapterResult: structured per-adapter outcome (no sentinel/exception ambiguity in downstream).
 - latency_ms on every data_sources row (signed payload).
@@ -196,6 +197,8 @@ async def build_journalist_investigation_record(
         "lda_filings": None,
         "quoted_sources": [],
         "layer_b": None,
+        "byline_corpus": None,
+        "narrative_echo": None,
     }
 
     if not name:
@@ -356,6 +359,33 @@ async def build_journalist_investigation_record(
         quoted_sources=base["quoted_sources"],
     )
     base["layer_b"] = layer_b
+
+    GDELT_TIMEOUT = 12.0
+    from adapters.gdelt import get_narrative_echo_score, search_byline_corpus
+
+    async def _gdelt_byline() -> list[dict[str, Any]]:
+        return await search_byline_corpus(name, publication, max_results=50)
+
+    topic_t = (article_topic or "").strip()
+    tasks: list[Awaitable[AdapterResult]] = [
+        run_adapter(_gdelt_byline, adapter="gdelt_byline_corpus", timeout=GDELT_TIMEOUT),
+    ]
+    if topic_t:
+
+        async def _gdelt_echo() -> dict[str, Any]:
+            return await get_narrative_echo_score(topic_t, hours=48)
+
+        tasks.append(run_adapter(_gdelt_echo, adapter="gdelt_narrative_echo", timeout=GDELT_TIMEOUT))
+
+    gdelt_results = await asyncio.gather(*tasks)
+    bc_r = gdelt_results[0]
+    base["byline_corpus"] = bc_r.value if bc_r.ok else None
+    if topic_t:
+        echo_r = gdelt_results[1]
+        base["narrative_echo"] = echo_r.value if echo_r.ok else None
+    else:
+        base["narrative_echo"] = None
+
     return base
 
 

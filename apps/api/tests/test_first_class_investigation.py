@@ -75,6 +75,26 @@ def _make_lda() -> dict:
     return {"filingCount": 2, "filings": [{}, {}]}
 
 
+def _gdelt_echo_stub() -> dict:
+    return {
+        "total_articles": 0,
+        "unique_domains": 0,
+        "unique_countries": 0,
+        "echo_score": 0.0,
+        "top_domains": [],
+    }
+
+
+@pytest.fixture(autouse=True)
+def _mock_gdelt_adapter():
+    """Avoid real GDELT HTTP when building journalist investigations."""
+    with (
+        patch("adapters.gdelt.search_byline_corpus", AsyncMock(return_value=[])),
+        patch("adapters.gdelt.get_narrative_echo_score", AsyncMock(return_value=_gdelt_echo_stub())),
+    ):
+        yield
+
+
 def _all_adapter_patches(
     *,
     fec=None,
